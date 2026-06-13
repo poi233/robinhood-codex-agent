@@ -124,6 +124,21 @@ else
   echo "  - WARNING: DSA signal layer is incomplete or not wired into prompts."
 fi
 
+if [[ -f "$AGENT_ROOT/scripts/kronos_generate_signals.py" ]] \
+  && [[ -f "$AGENT_ROOT/scripts/run_kronos_premarket_scan.sh" ]] \
+  && rg -q 'state/kronos_signals.json' "$AGENT_ROOT/prompts/premarket_research.txt"; then
+  echo "  - Kronos signal layer is configured and wired into premarket: ok"
+else
+  echo "  - WARNING: Kronos signal layer is incomplete or not wired into premarket."
+fi
+
+if [[ -f "$AGENT_ROOT/config/runtime.env.local.example" ]] \
+  && rg -q '^ENABLE_KRONOS_SIGNAL_LAYER=' "$AGENT_ROOT/config/runtime.env"; then
+  echo "  - Portable Kronos setup files found: ok"
+else
+  echo "  - WARNING: portable Kronos setup files missing."
+fi
+
 if rg -q 'Runtime mode behavior' "$AGENT_ROOT/prompts/intraday_check.txt"; then
   echo "  - Intraday prompt has runtime mode gate: ok"
 else

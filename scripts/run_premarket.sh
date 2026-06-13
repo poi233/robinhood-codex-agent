@@ -19,4 +19,10 @@ if [[ "${ENABLE_DSA_SIGNAL_LAYER:-1}" == "1" ]]; then
   fi
 fi
 
+if [[ "${ENABLE_KRONOS_SIGNAL_LAYER:-1}" == "1" ]]; then
+  if ! "$SCRIPT_DIR/run_kronos_premarket_scan.sh"; then
+    log_line "kronos_premarket_scan failed; continuing with main premarket research."
+  fi
+fi
+
 run_codex_prompt "premarket" "$AGENT_ROOT/prompts/premarket_research.txt"

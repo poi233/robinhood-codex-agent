@@ -129,6 +129,13 @@ class PortableArtifactTests(unittest.TestCase):
         self.assertNotIn("run_kronos_premarket_scan.sh", contents)
 
 
+class PromptWiringTests(unittest.TestCase):
+    def test_premarket_prompt_mentions_kronos_signal_file(self) -> None:
+        prompt = (REPO_ROOT / "prompts" / "premarket_research.txt").read_text(encoding="utf-8")
+        self.assertIn("state/kronos_signals.json", prompt)
+        self.assertIn("kronos_signal_status", prompt)
+
+
 class KronosGenerateSignalsTests(unittest.TestCase):
     @staticmethod
     def import_module():
