@@ -98,3 +98,23 @@ class PortableArtifactTests(unittest.TestCase):
     def test_setup_and_verify_scripts_exist(self) -> None:
         self.assertTrue((REPO_ROOT / "scripts" / "setup_kronos_env.sh").exists())
         self.assertTrue((REPO_ROOT / "scripts" / "verify_kronos_env.sh").exists())
+
+    def test_verify_script_skips_task3_generation_until_script_exists(self) -> None:
+        contents = (REPO_ROOT / "scripts" / "verify_kronos_env.sh").read_text(encoding="utf-8")
+
+        self.assertIn('if [[ -f "$AGENT_ROOT/scripts/kronos_generate_signals.py" ]]; then', contents)
+        self.assertIn("pending Task 3", contents)
+
+    def test_verify_script_uses_temp_output_and_cleans_it_up(self) -> None:
+        contents = (REPO_ROOT / "scripts" / "verify_kronos_env.sh").read_text(encoding="utf-8")
+
+        self.assertIn("mktemp", contents)
+        self.assertIn("trap", contents)
+        self.assertNotIn('state/kronos_signals.json', contents)
+
+    def test_setup_doc_does_not_claim_task3_scripts_exist_yet(self) -> None:
+        contents = (REPO_ROOT / "docs" / "setup" / "kronos-portable-setup.md").read_text(encoding="utf-8")
+
+        self.assertIn("Python `venv` support", contents)
+        self.assertIn("pending later tasks", contents)
+        self.assertNotIn("run_kronos_premarket_scan.sh", contents)

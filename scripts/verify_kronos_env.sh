@@ -20,10 +20,18 @@ from model import Kronos, KronosPredictor, KronosTokenizer  # noqa: F401
 print("python imports ok")
 PY
 
-"$KRONOS_PYTHON_BIN" "$AGENT_ROOT/scripts/kronos_generate_signals.py" \
-  --universe-file "$AGENT_ROOT/config/universe.txt" \
-  --output-file "$AGENT_ROOT/state/kronos_signals.json" \
-  --date "$(pt_date)" \
-  --mock
+if [[ -f "$AGENT_ROOT/scripts/kronos_generate_signals.py" ]]; then
+  mkdir -p "$AGENT_ROOT/state"
+  TEMP_OUTPUT_FILE="$(mktemp "$AGENT_ROOT/state/kronos_signals.verify.XXXXXX.json")"
+  trap 'rm -f "$TEMP_OUTPUT_FILE"' EXIT
+
+  "$KRONOS_PYTHON_BIN" "$AGENT_ROOT/scripts/kronos_generate_signals.py" \
+    --universe-file "$AGENT_ROOT/config/universe.txt" \
+    --output-file "$TEMP_OUTPUT_FILE" \
+    --date "$(pt_date)" \
+    --mock
+else
+  echo "signal generation verification is pending Task 3 because scripts/kronos_generate_signals.py does not exist yet"
+fi
 
 echo "Kronos portable verification passed."

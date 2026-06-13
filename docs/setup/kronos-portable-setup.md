@@ -4,7 +4,7 @@
 
 - macOS or Linux shell with `bash`
 - `git`
-- `python3`
+- `python3` with Python `venv` support
 - Codex installed separately
 
 ## Rebuild Steps
@@ -32,6 +32,6 @@ Complete Robinhood Agentic Account authentication on desktop.
 
 ```bash
 ./scripts/check_safety.sh
-ALLOW_WEEKEND_RUN=1 KRONOS_USE_MOCK=1 ./scripts/run_kronos_premarket_scan.sh
-ALLOW_WEEKEND_RUN=1 KRONOS_USE_MOCK=1 CODEX_EXEC_DRY_RUN=1 ./scripts/run_premarket.sh
 ```
+
+The Task 3 signal-generation and premarket runner commands are pending later tasks. At this commit, `./scripts/verify_kronos_env.sh` only verifies the portable Kronos environment and imports, and only exercises mock signal generation if `scripts/kronos_generate_signals.py` exists.
