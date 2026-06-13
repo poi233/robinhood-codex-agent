@@ -1,0 +1,30 @@
+{
+  "0": {
+    "name": "micro_test",
+    "max_single_order_notional": 10,
+    "max_daily_notional": 25,
+    "max_live_orders_per_day": 1,
+    "promotion_requirement": "Initial paper/review/live micro test."
+  },
+  "1": {
+    "name": "small_live",
+    "max_single_order_notional": 25,
+    "max_daily_notional": 75,
+    "max_live_orders_per_day": 2,
+    "promotion_requirement": "At least 5 clean paper/review sessions with no rule violations."
+  },
+  "2": {
+    "name": "moderate_live",
+    "max_single_order_notional": 50,
+    "max_daily_notional": 150,
+    "max_live_orders_per_day": 3,
+    "promotion_requirement": "Tier 1 live logs show no rule violations or unexpected behavior."
+  },
+  "3": {
+    "name": "aggressive_small_account",
+    "max_single_order_notional": 100,
+    "max_daily_notional": 300,
+    "max_live_orders_per_day": 4,
+    "promotion_requirement": "Only for a small dedicated Agentic Account after stable live operation."
+  }
+}

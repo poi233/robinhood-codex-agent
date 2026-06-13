@@ -1,0 +1,115 @@
+# Project-scoped Codex config for the Robinhood automation.
+# Goal: read-only Robinhood MCP calls should not be cancelled in codex exec.
+# Trading/write tools remain prompt-gated here; the prompts and runtime mode add
+# additional safeguards on top of this MCP permission layer.
+
+[mcp_servers.robinhood-trading]
+url = "https://agent.robinhood.com/mcp/trading"
+default_tools_approval_mode = "prompt"
+tool_timeout_sec = 60
+
+# Read-only account, portfolio, position, order-history, quote, market-data,
+# watchlist-read, and instrument-discovery tools.
+[mcp_servers.robinhood-trading.tools.get_accounts]
+approval_mode = "approve"
+
+[mcp_servers.robinhood-trading.tools.get_portfolio]
+approval_mode = "approve"
+
+[mcp_servers.robinhood-trading.tools.get_equity_positions]
+approval_mode = "approve"
+
+[mcp_servers.robinhood-trading.tools.get_option_positions]
+approval_mode = "approve"
+
+[mcp_servers.robinhood-trading.tools.get_equity_orders]
+approval_mode = "approve"
+
+[mcp_servers.robinhood-trading.tools.get_option_orders]
+approval_mode = "approve"
+
+[mcp_servers.robinhood-trading.tools.get_equity_quotes]
+approval_mode = "approve"
+
+[mcp_servers.robinhood-trading.tools.get_option_quotes]
+approval_mode = "approve"
+
+[mcp_servers.robinhood-trading.tools.get_index_quotes]
+approval_mode = "approve"
+
+[mcp_servers.robinhood-trading.tools.get_equity_historicals]
+approval_mode = "approve"
+
+[mcp_servers.robinhood-trading.tools.get_equity_tradability]
+approval_mode = "approve"
+
+[mcp_servers.robinhood-trading.tools.get_indexes]
+approval_mode = "approve"
+
+[mcp_servers.robinhood-trading.tools.search]
+approval_mode = "approve"
+
+[mcp_servers.robinhood-trading.tools.get_watchlists]
+approval_mode = "approve"
+
+[mcp_servers.robinhood-trading.tools.get_watchlist_items]
+approval_mode = "approve"
+
+[mcp_servers.robinhood-trading.tools.get_popular_watchlists]
+approval_mode = "approve"
+
+[mcp_servers.robinhood-trading.tools.get_option_watchlist]
+approval_mode = "approve"
+
+[mcp_servers.robinhood-trading.tools.get_option_chains]
+approval_mode = "approve"
+
+[mcp_servers.robinhood-trading.tools.get_option_instruments]
+approval_mode = "approve"
+
+# Equity order review is a non-placing simulation. It is auto-approved so
+# TRADING_MODE=review can work unattended while still preventing real orders.
+[mcp_servers.robinhood-trading.tools.review_equity_order]
+approval_mode = "approve"
+
+# Real trading, option review, cancellation, and watchlist-write tools remain
+# prompt-gated. In codex exec with approval_policy=never, this means they are
+# not silently auto-approved.
+[mcp_servers.robinhood-trading.tools.review_option_order]
+approval_mode = "prompt"
+
+[mcp_servers.robinhood-trading.tools.place_equity_order]
+approval_mode = "prompt"
+
+[mcp_servers.robinhood-trading.tools.place_option_order]
+approval_mode = "prompt"
+
+[mcp_servers.robinhood-trading.tools.cancel_equity_order]
+approval_mode = "prompt"
+
+[mcp_servers.robinhood-trading.tools.cancel_option_order]
+approval_mode = "prompt"
+
+[mcp_servers.robinhood-trading.tools.add_to_watchlist]
+approval_mode = "prompt"
+
+[mcp_servers.robinhood-trading.tools.remove_from_watchlist]
+approval_mode = "prompt"
+
+[mcp_servers.robinhood-trading.tools.follow_watchlist]
+approval_mode = "prompt"
+
+[mcp_servers.robinhood-trading.tools.unfollow_watchlist]
+approval_mode = "prompt"
+
+[mcp_servers.robinhood-trading.tools.create_watchlist]
+approval_mode = "prompt"
+
+[mcp_servers.robinhood-trading.tools.update_watchlist]
+approval_mode = "prompt"
+
+[mcp_servers.robinhood-trading.tools.add_option_to_watchlist]
+approval_mode = "prompt"
+
+[mcp_servers.robinhood-trading.tools.remove_option_from_watchlist]
+approval_mode = "prompt"

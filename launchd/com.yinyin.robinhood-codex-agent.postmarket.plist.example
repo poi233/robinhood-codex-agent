@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.yinyin.robinhood-codex-agent.postmarket</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/bash</string>
+    <string>/Users/yinyin-jiang/Documents/Codex/2026-06-12/codex-30-cron-launchd-codex-exec/robinhood-codex-agent/scripts/run_postmarket.sh</string>
+  </array>
+  <key>StartCalendarInterval</key>
+  <dict>
+    <key>Hour</key>
+    <integer>13</integer>
+    <key>Minute</key>
+    <integer>10</integer>
+  </dict>
+  <key>StandardOutPath</key>
+  <string>/Users/yinyin-jiang/Documents/Codex/2026-06-12/codex-30-cron-launchd-codex-exec/robinhood-codex-agent/logs/launchd.postmarket.out</string>
+  <key>StandardErrorPath</key>
+  <string>/Users/yinyin-jiang/Documents/Codex/2026-06-12/codex-30-cron-launchd-codex-exec/robinhood-codex-agent/logs/launchd.postmarket.err</string>
+</dict>
+</plist>

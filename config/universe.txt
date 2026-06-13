@@ -1,0 +1,74 @@
+# Maximum candidate universe for daily dynamic allowlist generation.
+# Premarket agent may only select symbols from this file.
+# Intraday agent may only trade symbols selected into state/today_allowlist.txt.
+#
+# Rules:
+# - Long equities/ETFs only.
+# - No leveraged ETFs, inverse ETFs, options, crypto, futures, margin, or shorts.
+# - Prefer liquid U.S.-listed names that Robinhood confirms tradable/fractional when needed.
+
+# Core index / liquidity anchors
+SPY
+QQQ
+SMH
+VOO
+
+# AI semiconductors / compute
+NVDA
+AVGO
+AMD
+TSM
+ASML
+MU
+MRVL
+QCOM
+ARM
+ALAB
+
+# AI infrastructure / data center / networking / power
+VRT
+DELL
+CLS
+FN
+ANET
+CEG
+VST
+ETN
+GEV
+
+# CPO / photonics / interconnect / narrow-gate candidates
+COHR
+LITE
+AAOI
+AXTI
+AEHR
+ACLS
+CAMT
+
+# Space / defense / autonomy
+RKLB
+ASTS
+LUNR
+PL
+AVAV
+KTOS
+LMT
+NOC
+PLTR
+
+# Nuclear / uranium / energy transition
+OKLO
+LEU
+UUUU
+CCJ
+NXE
+
+# High-beta software / AI data
+SNOW
+NET
+CRWD
+DDOG
+MDB
+
+# Optional cash deployment / broad beta
+IWM

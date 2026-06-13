@@ -1,0 +1,38 @@
+# macOS / editor noise
+.DS_Store
+*.swp
+*.swo
+.idea/
+.vscode/
+
+# Local credentials and environment overrides
+.env
+.env.*
+*.local
+*.secret
+*.token
+
+# Codex / automation runtime artifacts
+.codex/session*
+.codex/tmp/
+*.lock
+state/*
+!state/.gitkeep
+logs/*
+!logs/.gitkeep
+
+# Script/runtime scratch files
+*.tmp
+*.bak
+*.pid
+*.out
+*.err
+
+# Python / Node / generic build artifacts
+__pycache__/
+*.py[cod]
+node_modules/
+dist/
+build/
+.cache/
+

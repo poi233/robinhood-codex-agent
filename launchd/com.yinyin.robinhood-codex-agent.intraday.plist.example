@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.yinyin.robinhood-codex-agent.intraday</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/bash</string>
+    <string>/Users/yinyin-jiang/Documents/Codex/2026-06-12/codex-30-cron-launchd-codex-exec/robinhood-codex-agent/scripts/run_intraday.sh</string>
+  </array>
+  <key>StartCalendarInterval</key>
+  <array>
+    <dict><key>Hour</key><integer>6</integer><key>Minute</key><integer>45</integer></dict>
+    <dict><key>Hour</key><integer>7</integer><key>Minute</key><integer>15</integer></dict>
+    <dict><key>Hour</key><integer>7</integer><key>Minute</key><integer>45</integer></dict>
+    <dict><key>Hour</key><integer>8</integer><key>Minute</key><integer>15</integer></dict>
+    <dict><key>Hour</key><integer>8</integer><key>Minute</key><integer>45</integer></dict>
+    <dict><key>Hour</key><integer>9</integer><key>Minute</key><integer>15</integer></dict>
+    <dict><key>Hour</key><integer>9</integer><key>Minute</key><integer>45</integer></dict>
+    <dict><key>Hour</key><integer>10</integer><key>Minute</key><integer>15</integer></dict>
+    <dict><key>Hour</key><integer>10</integer><key>Minute</key><integer>45</integer></dict>
+    <dict><key>Hour</key><integer>11</integer><key>Minute</key><integer>15</integer></dict>
+    <dict><key>Hour</key><integer>11</integer><key>Minute</key><integer>45</integer></dict>
+    <dict><key>Hour</key><integer>12</integer><key>Minute</key><integer>15</integer></dict>
+    <dict><key>Hour</key><integer>12</integer><key>Minute</key><integer>45</integer></dict>
+  </array>
+  <key>StandardOutPath</key>
+  <string>/Users/yinyin-jiang/Documents/Codex/2026-06-12/codex-30-cron-launchd-codex-exec/robinhood-codex-agent/logs/launchd.intraday.out</string>
+  <key>StandardErrorPath</key>
+  <string>/Users/yinyin-jiang/Documents/Codex/2026-06-12/codex-30-cron-launchd-codex-exec/robinhood-codex-agent/logs/launchd.intraday.err</string>
+</dict>
+</plist>

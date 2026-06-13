@@ -1,0 +1,4 @@
+KILL_SWITCH is enabled by default.
+
+Intraday trading checks will skip while this file exists.
+Remove it only after paper/review rollout is working as expected.
