@@ -104,6 +104,11 @@ class PortableArtifactTests(unittest.TestCase):
         self.assertIn("./scripts/setup_kronos_env.sh", readme)
         self.assertIn("./scripts/verify_kronos_env.sh", readme)
         self.assertIn("./scripts/check_safety.sh", readme)
+        self.assertIn("ALLOW_WEEKEND_RUN=1 KRONOS_USE_MOCK=1 ./scripts/run_kronos_premarket_scan.sh", readme)
+        self.assertIn(
+            "ALLOW_WEEKEND_RUN=1 KRONOS_USE_MOCK=1 CODEX_EXEC_DRY_RUN=1 ./scripts/run_premarket.sh",
+            readme,
+        )
         self.assertIn("KRONOS_BOOTSTRAP_PYTHON", readme)
         self.assertRegex(readme, r"python3\.12|python3\.11")
 
@@ -129,13 +134,20 @@ class PortableArtifactTests(unittest.TestCase):
         self.assertIn("mktemp", contents)
         self.assertIn("trap", contents)
         self.assertNotIn('state/kronos_signals.json', contents)
+        self.assertNotIn('mktemp "$AGENT_ROOT/state/kronos_signals.verify.XXXXXX.json"', contents)
 
-    def test_setup_doc_does_not_claim_task3_scripts_exist_yet(self) -> None:
+    def test_setup_doc_describes_current_validation_flow(self) -> None:
         contents = (REPO_ROOT / "docs" / "setup" / "kronos-portable-setup.md").read_text(encoding="utf-8")
 
-        self.assertIn("Python `venv` support", contents)
-        self.assertIn("pending later tasks", contents)
-        self.assertNotIn("run_kronos_premarket_scan.sh", contents)
+        self.assertIn("Python `3.11` or `3.12`", contents)
+        self.assertIn("./scripts/verify_kronos_env.sh", contents)
+        self.assertIn("./scripts/check_safety.sh", contents)
+        self.assertIn("ALLOW_WEEKEND_RUN=1 KRONOS_USE_MOCK=1 ./scripts/run_kronos_premarket_scan.sh", contents)
+        self.assertIn(
+            "ALLOW_WEEKEND_RUN=1 KRONOS_USE_MOCK=1 CODEX_EXEC_DRY_RUN=1 ./scripts/run_premarket.sh",
+            contents,
+        )
+        self.assertNotIn("pending later tasks", contents)
 
     def test_setup_doc_mentions_bootstrap_python_override(self) -> None:
         contents = (REPO_ROOT / "docs" / "setup" / "kronos-portable-setup.md").read_text(encoding="utf-8")
@@ -305,6 +317,85 @@ class SafetyWiringTests(unittest.TestCase):
         self.assertIn('requirements-kronos-extra.txt', contents)
         self.assertIn('scripts/setup_kronos_env.sh', contents)
         self.assertIn('scripts/verify_kronos_env.sh', contents)
+
+    def test_check_safety_runs_without_rg_binary(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp = Path(tmpdir)
+            scripts_dir = tmp / "scripts"
+            config_dir = tmp / "config"
+            prompts_dir = tmp / "prompts"
+            codex_dir = tmp / ".codex"
+            fake_bin = tmp / "bin"
+
+            scripts_dir.mkdir()
+            config_dir.mkdir()
+            prompts_dir.mkdir()
+            codex_dir.mkdir()
+            fake_bin.mkdir()
+
+            (scripts_dir / "check_safety.sh").write_text(
+                (REPO_ROOT / "scripts" / "check_safety.sh").read_text(encoding="utf-8"),
+                encoding="utf-8",
+            )
+            (scripts_dir / "common.sh").write_text(
+                (REPO_ROOT / "scripts" / "common.sh").read_text(encoding="utf-8"),
+                encoding="utf-8",
+            )
+
+            (config_dir / "runtime.env").write_text("TRADING_MODE=paper\nRISK_TIER=0\n", encoding="utf-8")
+            (config_dir / "allowlist.txt").write_text("SPY\n", encoding="utf-8")
+            (config_dir / "universe.txt").write_text("NVDA\n", encoding="utf-8")
+            (config_dir / "risk.md").write_text("Only use limit orders\n", encoding="utf-8")
+            (config_dir / "dsa_strategy_weights.json").write_text("{}\n", encoding="utf-8")
+            (config_dir / "runtime.env.local.example").write_text("TRADING_MODE=paper\n", encoding="utf-8")
+
+            (prompts_dir / "premarket_research.txt").write_text(
+                "Do not call place_equity_order\nstate/dsa_signals.json\nstate/kronos_signals.json\n",
+                encoding="utf-8",
+            )
+            (prompts_dir / "postmarket_summary.txt").write_text(
+                "Do not call place_equity_order\n",
+                encoding="utf-8",
+            )
+            (prompts_dir / "dsa_premarket_scan.txt").write_text(
+                "never place, review, cancel, or modify orders\n",
+                encoding="utf-8",
+            )
+            (prompts_dir / "intraday_check.txt").write_text(
+                "Runtime mode behavior\nstate/dsa_signals.json\n",
+                encoding="utf-8",
+            )
+
+            for filename in (
+                "kronos_generate_signals.py",
+                "run_kronos_premarket_scan.sh",
+                "setup_kronos_env.sh",
+                "verify_kronos_env.sh",
+                "run_premarket.sh",
+            ):
+                (scripts_dir / filename).write_text("", encoding="utf-8")
+            (scripts_dir / "run_premarket.sh").write_text(
+                'ENABLE_KRONOS_SIGNAL_LAYER=1\nrun_kronos_premarket_scan.sh\n',
+                encoding="utf-8",
+            )
+
+            (tmp / "requirements-kronos-extra.txt").write_text("yfinance\n", encoding="utf-8")
+            (codex_dir / "config.toml").write_text("", encoding="utf-8")
+            (fake_bin / "rg").write_text("#!/bin/sh\nexit 86\n", encoding="utf-8")
+            os.chmod(fake_bin / "rg", 0o755)
+
+            result = subprocess.run(
+                ["/bin/bash", str(scripts_dir / "check_safety.sh")],
+                cwd=tmp,
+                capture_output=True,
+                text=True,
+                check=False,
+                env={**os.environ, "PATH": f"{fake_bin}:{os.environ.get('PATH', '')}"},
+            )
+
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+            self.assertIn("Safety checks:", result.stdout)
+            self.assertIn("Kronos signal layer is configured and wired into premarket: ok", result.stdout)
 
 
 class KronosGenerateSignalsTests(unittest.TestCase):
@@ -480,7 +571,13 @@ printf 'kronos\\n' >> "$(pwd)/calls.log"
             (prompts_dir / "premarket_research.txt").write_text("prompt\n", encoding="utf-8")
             os.chmod(scripts_dir / "run_kronos_premarket_scan.sh", 0o755)
 
-            env = dict(os.environ, ENABLE_DSA_SIGNAL_LAYER="0", ENABLE_KRONOS_SIGNAL_LAYER="1")
+            env = dict(
+                os.environ,
+                ENABLE_DSA_SIGNAL_LAYER="0",
+                ENABLE_KRONOS_SIGNAL_LAYER="1",
+                ENABLE_MARKET_FEED_LAYER="0",
+                ENABLE_TECHNICAL_SIGNAL_LAYER="0",
+            )
             result = subprocess.run(
                 ["bash", str(scripts_dir / "run_premarket.sh")],
                 capture_output=True,
@@ -534,7 +631,13 @@ printf 'kronos\\n' >> "$(pwd)/calls.log"
             (prompts_dir / "premarket_research.txt").write_text("prompt\n", encoding="utf-8")
             os.chmod(scripts_dir / "run_kronos_premarket_scan.sh", 0o755)
 
-            env = dict(os.environ, ENABLE_DSA_SIGNAL_LAYER="0", ENABLE_KRONOS_SIGNAL_LAYER="0")
+            env = dict(
+                os.environ,
+                ENABLE_DSA_SIGNAL_LAYER="0",
+                ENABLE_KRONOS_SIGNAL_LAYER="0",
+                ENABLE_MARKET_FEED_LAYER="0",
+                ENABLE_TECHNICAL_SIGNAL_LAYER="0",
+            )
             result = subprocess.run(
                 ["bash", str(scripts_dir / "run_premarket.sh")],
                 capture_output=True,
@@ -588,7 +691,13 @@ exit 7
             (prompts_dir / "premarket_research.txt").write_text("prompt\n", encoding="utf-8")
             os.chmod(scripts_dir / "run_kronos_premarket_scan.sh", 0o755)
 
-            env = dict(os.environ, ENABLE_DSA_SIGNAL_LAYER="0", ENABLE_KRONOS_SIGNAL_LAYER="1")
+            env = dict(
+                os.environ,
+                ENABLE_DSA_SIGNAL_LAYER="0",
+                ENABLE_KRONOS_SIGNAL_LAYER="1",
+                ENABLE_MARKET_FEED_LAYER="0",
+                ENABLE_TECHNICAL_SIGNAL_LAYER="0",
+            )
             result = subprocess.run(
                 ["bash", str(scripts_dir / "run_premarket.sh")],
                 capture_output=True,

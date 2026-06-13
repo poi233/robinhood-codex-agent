@@ -53,6 +53,11 @@ scripts/
   common.sh              shared runtime helpers
   run_dsa_premarket_scan.sh
                          optional standalone DSA signal scan
+  run_market_feed_collection.sh
+                         deterministic market/news artifact collector
+  run_technical_research.sh
+                         repo-skill-based technical analysis layer
+  run_symbol_research.sh manual single-symbol research entrypoint
   run_premarket.sh       premarket entrypoint
   run_intraday.sh        intraday entrypoint
   run_postmarket.sh      postmarket entrypoint
@@ -77,7 +82,7 @@ KILL_SWITCH              default safety stop file
 
 ### Premarket
 
-The premarket flow has two research-only layers. Neither reviews, places, or cancels orders.
+The premarket flow now has four research-only layers before any intraday execution logic. None of them reviews, places, or cancels orders.
 
 First, the optional Daily Stock Analysis-inspired signal layer runs through Codex subscription via `codex exec`.
 It does not run the third-party project's own LLM API stack by default.
@@ -91,11 +96,22 @@ It:
 
 This layer is advisory only. It can promote, demote, or block research candidates, but it cannot authorize a trade.
 
+Second, the optional Kronos forecast layer runs locally and writes `state/kronos_signals.json`.
+It is advisory only and cannot bypass account, tradability, or risk gates.
+
+Third, the market-feed collector and repo-owned technical research layer run:
+
+- collector writes `state/market_feed/<date>/` with `charts/`, `ohlcv/`, `news/`, and `manifest.json`
+- technical research reads the repo-owned skills under `.agents/skills/`
+- technical research writes `state/technical_signals.json`
+
+This layer is also advisory only. It adds execution-aware price levels, no-trade zones, and long/short-management scenarios for the main planner and intraday checker.
+
 Then the main premarket agent creates the official daily plan.
 
 It:
 
-- reads `config/universe.txt`, `risk.md`, `risk_tiers.json`, `strategy.md`, `runtime.env`, and same-day `state/dsa_signals.json` when present
+- reads `config/universe.txt`, `risk.md`, `risk_tiers.json`, `strategy.md`, `runtime.env`, and same-day `state/dsa_signals.json`, `state/kronos_signals.json`, and `state/technical_signals.json` when present
 - identifies the dedicated Robinhood Agentic Account
 - checks buying power, positions, and open equity orders
 - scans market regime and priority sectors
@@ -128,6 +144,14 @@ Disable the DSA signal layer for scheduled premarket runs:
 ENABLE_DSA_SIGNAL_LAYER=0 ./scripts/run_premarket.sh
 ```
 
+Run the market-feed and technical-research layers manually:
+
+```bash
+./scripts/run_market_feed_collection.sh
+./scripts/run_technical_research.sh
+./scripts/run_symbol_research.sh NVDA
+```
+
 ### Intraday
 
 The intraday agent is intended to run every 30 minutes during market hours.
@@ -136,6 +160,7 @@ It:
 
 - reads the premarket plan and dynamic allowlist
 - reads same-day DSA signals when present
+- reads same-day `state/technical_signals.json` when present
 - checks `KILL_SWITCH`
 - checks local time window
 - checks trading mode
@@ -188,6 +213,25 @@ Project MCP approval policy:
 - `review_equity_order` is auto-approved for review-mode simulation
 - `place_equity_order`, cancellation, option order tools, and watchlist-write tools remain prompt-gated
 
+## Repo-Owned Trading Skills
+
+This repo now ships its own trading skill pack under `.agents/skills/`.
+
+- install: `./scripts/install_repo_skills.sh`
+- verify: `./scripts/verify_repo_skills.sh`
+- scheduled collector: `./scripts/run_market_feed_collection.sh`
+- manual symbol research: `./scripts/run_symbol_research.sh NVDA`
+
+The scheduled research workflow now includes:
+
+```text
+DSA signal scan
+  -> Kronos signal scan
+  -> market feed collection
+  -> technical research
+  -> main premarket planner
+```
+
 ## Setup
 
 Portable Kronos setup requires `git` and a bootstrap interpreter on Python `3.11` or `3.12`.
@@ -207,6 +251,8 @@ chmod +x scripts/*.sh
 ./scripts/setup_kronos_env.sh
 ./scripts/verify_kronos_env.sh
 ./scripts/check_safety.sh
+ALLOW_WEEKEND_RUN=1 KRONOS_USE_MOCK=1 ./scripts/run_kronos_premarket_scan.sh
+ALLOW_WEEKEND_RUN=1 KRONOS_USE_MOCK=1 CODEX_EXEC_DRY_RUN=1 ./scripts/run_premarket.sh
 ```
 
 For a clean rebuild of the portable Kronos environment:
@@ -236,6 +282,8 @@ chmod +x scripts/*.sh
 ./scripts/setup_kronos_env.sh
 ./scripts/verify_kronos_env.sh
 ./scripts/check_safety.sh
+ALLOW_WEEKEND_RUN=1 KRONOS_USE_MOCK=1 ./scripts/run_kronos_premarket_scan.sh
+ALLOW_WEEKEND_RUN=1 KRONOS_USE_MOCK=1 CODEX_EXEC_DRY_RUN=1 ./scripts/run_premarket.sh
 ```
 
 ## Dry Run

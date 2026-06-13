@@ -22,7 +22,7 @@ PY
 
 if [[ -f "$AGENT_ROOT/scripts/kronos_generate_signals.py" ]]; then
   mkdir -p "$AGENT_ROOT/state"
-  TEMP_OUTPUT_FILE="$(mktemp "$AGENT_ROOT/state/kronos_signals.verify.XXXXXX.json")"
+  TEMP_OUTPUT_FILE="$(mktemp "$AGENT_ROOT/state/kronos_signals.verify.XXXXXX")"
   trap 'rm -f "$TEMP_OUTPUT_FILE"' EXIT
 
   "$KRONOS_PYTHON_BIN" "$AGENT_ROOT/scripts/kronos_generate_signals.py" \

@@ -6,13 +6,29 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=scripts/common.sh
 source "$SCRIPT_DIR/common.sh"
 
+file_has_pattern() {
+  local pattern="$1"
+  local file="$2"
+  grep -Eq -- "$pattern" "$file"
+}
+
+print_non_comment_lines() {
+  local file="$1"
+  awk '!/^[[:space:]]*(#|$)/ {print "  - " $0}' "$file"
+}
+
+count_non_comment_lines() {
+  local file="$1"
+  awk '!/^[[:space:]]*(#|$)/ {count++} END {print count + 0}' "$file"
+}
+
 echo "Agent root: $AGENT_ROOT"
 echo "Trading mode: $TRADING_MODE"
 echo "Risk tier: $RISK_TIER"
 echo "Kill switch: $(kill_switch_status)"
 echo "Static fallback allowlist:"
-rg -v '^\s*(#|$)' "$AGENT_ROOT/config/allowlist.txt" | sed 's/^/  - /'
-echo "Universe count: $(rg -v '^\s*(#|$)' "$AGENT_ROOT/config/universe.txt" | wc -l | tr -d ' ')"
+print_non_comment_lines "$AGENT_ROOT/config/allowlist.txt"
+echo "Universe count: $(count_non_comment_lines "$AGENT_ROOT/config/universe.txt")"
 
 echo
 echo "Safety checks:"
@@ -81,7 +97,7 @@ fi
 
 missing_read_approvals=0
 for tool in "${READ_APPROVED_TOOLS[@]}"; do
-  if ! rg -q "mcp_servers\\.robinhood-trading\\.tools\\.$tool" "$PROJECT_CODEX_CONFIG" \
+  if ! file_has_pattern "mcp_servers\\.robinhood-trading\\.tools\\.$tool" "$PROJECT_CODEX_CONFIG" \
     || ! awk "/tools\\.$tool\\]/{seen=1; next} /^\\[/{seen=0} seen && /approval_mode = \"approve\"/{found=1} END{exit found ? 0 : 1}" "$PROJECT_CODEX_CONFIG"; then
     echo "  - WARNING: read tool is not auto-approved: $tool"
     missing_read_approvals=$((missing_read_approvals + 1))
@@ -108,9 +124,9 @@ if [[ "$write_auto_approvals" -eq 0 ]]; then
   echo "  - Trading/write tools are not auto-approved: ok"
 fi
 
-if rg -q 'Do not call .*place_equity_order' "$AGENT_ROOT/prompts/premarket_research.txt" \
-  && rg -q 'Do not call .*place_equity_order' "$AGENT_ROOT/prompts/postmarket_summary.txt" \
-  && rg -q 'never place, review, cancel, or modify orders' "$AGENT_ROOT/prompts/dsa_premarket_scan.txt"; then
+if file_has_pattern 'Do not call .*place_equity_order' "$AGENT_ROOT/prompts/premarket_research.txt" \
+  && file_has_pattern 'Do not call .*place_equity_order' "$AGENT_ROOT/prompts/postmarket_summary.txt" \
+  && file_has_pattern 'never place, review, cancel, or modify orders' "$AGENT_ROOT/prompts/dsa_premarket_scan.txt"; then
   echo "  - Non-trading prompts explicitly forbid place_equity_order: ok"
 else
   echo "  - WARNING: non-trading prompts do not explicitly forbid place_equity_order."
@@ -118,8 +134,8 @@ fi
 
 if [[ -f "$AGENT_ROOT/config/dsa_strategy_weights.json" ]] \
   && [[ -f "$AGENT_ROOT/prompts/dsa_premarket_scan.txt" ]] \
-  && rg -q 'state/dsa_signals.json' "$AGENT_ROOT/prompts/premarket_research.txt" \
-  && rg -q 'state/dsa_signals.json' "$AGENT_ROOT/prompts/intraday_check.txt"; then
+  && file_has_pattern 'state/dsa_signals.json' "$AGENT_ROOT/prompts/premarket_research.txt" \
+  && file_has_pattern 'state/dsa_signals.json' "$AGENT_ROOT/prompts/intraday_check.txt"; then
   echo "  - DSA signal layer is configured and wired into premarket/intraday: ok"
 else
   echo "  - WARNING: DSA signal layer is incomplete or not wired into prompts."
@@ -128,9 +144,9 @@ fi
 if [[ -f "$AGENT_ROOT/scripts/kronos_generate_signals.py" ]] \
   && [[ -f "$AGENT_ROOT/scripts/run_kronos_premarket_scan.sh" ]] \
   && [[ -f "$PREMARKET_SCRIPT" ]] \
-  && rg -q 'ENABLE_KRONOS_SIGNAL_LAYER' "$PREMARKET_SCRIPT" \
-  && rg -q 'run_kronos_premarket_scan\.sh' "$PREMARKET_SCRIPT" \
-  && rg -q 'state/kronos_signals.json' "$AGENT_ROOT/prompts/premarket_research.txt"; then
+  && file_has_pattern 'ENABLE_KRONOS_SIGNAL_LAYER' "$PREMARKET_SCRIPT" \
+  && file_has_pattern 'run_kronos_premarket_scan\.sh' "$PREMARKET_SCRIPT" \
+  && file_has_pattern 'state/kronos_signals.json' "$AGENT_ROOT/prompts/premarket_research.txt"; then
   echo "  - Kronos signal layer is configured and wired into premarket: ok"
 else
   echo "  - WARNING: Kronos signal layer is incomplete or not wired into premarket."
@@ -140,19 +156,19 @@ if [[ -f "$AGENT_ROOT/config/runtime.env.local.example" ]] \
   && [[ -f "$AGENT_ROOT/requirements-kronos-extra.txt" ]] \
   && [[ -f "$AGENT_ROOT/scripts/setup_kronos_env.sh" ]] \
   && [[ -f "$AGENT_ROOT/scripts/verify_kronos_env.sh" ]] \
-  && rg -q '^ENABLE_KRONOS_SIGNAL_LAYER=' "$AGENT_ROOT/config/runtime.env"; then
+  && file_has_pattern '^ENABLE_KRONOS_SIGNAL_LAYER=' "$AGENT_ROOT/config/runtime.env"; then
   echo "  - Portable Kronos setup files found: ok"
 else
   echo "  - WARNING: portable Kronos setup files missing."
 fi
 
-if rg -q 'Runtime mode behavior' "$AGENT_ROOT/prompts/intraday_check.txt"; then
+if file_has_pattern 'Runtime mode behavior' "$AGENT_ROOT/prompts/intraday_check.txt"; then
   echo "  - Intraday prompt has runtime mode gate: ok"
 else
   echo "  - WARNING: intraday prompt missing runtime mode gate."
 fi
 
-if rg -q 'Only use limit orders' "$AGENT_ROOT/config/risk.md"; then
+if file_has_pattern 'Only use limit orders' "$AGENT_ROOT/config/risk.md"; then
   echo "  - Limit-order-only rule found: ok"
 else
   echo "  - WARNING: limit-order-only rule missing."
