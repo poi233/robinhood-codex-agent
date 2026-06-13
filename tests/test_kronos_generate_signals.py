@@ -134,6 +134,26 @@ class PromptWiringTests(unittest.TestCase):
         prompt = (REPO_ROOT / "prompts" / "premarket_research.txt").read_text(encoding="utf-8")
         self.assertIn("state/kronos_signals.json", prompt)
         self.assertIn("kronos_signal_status", prompt)
+        self.assertIn("kronos_direction_bias", prompt)
+        self.assertIn("kronos_confidence", prompt)
+        self.assertIn("kronos_setup_bias", prompt)
+
+
+class SafetyWiringTests(unittest.TestCase):
+    def test_check_safety_verifies_run_premarket_kronos_gate(self) -> None:
+        contents = (REPO_ROOT / "scripts" / "check_safety.sh").read_text(encoding="utf-8")
+
+        self.assertIn('ENABLE_KRONOS_SIGNAL_LAYER', contents)
+        self.assertIn('scripts/run_premarket.sh', contents)
+        self.assertIn('run_kronos_premarket_scan.sh', contents)
+
+    def test_check_safety_verifies_portable_kronos_artifacts(self) -> None:
+        contents = (REPO_ROOT / "scripts" / "check_safety.sh").read_text(encoding="utf-8")
+
+        self.assertIn('config/runtime.env.local.example', contents)
+        self.assertIn('requirements-kronos-extra.txt', contents)
+        self.assertIn('scripts/setup_kronos_env.sh', contents)
+        self.assertIn('scripts/verify_kronos_env.sh', contents)
 
 
 class KronosGenerateSignalsTests(unittest.TestCase):
@@ -272,6 +292,172 @@ class KronosPredictor:
 
 
 class KronosRunnerTests(unittest.TestCase):
+    def test_premarket_runner_invokes_kronos_when_enabled(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp = Path(tmpdir)
+            scripts_dir = tmp / "scripts"
+            prompts_dir = tmp / "prompts"
+            scripts_dir.mkdir()
+            prompts_dir.mkdir()
+
+            (scripts_dir / "run_premarket.sh").write_text(
+                (REPO_ROOT / "scripts" / "run_premarket.sh").read_text(encoding="utf-8"),
+                encoding="utf-8",
+            )
+            (scripts_dir / "common.sh").write_text(
+                """
+#!/usr/bin/env bash
+set -euo pipefail
+AGENT_ROOT="$(pwd)"
+acquire_lock() { :; }
+is_weekday_pt() { return 0; }
+log_line() { printf 'log:%s\\n' "$*" >> "$AGENT_ROOT/calls.log"; }
+run_codex_prompt() { printf 'prompt:%s:%s\\n' "$1" "$2" >> "$AGENT_ROOT/calls.log"; }
+""".strip()
+                + "\n",
+                encoding="utf-8",
+            )
+            (scripts_dir / "run_kronos_premarket_scan.sh").write_text(
+                """
+#!/usr/bin/env bash
+set -euo pipefail
+printf 'kronos\\n' >> "$(pwd)/calls.log"
+""".strip()
+                + "\n",
+                encoding="utf-8",
+            )
+            (prompts_dir / "premarket_research.txt").write_text("prompt\n", encoding="utf-8")
+            os.chmod(scripts_dir / "run_kronos_premarket_scan.sh", 0o755)
+
+            env = dict(os.environ, ENABLE_DSA_SIGNAL_LAYER="0", ENABLE_KRONOS_SIGNAL_LAYER="1")
+            result = subprocess.run(
+                ["bash", str(scripts_dir / "run_premarket.sh")],
+                capture_output=True,
+                text=True,
+                check=False,
+                cwd=tmp,
+                env=env,
+            )
+
+            self.assertEqual(result.returncode, 0)
+            calls = (tmp / "calls.log").read_text(encoding="utf-8").splitlines()
+            self.assertEqual(calls[0], "kronos")
+            self.assertEqual(len(calls), 2)
+            self.assertTrue(calls[1].startswith("prompt:premarket:"))
+            self.assertTrue(calls[1].endswith("/prompts/premarket_research.txt"))
+
+    def test_premarket_runner_skips_kronos_when_disabled(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp = Path(tmpdir)
+            scripts_dir = tmp / "scripts"
+            prompts_dir = tmp / "prompts"
+            scripts_dir.mkdir()
+            prompts_dir.mkdir()
+
+            (scripts_dir / "run_premarket.sh").write_text(
+                (REPO_ROOT / "scripts" / "run_premarket.sh").read_text(encoding="utf-8"),
+                encoding="utf-8",
+            )
+            (scripts_dir / "common.sh").write_text(
+                """
+#!/usr/bin/env bash
+set -euo pipefail
+AGENT_ROOT="$(pwd)"
+acquire_lock() { :; }
+is_weekday_pt() { return 0; }
+log_line() { printf 'log:%s\\n' "$*" >> "$AGENT_ROOT/calls.log"; }
+run_codex_prompt() { printf 'prompt:%s:%s\\n' "$1" "$2" >> "$AGENT_ROOT/calls.log"; }
+""".strip()
+                + "\n",
+                encoding="utf-8",
+            )
+            (scripts_dir / "run_kronos_premarket_scan.sh").write_text(
+                """
+#!/usr/bin/env bash
+set -euo pipefail
+printf 'kronos\\n' >> "$(pwd)/calls.log"
+""".strip()
+                + "\n",
+                encoding="utf-8",
+            )
+            (prompts_dir / "premarket_research.txt").write_text("prompt\n", encoding="utf-8")
+            os.chmod(scripts_dir / "run_kronos_premarket_scan.sh", 0o755)
+
+            env = dict(os.environ, ENABLE_DSA_SIGNAL_LAYER="0", ENABLE_KRONOS_SIGNAL_LAYER="0")
+            result = subprocess.run(
+                ["bash", str(scripts_dir / "run_premarket.sh")],
+                capture_output=True,
+                text=True,
+                check=False,
+                cwd=tmp,
+                env=env,
+            )
+
+            self.assertEqual(result.returncode, 0)
+            calls = (tmp / "calls.log").read_text(encoding="utf-8").splitlines()
+            self.assertEqual(len(calls), 1)
+            self.assertTrue(calls[0].startswith("prompt:premarket:"))
+            self.assertTrue(calls[0].endswith("/prompts/premarket_research.txt"))
+
+    def test_premarket_runner_continues_when_kronos_fails(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp = Path(tmpdir)
+            scripts_dir = tmp / "scripts"
+            prompts_dir = tmp / "prompts"
+            scripts_dir.mkdir()
+            prompts_dir.mkdir()
+
+            (scripts_dir / "run_premarket.sh").write_text(
+                (REPO_ROOT / "scripts" / "run_premarket.sh").read_text(encoding="utf-8"),
+                encoding="utf-8",
+            )
+            (scripts_dir / "common.sh").write_text(
+                """
+#!/usr/bin/env bash
+set -euo pipefail
+AGENT_ROOT="$(pwd)"
+acquire_lock() { :; }
+is_weekday_pt() { return 0; }
+log_line() { printf 'log:%s\\n' "$*" >> "$AGENT_ROOT/calls.log"; }
+run_codex_prompt() { printf 'prompt:%s:%s\\n' "$1" "$2" >> "$AGENT_ROOT/calls.log"; }
+""".strip()
+                + "\n",
+                encoding="utf-8",
+            )
+            (scripts_dir / "run_kronos_premarket_scan.sh").write_text(
+                """
+#!/usr/bin/env bash
+set -euo pipefail
+printf 'kronos\\n' >> "$(pwd)/calls.log"
+exit 7
+""".strip()
+                + "\n",
+                encoding="utf-8",
+            )
+            (prompts_dir / "premarket_research.txt").write_text("prompt\n", encoding="utf-8")
+            os.chmod(scripts_dir / "run_kronos_premarket_scan.sh", 0o755)
+
+            env = dict(os.environ, ENABLE_DSA_SIGNAL_LAYER="0", ENABLE_KRONOS_SIGNAL_LAYER="1")
+            result = subprocess.run(
+                ["bash", str(scripts_dir / "run_premarket.sh")],
+                capture_output=True,
+                text=True,
+                check=False,
+                cwd=tmp,
+                env=env,
+            )
+
+            self.assertEqual(result.returncode, 0)
+            calls = (tmp / "calls.log").read_text(encoding="utf-8").splitlines()
+            self.assertEqual(calls[0], "kronos")
+            self.assertEqual(
+                calls[1],
+                "log:kronos_premarket_scan failed; continuing with main premarket research.",
+            )
+            self.assertEqual(len(calls), 3)
+            self.assertTrue(calls[2].startswith("prompt:premarket:"))
+            self.assertTrue(calls[2].endswith("/prompts/premarket_research.txt"))
+
     def test_mock_runner_writes_repo_state_file(self) -> None:
         state_file = REPO_ROOT / "state" / "kronos_signals.json"
         original_contents = state_file.read_text(encoding="utf-8") if state_file.exists() else None

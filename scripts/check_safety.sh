@@ -18,6 +18,7 @@ echo
 echo "Safety checks:"
 
 PROJECT_CODEX_CONFIG="$AGENT_ROOT/.codex/config.toml"
+PREMARKET_SCRIPT="$AGENT_ROOT/scripts/run_premarket.sh"
 READ_APPROVED_TOOLS=(
   get_accounts
   get_portfolio
@@ -126,6 +127,9 @@ fi
 
 if [[ -f "$AGENT_ROOT/scripts/kronos_generate_signals.py" ]] \
   && [[ -f "$AGENT_ROOT/scripts/run_kronos_premarket_scan.sh" ]] \
+  && [[ -f "$PREMARKET_SCRIPT" ]] \
+  && rg -q 'ENABLE_KRONOS_SIGNAL_LAYER' "$PREMARKET_SCRIPT" \
+  && rg -q 'run_kronos_premarket_scan\.sh' "$PREMARKET_SCRIPT" \
   && rg -q 'state/kronos_signals.json' "$AGENT_ROOT/prompts/premarket_research.txt"; then
   echo "  - Kronos signal layer is configured and wired into premarket: ok"
 else
@@ -133,6 +137,9 @@ else
 fi
 
 if [[ -f "$AGENT_ROOT/config/runtime.env.local.example" ]] \
+  && [[ -f "$AGENT_ROOT/requirements-kronos-extra.txt" ]] \
+  && [[ -f "$AGENT_ROOT/scripts/setup_kronos_env.sh" ]] \
+  && [[ -f "$AGENT_ROOT/scripts/verify_kronos_env.sh" ]] \
   && rg -q '^ENABLE_KRONOS_SIGNAL_LAYER=' "$AGENT_ROOT/config/runtime.env"; then
   echo "  - Portable Kronos setup files found: ok"
 else
