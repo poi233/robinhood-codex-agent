@@ -39,6 +39,24 @@ def validate_signal_symbols(universe_symbols: set[str], signal_map: dict[str, ob
         raise ValueError(f"signals contained symbols outside universe: {sorted(extra)}")
 
 
+def build_failed_payload(run_date: str, source_universe: str, note: str, mode: str) -> dict[str, object]:
+    return {
+        "date": run_date,
+        "generated_at": datetime.now().astimezone().isoformat(),
+        "timeframe": os.environ.get("KRONOS_TIMEFRAME", "30m"),
+        "horizon_bars": int(os.environ.get("KRONOS_HORIZON_BARS", "8")),
+        "source_universe": source_universe,
+        "model": {
+            "name": os.environ.get("KRONOS_MODEL_NAME", "NeoQuasar/Kronos-small"),
+            "tokenizer": os.environ.get("KRONOS_TOKENIZER_NAME", "NeoQuasar/Kronos-Tokenizer-base"),
+            "mode": mode,
+        },
+        "data_status": "failed",
+        "symbols": {},
+        "notes": note,
+    }
+
+
 def build_mock_payload(symbols: list[str], run_date: str, source_universe: str) -> dict[str, object]:
     signal_map = {}
     for index, symbol in enumerate(symbols):
@@ -100,6 +118,9 @@ def build_live_payload(symbols: list[str], run_date: str, source_universe: str) 
             history = yf.download(symbol, period=period, interval=interval, progress=False, auto_adjust=False)
             if history.empty:
                 raise ValueError("no market data returned")
+            if isinstance(history.columns, pd.MultiIndex):
+                history = history.copy()
+                history.columns = history.columns.get_level_values(0)
             history = history.rename(columns=str.lower).reset_index()
             history = history.rename(columns={history.columns[0]: "timestamps"})
             for column in ["open", "high", "low", "close"]:
@@ -178,12 +199,25 @@ def main() -> int:
     args = parse_args()
     universe_file = Path(args.universe_file)
     output_file = Path(args.output_file)
-    symbols = load_universe(universe_file)
-    payload = build_mock_payload(symbols, args.date, str(universe_file)) if args.mock else build_live_payload(symbols, args.date, str(universe_file))
+    try:
+        symbols = load_universe(universe_file)
+        payload = build_mock_payload(symbols, args.date, str(universe_file)) if args.mock else build_live_payload(symbols, args.date, str(universe_file))
+        exit_code = 0
+    except Exception as exc:
+        if args.mock:
+            raise
+        payload = build_failed_payload(
+            args.date,
+            str(universe_file),
+            f"live Kronos generation failed: {exc}",
+            "inference_only",
+        )
+        print(f"kronos signal generation failed: {exc}", file=sys.stderr)
+        exit_code = 1
     output_file.parent.mkdir(parents=True, exist_ok=True)
     output_file.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     print(f"kronos signals written: {output_file}")
-    return 0
+    return exit_code
 
 
 if __name__ == "__main__":
