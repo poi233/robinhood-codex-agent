@@ -98,6 +98,15 @@ class CommonRuntimeTests(unittest.TestCase):
 
 
 class PortableArtifactTests(unittest.TestCase):
+    def test_readme_mentions_portable_kronos_rebuild_and_validation_commands(self) -> None:
+        readme = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
+
+        self.assertIn("./scripts/setup_kronos_env.sh", readme)
+        self.assertIn("./scripts/verify_kronos_env.sh", readme)
+        self.assertIn("./scripts/check_safety.sh", readme)
+        self.assertIn("KRONOS_BOOTSTRAP_PYTHON", readme)
+        self.assertRegex(readme, r"python3\.12|python3\.11")
+
     def test_runtime_env_local_example_exists(self) -> None:
         self.assertTrue((REPO_ROOT / "config" / "runtime.env.local.example").exists())
 
@@ -127,6 +136,148 @@ class PortableArtifactTests(unittest.TestCase):
         self.assertIn("Python `venv` support", contents)
         self.assertIn("pending later tasks", contents)
         self.assertNotIn("run_kronos_premarket_scan.sh", contents)
+
+    def test_setup_doc_mentions_bootstrap_python_override(self) -> None:
+        contents = (REPO_ROOT / "docs" / "setup" / "kronos-portable-setup.md").read_text(encoding="utf-8")
+
+        self.assertIn("KRONOS_BOOTSTRAP_PYTHON", contents)
+        self.assertRegex(contents, r"python3\.12|python3\.11")
+
+    def test_setup_script_fails_fast_when_only_unsupported_python_is_available(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp = Path(tmpdir)
+            repo = tmp / "repo"
+            fake_bin = tmp / "bin"
+            (repo / "scripts").mkdir(parents=True)
+            fake_bin.mkdir()
+
+            (repo / "scripts" / "setup_kronos_env.sh").write_text(
+                (REPO_ROOT / "scripts" / "setup_kronos_env.sh").read_text(encoding="utf-8"),
+                encoding="utf-8",
+            )
+            (fake_bin / "git").write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+            (fake_bin / "python3").write_text(
+                "#!/bin/sh\n"
+                "if [ \"$1\" = \"-c\" ]; then\n"
+                "  printf '3.13\\n'\n"
+                "  exit 0\n"
+                "fi\n"
+                "exit 0\n",
+                encoding="utf-8",
+            )
+            os.chmod(fake_bin / "git", 0o755)
+            os.chmod(fake_bin / "python3", 0o755)
+
+            result = subprocess.run(
+                ["/bin/bash", str(repo / "scripts" / "setup_kronos_env.sh")],
+                cwd=repo,
+                capture_output=True,
+                text=True,
+                check=False,
+                env={**os.environ, "PATH": f"{fake_bin}:{os.environ.get('PATH', '')}"},
+            )
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("KRONOS_BOOTSTRAP_PYTHON", result.stderr)
+            self.assertIn("python3.12", result.stderr)
+            self.assertIn("python3.11", result.stderr)
+            self.assertIn("3.13", result.stderr)
+
+    def test_setup_script_prefers_compatible_python_when_python3_is_unsupported(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp = Path(tmpdir)
+            repo = tmp / "repo"
+            fake_bin = tmp / "bin"
+            venv_python_log = tmp / "venv-python.log"
+            pip_log = tmp / "pip.log"
+            git_log = tmp / "git.log"
+
+            (repo / "scripts").mkdir(parents=True)
+            (repo / "config").mkdir()
+            fake_bin.mkdir()
+
+            (repo / "scripts" / "setup_kronos_env.sh").write_text(
+                (REPO_ROOT / "scripts" / "setup_kronos_env.sh").read_text(encoding="utf-8"),
+                encoding="utf-8",
+            )
+            (repo / "config" / "runtime.env.local.example").write_text("TRADING_MODE=paper\n", encoding="utf-8")
+            (repo / "requirements-kronos-extra.txt").write_text("example-extra\n", encoding="utf-8")
+
+            (fake_bin / "git").write_text(
+                "#!/bin/sh\n"
+                "printf '%s\\n' \"$*\" >> \"$GIT_LOG\"\n"
+                "if [ \"$1\" = \"clone\" ]; then\n"
+                "  target=\"$3\"\n"
+                "  mkdir -p \"$target/.git\"\n"
+                "  printf 'example-package\\n' > \"$target/requirements.txt\"\n"
+                "fi\n"
+                "exit 0\n",
+                encoding="utf-8",
+            )
+            (fake_bin / "python3").write_text(
+                "#!/bin/sh\n"
+                "if [ \"$1\" = \"-c\" ]; then\n"
+                "  printf '3.13\\n'\n"
+                "  exit 0\n"
+                "fi\n"
+                "exit 0\n",
+                encoding="utf-8",
+            )
+            (fake_bin / "python3.11").write_text(
+                "#!/bin/sh\n"
+                "if [ \"$1\" = \"-c\" ]; then\n"
+                "  printf '3.11\\n'\n"
+                "  exit 0\n"
+                "fi\n"
+                "if [ \"$1\" = \"-m\" ] && [ \"$2\" = \"venv\" ]; then\n"
+                "  venv_dir=\"$3\"\n"
+                "  mkdir -p \"$venv_dir/bin\"\n"
+                "  cat > \"$venv_dir/bin/python\" <<'EOF'\n"
+                "#!/bin/sh\n"
+                "printf '%s\\n' \"$0 $*\" >> \"$VENV_PYTHON_LOG\"\n"
+                "if [ \"$1\" = \"-m\" ] && [ \"$2\" = \"pip\" ]; then\n"
+                "  exit 0\n"
+                "fi\n"
+                "exit 0\n"
+                "EOF\n"
+                "  cat > \"$venv_dir/bin/pip\" <<'EOF'\n"
+                "#!/bin/sh\n"
+                "printf '%s\\n' \"$0 $*\" >> \"$PIP_LOG\"\n"
+                "exit 0\n"
+                "EOF\n"
+                "  chmod +x \"$venv_dir/bin/python\" \"$venv_dir/bin/pip\"\n"
+                "  exit 0\n"
+                "fi\n"
+                "exit 0\n",
+                encoding="utf-8",
+            )
+            for path in (fake_bin / "git", fake_bin / "python3", fake_bin / "python3.11"):
+                os.chmod(path, 0o755)
+
+            result = subprocess.run(
+                ["/bin/bash", str(repo / "scripts" / "setup_kronos_env.sh")],
+                cwd=repo,
+                capture_output=True,
+                text=True,
+                check=False,
+                env={
+                    **os.environ,
+                    "PATH": f"{fake_bin}:{os.environ.get('PATH', '')}",
+                    "GIT_LOG": str(git_log),
+                    "VENV_PYTHON_LOG": str(venv_python_log),
+                    "PIP_LOG": str(pip_log),
+                },
+            )
+
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+            self.assertTrue((repo / "config" / "runtime.env.local").exists())
+            env_contents = (repo / "config" / "runtime.env.local").read_text(encoding="utf-8")
+            self.assertIn(f"KRONOS_PYTHON_BIN={repo / '.venv-kronos' / 'bin' / 'python'}", env_contents)
+            self.assertIn(f"KRONOS_PROJECT_ROOT={repo / '.vendor' / 'kronos'}", env_contents)
+            self.assertIn("python3.11", result.stdout)
+            self.assertTrue(venv_python_log.exists())
+            self.assertTrue(pip_log.exists())
+
 
 
 class PromptWiringTests(unittest.TestCase):

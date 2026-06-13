@@ -190,9 +190,37 @@ Project MCP approval policy:
 
 ## Setup
 
+Portable Kronos setup requires `git` and a bootstrap interpreter on Python `3.11` or `3.12`.
+The setup script prefers `python3.12`, then `python3.11`, and only falls back to `python3` if it resolves to a supported version.
+If your machine defaults to an unsupported interpreter such as Python `3.13`, point setup at a compatible one explicitly:
+
+```bash
+KRONOS_BOOTSTRAP_PYTHON=$(command -v python3.12) ./scripts/setup_kronos_env.sh
+```
+
+Portable rebuild and validation flow:
+
+```bash
+git clone <repo-url>
+cd trading
+chmod +x scripts/*.sh
+./scripts/setup_kronos_env.sh
+./scripts/verify_kronos_env.sh
+./scripts/check_safety.sh
+```
+
+For a clean rebuild of the portable Kronos environment:
+
+```bash
+rm -rf .venv-kronos .vendor/kronos
+./scripts/setup_kronos_env.sh
+./scripts/verify_kronos_env.sh
+```
+
 Install and authenticate Codex, then connect Robinhood Trading MCP:
 
 ```bash
+codex login
 codex mcp add robinhood-trading --url https://agent.robinhood.com/mcp/trading
 codex
 /mcp
@@ -205,12 +233,14 @@ Then run:
 ```bash
 cd /path/to/robinhood-codex-agent
 chmod +x scripts/*.sh
+./scripts/setup_kronos_env.sh
+./scripts/verify_kronos_env.sh
 ./scripts/check_safety.sh
 ```
 
 ## Dry Run
 
-Dry-run the shell layer without invoking Codex:
+Dry-run the shell layer without invoking Codex after setup and safety checks pass:
 
 ```bash
 CODEX_EXEC_DRY_RUN=1 ./scripts/run_premarket.sh
