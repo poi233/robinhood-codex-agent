@@ -11,6 +11,9 @@
 *.local
 *.secret
 *.token
+config/runtime.env.local
+.vendor/
+.venv-kronos/
 
 # Codex / automation runtime artifacts
 .codex/session*
@@ -35,4 +38,3 @@ node_modules/
 dist/
 build/
 .cache/
-
