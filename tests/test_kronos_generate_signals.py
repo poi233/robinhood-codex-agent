@@ -86,3 +86,15 @@ class CommonRuntimeTests(unittest.TestCase):
 
             self.assertEqual(result.returncode, 0)
             self.assertEqual(result.stdout, "live")
+
+
+class PortableArtifactTests(unittest.TestCase):
+    def test_runtime_env_local_example_exists(self) -> None:
+        self.assertTrue((REPO_ROOT / "config" / "runtime.env.local.example").exists())
+
+    def test_requirements_kronos_extra_exists(self) -> None:
+        self.assertTrue((REPO_ROOT / "requirements-kronos-extra.txt").exists())
+
+    def test_setup_and_verify_scripts_exist(self) -> None:
+        self.assertTrue((REPO_ROOT / "scripts" / "setup_kronos_env.sh").exists())
+        self.assertTrue((REPO_ROOT / "scripts" / "verify_kronos_env.sh").exists())
