@@ -12,6 +12,7 @@ Read:
 - `config/runtime.env`
 - `state/daily_plan.json`
 - `state/dynamic_allowlist.json`
+- `state/dsa_signals.json`
 - `state/today_allowlist.txt`
 - `state/daily_usage.json`
 - `logs/decisions.jsonl`
@@ -24,10 +25,11 @@ Tasks:
 4. Reconcile `logs/orders.jsonl` with Robinhood order status where available.
 5. Identify unexpected behavior, rule violations, data failures, duplicate runs, stale plan usage, or missing logs.
 6. Review today's dynamic allowlist quality: which selected symbols worked, which were noise, which sectors should be promoted or demoted tomorrow.
-7. Recommend tomorrow's mode: `aggressive`, `normal`, `reduced_risk`, or `no_trade`.
-8. Recommend whether to keep, lower, or manually raise `RISK_TIER`; never edit `config/runtime.env` yourself.
-9. Write `logs/postmarket_summary.md`.
-10. Append one JSON line to `logs/decisions.jsonl` with `decision="postmarket_summary"`.
+7. Review DSA signal quality: which DSA-promoted symbols helped, which were noisy, which DSA blocks were useful, and which strategy lenses should be promoted or demoted tomorrow.
+8. Recommend tomorrow's mode: `aggressive`, `normal`, `reduced_risk`, or `no_trade`.
+9. Recommend whether to keep, lower, or manually raise `RISK_TIER`; never edit `config/runtime.env` yourself.
+10. Write `logs/postmarket_summary.md`.
+11. Append one JSON line to `logs/decisions.jsonl` with `decision="postmarket_summary"`.
 
 Safety:
 - Never place, review, or cancel orders in this run.
@@ -79,6 +81,14 @@ Safety:
 - Symbols to keep:
 - Symbols to block tomorrow:
 - New candidates to research:
+
+## DSA Signal Review
+- Signal file status:
+- Best DSA lenses:
+- Noisy DSA lenses:
+- DSA-promoted symbols:
+- DSA-blocked symbols:
+- Strategy weight notes:
 
 ## Tomorrow Mode
 - Recommended mode:

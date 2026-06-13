@@ -10,6 +10,8 @@ Read these local files first:
 - `config/risk_tiers.json`
 - `config/strategy.md`
 - `config/runtime.env`
+- `config/dsa_strategy_weights.json`
+- `state/dsa_signals.json` if it exists and is for today
 
 Account scope:
 - Identify the dedicated Robinhood Agentic Account.
@@ -22,28 +24,37 @@ Tasks:
 2. Check whether today appears to be a normal U.S. equity trading day. If uncertain, set `market_regime` to `no_trade`.
 3. Check the Agentic Account portfolio, buying power, positions, and open equity orders.
 4. Read `config/universe.txt` as the maximum candidate universe.
-5. Check current quote and prior-close data for a focused candidate set from the universe. Do not exceed MCP quote limits; batch if needed.
-6. Perform an aggressive-growth market scan modeled on my existing stock-report automations:
+5. Read `state/dsa_signals.json` if present. Treat it as a non-binding research signal layer only:
+   - It may promote, demote, or block candidates in the scoring process.
+   - It must never override `config/risk.md`, Robinhood MCP account/quote/tradability checks, daily caps, trading mode, or the daily plan schema.
+   - If it is missing, stale, invalid, or partial, continue the main scan and record `dsa_signal_status` accordingly.
+6. Check current quote and prior-close data for a focused candidate set from the universe. Prioritize symbols surfaced by DSA signals plus the strongest priority-sector names. Do not exceed MCP quote limits; batch if needed.
+7. Perform an aggressive-growth market scan modeled on my existing stock-report automations:
    - market regime: SPY, QQQ, IWM, SMH, VIX if available, rates/DXY if available;
    - priority sectors: AI semiconductors, AI data-center infrastructure, CPO/photonics/interconnect, space/defense/autonomy, nuclear/power, high-beta AI software;
    - catalysts: earnings dates, guidance/news, contracts, launches, investor days, policy/regulatory items, sector momentum;
    - technicals: gap, relative strength, prior close, reclaim/breakout/pullback setup, liquidity;
    - portfolio/account fit: small Agentic Account cash, existing positions, open orders, buying power.
-7. Apply a compressed multi-framework quality check before selecting candidates:
+8. Apply a compressed multi-framework quality check before selecting candidates:
    - Serenity/narrow-gate: is there a real supply-chain bottleneck or hard catalyst?
    - Public-equity PM: why now, what is priced in, first rebuttal, what kills the setup?
    - Buffett filter: avoid obvious quality/balance-sheet/valuation traps for larger orders.
    - TradingAgents-style debate: bull case, bear case, risk manager limit.
    - UZI-style trap screen: avoid hype-only moves, thin liquidity, financing/issuance risk, and unverified news.
-8. Select 3-8 symbols for today's dynamic allowlist. Prefer AI, space, defense, nuclear/power, and infrastructure when their score and data quality justify it. Include broad ETFs only when single-name quality is weak or market risk is elevated.
-9. Decide today's `market_regime`: `normal`, `aggressive_ok`, `risk_off`, or `no_trade`.
-10. Decide today's `risk_level`, `risk_multiplier`, `today_watchlist`, `blocked_symbols`, `allowed_actions`, and per-symbol rules.
-11. Write `state/today_allowlist.txt` with today's selected symbols, one symbol per line. Include comments only after `#`.
-12. Write `state/dynamic_allowlist.json` with scores and reasons.
-13. Write `state/daily_plan.json` with the exact JSON schema below.
-14. Write `state/daily_plan.md` with a concise human-readable summary.
-15. Initialize or reset `state/daily_usage.json` for the current date, preserving no old usage if the date changed.
-16. Append one JSON line to `logs/decisions.jsonl` with `decision="premarket_plan"`.
+9. Apply Daily Stock Analysis-style signal blending:
+   - Use `hot_theme`, `event_driven`, `bull_trend`, `shrink_pullback`, `volume_breakout`, `growth_quality`, and `dragon_head` signals only when supported by current data.
+   - A DSA `promote` signal can add confidence, but cannot select a symbol that fails Robinhood quote/tradability/risk checks.
+   - A DSA `block` signal should block the symbol unless stronger verified current evidence proves the block is obsolete.
+   - A DSA `watch_only` or low-confidence signal cannot become an executable candidate by itself.
+10. Select 3-8 symbols for today's dynamic allowlist. Prefer AI, space, defense, nuclear/power, and infrastructure when their score and data quality justify it. Include broad ETFs only when single-name quality is weak or market risk is elevated.
+11. Decide today's `market_regime`: `normal`, `aggressive_ok`, `risk_off`, or `no_trade`.
+12. Decide today's `risk_level`, `risk_multiplier`, `today_watchlist`, `blocked_symbols`, `allowed_actions`, and per-symbol rules.
+13. Write `state/today_allowlist.txt` with today's selected symbols, one symbol per line. Include comments only after `#`.
+14. Write `state/dynamic_allowlist.json` with scores and reasons.
+15. Write `state/daily_plan.json` with the exact JSON schema below.
+16. Write `state/daily_plan.md` with a concise human-readable summary.
+17. Initialize or reset `state/daily_usage.json` for the current date, preserving no old usage if the date changed.
+18. Append one JSON line to `logs/decisions.jsonl` with `decision="premarket_plan"`.
 
 `state/daily_plan.json` schema:
 {
@@ -77,6 +88,7 @@ Tasks:
     "robinhood_mcp": "ok|failed|partial",
     "quotes": "ok|failed|partial",
     "market_calendar": "ok|uncertain",
+    "dsa_signal_status": "ok|missing|stale|partial|failed",
     "missing_or_stale": []
   },
   "no_trade_reasons": [],
@@ -101,6 +113,9 @@ Tasks:
   "symbol_scores": {
     "SPY": {
       "score": 0,
+      "dsa_score": 0,
+      "dsa_bias": "strong_candidate|candidate|watch_only|blocked|missing",
+      "dsa_strategies": ["bull_trend"],
       "theme": "broad_beta",
       "reason": "short text",
       "setup": "pullback|breakout|reclaim|watch_only|blocked",

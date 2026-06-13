@@ -40,14 +40,19 @@ config/
   runtime.env            current mode, model, tier, notional caps
   strategy.md            trading and screening strategy
   universe.txt           maximum candidate universe
+  dsa_strategy_weights.json
+                         Daily Stock Analysis-inspired signal weights
 
 prompts/
+  dsa_premarket_scan.txt research-only strategy signal generator
   premarket_research.txt research-only daily plan generator
   intraday_check.txt     scheduled intraday decision agent
   postmarket_summary.txt review-only daily reconciliation
 
 scripts/
   common.sh              shared runtime helpers
+  run_dsa_premarket_scan.sh
+                         optional standalone DSA signal scan
   run_premarket.sh       premarket entrypoint
   run_intraday.sh        intraday entrypoint
   run_postmarket.sh      postmarket entrypoint
@@ -72,11 +77,25 @@ KILL_SWITCH              default safety stop file
 
 ### Premarket
 
-The premarket agent does research only. It never reviews, places, or cancels orders.
+The premarket flow has two research-only layers. Neither reviews, places, or cancels orders.
+
+First, the optional Daily Stock Analysis-inspired signal layer runs through Codex subscription via `codex exec`.
+It does not run the third-party project's own LLM API stack by default.
 
 It:
 
-- reads `config/universe.txt`, `risk.md`, `risk_tiers.json`, `strategy.md`, and `runtime.env`
+- reads `config/universe.txt`, `strategy.md`, `risk.md`, and `dsa_strategy_weights.json`
+- applies DSA-style lenses: hot theme, event driven, bull trend, shrink pullback, volume breakout, growth quality, and sector leader behavior
+- writes `state/dsa_signals.json`
+- appends one `dsa_premarket_scan` record to `logs/decisions.jsonl`
+
+This layer is advisory only. It can promote, demote, or block research candidates, but it cannot authorize a trade.
+
+Then the main premarket agent creates the official daily plan.
+
+It:
+
+- reads `config/universe.txt`, `risk.md`, `risk_tiers.json`, `strategy.md`, `runtime.env`, and same-day `state/dsa_signals.json` when present
 - identifies the dedicated Robinhood Agentic Account
 - checks buying power, positions, and open equity orders
 - scans market regime and priority sectors
@@ -97,6 +116,18 @@ The screen prioritizes:
 - nuclear, uranium, power, and energy infrastructure
 - broad ETFs only when single-name quality is weak or risk is elevated
 
+Run only the DSA signal layer manually:
+
+```bash
+./scripts/run_dsa_premarket_scan.sh
+```
+
+Disable the DSA signal layer for scheduled premarket runs:
+
+```bash
+ENABLE_DSA_SIGNAL_LAYER=0 ./scripts/run_premarket.sh
+```
+
 ### Intraday
 
 The intraday agent is intended to run every 30 minutes during market hours.
@@ -104,6 +135,7 @@ The intraday agent is intended to run every 30 minutes during market hours.
 It:
 
 - reads the premarket plan and dynamic allowlist
+- reads same-day DSA signals when present
 - checks `KILL_SWITCH`
 - checks local time window
 - checks trading mode
@@ -148,6 +180,7 @@ Hard defaults:
 - max single order and daily notional are capped by the most conservative configured value
 - if data is missing, stale, or inconsistent, do nothing
 - if `KILL_SWITCH` exists, intraday trading is blocked
+- DSA signals are advisory only and cannot bypass risk or account checks
 
 Project MCP approval policy:
 
@@ -226,6 +259,7 @@ These are intentionally ignored by git:
 - `state/daily_plan.json`
 - `state/daily_plan.md`
 - `state/dynamic_allowlist.json`
+- `state/dsa_signals.json`
 - `state/today_allowlist.txt`
 - `state/daily_usage.json`
 - `logs/codex_runs.log`
@@ -235,4 +269,3 @@ These are intentionally ignored by git:
 - `logs/postmarket_summary.md`
 
 Keep generated state and logs local because they can contain account size, decisions, symbols, timestamps, and operational details.
-

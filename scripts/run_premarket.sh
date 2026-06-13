@@ -13,4 +13,10 @@ if ! is_weekday_pt && [[ "${ALLOW_WEEKEND_RUN:-0}" != "1" ]]; then
   exit 0
 fi
 
+if [[ "${ENABLE_DSA_SIGNAL_LAYER:-1}" == "1" ]]; then
+  if ! run_codex_prompt "dsa_premarket_scan" "$AGENT_ROOT/prompts/dsa_premarket_scan.txt"; then
+    log_line "dsa_premarket_scan failed; continuing with main premarket research."
+  fi
+fi
+
 run_codex_prompt "premarket" "$AGENT_ROOT/prompts/premarket_research.txt"

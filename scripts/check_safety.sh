@@ -108,10 +108,20 @@ if [[ "$write_auto_approvals" -eq 0 ]]; then
 fi
 
 if rg -q 'Do not call .*place_equity_order' "$AGENT_ROOT/prompts/premarket_research.txt" \
-  && rg -q 'Do not call .*place_equity_order' "$AGENT_ROOT/prompts/postmarket_summary.txt"; then
+  && rg -q 'Do not call .*place_equity_order' "$AGENT_ROOT/prompts/postmarket_summary.txt" \
+  && rg -q 'never place, review, cancel, or modify orders' "$AGENT_ROOT/prompts/dsa_premarket_scan.txt"; then
   echo "  - Non-trading prompts explicitly forbid place_equity_order: ok"
 else
   echo "  - WARNING: non-trading prompts do not explicitly forbid place_equity_order."
+fi
+
+if [[ -f "$AGENT_ROOT/config/dsa_strategy_weights.json" ]] \
+  && [[ -f "$AGENT_ROOT/prompts/dsa_premarket_scan.txt" ]] \
+  && rg -q 'state/dsa_signals.json' "$AGENT_ROOT/prompts/premarket_research.txt" \
+  && rg -q 'state/dsa_signals.json' "$AGENT_ROOT/prompts/intraday_check.txt"; then
+  echo "  - DSA signal layer is configured and wired into premarket/intraday: ok"
+else
+  echo "  - WARNING: DSA signal layer is incomplete or not wired into prompts."
 fi
 
 if rg -q 'Runtime mode behavior' "$AGENT_ROOT/prompts/intraday_check.txt"; then
