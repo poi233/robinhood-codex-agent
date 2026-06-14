@@ -59,10 +59,11 @@ class CommonRuntimeSkillFeedTests(unittest.TestCase):
                     "-lc",
                     (
                         f"cd {tmp} && source scripts/common.sh && "
-                        "printf '%s\\n%s\\n%s\\n%s' "
+                        "printf '%s\\n%s\\n%s\\n%s\\n%s' "
                         "\"$ENABLE_MARKET_FEED_LAYER\" "
                         "\"$MARKET_FEED_DIR\" "
-                        "\"$TECHNICAL_SIGNALS_FILE\" "
+                        "\"$RUN_STATE_DIR\" "
+                        "\"$DSA_SIGNALS_PATH\" "
                         "\"$TECHNICAL_SIGNALS_PATH\""
                     ),
                 ],
@@ -72,9 +73,9 @@ class CommonRuntimeSkillFeedTests(unittest.TestCase):
             )
 
             self.assertEqual(result.returncode, 0)
-            self.assertIn("/state/market_feed/", result.stdout)
-            self.assertIn("state/technical_signals.json", result.stdout)
-            self.assertIn("/state/technical_signals.json", result.stdout)
+            self.assertIn("/state/runs/", result.stdout)
+            self.assertIn("/market_feed", result.stdout)
+            self.assertIn("/signals/technical_signals.json", result.stdout)
 
     def test_common_sh_preserves_market_feed_dir_override(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

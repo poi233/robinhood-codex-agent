@@ -16,15 +16,15 @@ class PolicyLoaderTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
             (root / "config").mkdir()
-            (root / "state").mkdir()
+            (root / "state" / "runs" / "2026-06-14" / "planner").mkdir(parents=True)
             (root / "config" / "universe.txt").write_text("NVDA\n# comment\nSMH\n", encoding="utf-8")
-            (root / "state" / "today_allowlist.txt").write_text("NVDA\nSMH # broad ETF\n", encoding="utf-8")
+            (root / "state" / "runs" / "2026-06-14" / "planner" / "today_allowlist.txt").write_text("NVDA\nSMH # broad ETF\n", encoding="utf-8")
             write_json(
                 root / "config" / "risk_tiers.json",
                 {"0": {"max_single_order_notional": 10, "max_daily_notional": 25}},
             )
             write_json(
-                root / "state" / "daily_plan.json",
+                root / "state" / "runs" / "2026-06-14" / "planner" / "daily_plan.json",
                 {
                     "date": "2026-06-14",
                     "market_regime": "normal",
@@ -34,12 +34,15 @@ class PolicyLoaderTests(unittest.TestCase):
                 },
             )
             write_json(
-                root / "state" / "dynamic_allowlist.json",
+                root / "state" / "runs" / "2026-06-14" / "planner" / "dynamic_allowlist.json",
                 {"date": "2026-06-14", "symbol_scores": {"NVDA": {"score": 88}}},
             )
-            write_json(root / "state" / "daily_usage.json", {"date": "2026-06-14", "used_notional": 5})
             write_json(
-                root / "state" / "research_reports" / "2026-06-14" / "NVDA.json",
+                root / "state" / "runs" / "2026-06-14" / "planner" / "daily_usage.json",
+                {"date": "2026-06-14", "used_notional": 5},
+            )
+            write_json(
+                root / "state" / "runs" / "2026-06-14" / "research_reports" / "NVDA.json",
                 {
                     "date": "2026-06-14",
                     "symbol": "NVDA",

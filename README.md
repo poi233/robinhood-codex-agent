@@ -73,10 +73,22 @@ scripts/
   check_safety.sh        local safety sanity check
 
 state/
-  .gitkeep               generated plans live here locally
+  .gitkeep               generated runtime state lives here locally
+  runs/YYYY-MM-DD/       one folder per trading day
+    market_feed/         collected charts, ohlcv, news, manifest
+    signals/             dsa, kronos, technical outputs
+    planner/             allowlist, plan, usage snapshot
+    archive/             archived premarket report payload
 
 logs/
-  .gitkeep               generated logs live here locally
+  .gitkeep               generated runtime logs live here locally
+  runs/YYYY-MM-DD/       one folder per trading day
+    pipeline.jsonl       stage-level started/completed/failed log
+    codex_runs.log       codex stdout aggregation
+    errors.log           codex stderr aggregation
+    decisions.jsonl      planner and intraday decisions
+    orders.jsonl         live/review order audit trail
+    postmarket_summary.md
 
 launchd/
   *.plist.example        macOS launchd examples
@@ -101,19 +113,19 @@ It:
 
 - reads `config/universe.txt`, `strategy.md`, `risk.md`, and `dsa_strategy_weights.json`
 - applies DSA-style lenses: hot theme, event driven, bull trend, shrink pullback, volume breakout, growth quality, and sector leader behavior
-- writes `state/dsa_signals.json`
-- appends one `dsa_premarket_scan` record to `logs/decisions.jsonl`
+- writes `state/runs/<date>/signals/dsa_signals.json`
+- appends one `dsa_premarket_scan` record to `logs/runs/<date>/decisions.jsonl`
 
 This layer is advisory only. It can promote, demote, or block research candidates, but it cannot authorize a trade.
 
-Second, the optional Kronos forecast layer runs locally and writes `state/kronos_signals.json`.
+Second, the optional Kronos forecast layer runs locally and writes `state/runs/<date>/signals/kronos_signals.json`.
 It is advisory only and cannot bypass account, tradability, or risk gates.
 
 Third, the market-feed collector and repo-owned technical research layer run:
 
-- collector writes `state/market_feed/<date>/` with `charts/`, `ohlcv/`, `news/`, and `manifest.json`
+- collector writes `state/runs/<date>/market_feed/` with `charts/`, `ohlcv/`, `news/`, and `manifest.json`
 - technical research reads the repo-owned skills under `.agents/skills/`
-- technical research writes `state/technical_signals.json`
+- technical research writes `state/runs/<date>/signals/technical_signals.json`
 
 This layer is also advisory only. It adds execution-aware price levels, no-trade zones, and long/short-management scenarios for the main planner and intraday checker.
 
@@ -121,17 +133,18 @@ Then the main premarket agent creates the official daily plan.
 
 It:
 
-- reads `config/universe.txt`, `risk.md`, `risk_tiers.json`, `strategy.md`, `runtime.env`, and same-day `state/dsa_signals.json`, `state/kronos_signals.json`, and `state/technical_signals.json` when present
+- reads `config/universe.txt`, `risk.md`, `risk_tiers.json`, `strategy.md`, `runtime.env`, and same-day `state/runs/<date>/signals/*.json` outputs when present
 - identifies the dedicated Robinhood Agentic Account
 - checks buying power, positions, and open equity orders
 - scans market regime and priority sectors
 - builds a dynamic daily allowlist
-- writes `state/today_allowlist.txt`
-- writes `state/dynamic_allowlist.json`
-- writes `state/daily_plan.json`
-- writes `state/daily_plan.md`
-- resets `state/daily_usage.json`
-- appends one `premarket_plan` record to `logs/decisions.jsonl`
+- writes `state/runs/<date>/planner/today_allowlist.txt`
+- writes `state/runs/<date>/planner/dynamic_allowlist.json`
+- writes `state/runs/<date>/planner/daily_plan.json`
+- writes `state/runs/<date>/planner/daily_plan.md`
+- resets `state/runs/<date>/planner/daily_usage.json`
+- appends one `premarket_plan` record to `logs/runs/<date>/decisions.jsonl`
+- records stage status in `logs/runs/<date>/pipeline.jsonl`
 
 The screen prioritizes:
 
@@ -170,7 +183,7 @@ It:
 
 - reads the premarket plan and dynamic allowlist
 - reads same-day DSA signals when present
-- reads same-day `state/technical_signals.json` when present
+- reads same-day `state/runs/<date>/signals/technical_signals.json` when present
 - checks `KILL_SWITCH`
 - checks local time window
 - checks trading mode
@@ -196,8 +209,8 @@ It:
 - identifies rule violations or data failures
 - reviews allowlist quality
 - recommends tomorrow's mode
-- writes `logs/postmarket_summary.md`
-- appends one `postmarket_summary` record to `logs/decisions.jsonl`
+- writes `logs/runs/<date>/postmarket_summary.md`
+- appends one `postmarket_summary` record to `logs/runs/<date>/decisions.jsonl`
 
 ## Safety Rules
 
@@ -235,12 +248,13 @@ This repo now ships its own trading skill pack under `.agents/skills/`.
 The scheduled research workflow now includes:
 
 ```text
-DSA signal scan
-  -> Kronos signal scan
-  -> market feed collection
-  -> technical research
+market_context
+  -> parallel: DSA signal scan / Kronos signal scan / technical research
   -> main premarket planner
+  -> archive snapshot
 ```
+
+`planner` is currently the slowest stage because it still performs account checks, quote validation, scoring, and final synthesis inside one Codex run. The pipeline is already parallelized before planner; the next split point is planner decomposition, not the upstream signal layers.
 
 ## Setup
 
@@ -345,16 +359,10 @@ Never let Codex edit `RISK_TIER` by itself. Postmarket may recommend a tier chan
 
 These are intentionally ignored by git:
 
-- `state/daily_plan.json`
-- `state/daily_plan.md`
-- `state/dynamic_allowlist.json`
-- `state/dsa_signals.json`
-- `state/today_allowlist.txt`
-- `state/daily_usage.json`
-- `logs/codex_runs.log`
-- `logs/decisions.jsonl`
-- `logs/orders.jsonl`
-- `logs/errors.log`
-- `logs/postmarket_summary.md`
+- `state/runs/YYYY-MM-DD/market_feed/`
+- `state/runs/YYYY-MM-DD/signals/`
+- `state/runs/YYYY-MM-DD/planner/`
+- `state/runs/YYYY-MM-DD/archive/`
+- `logs/runs/YYYY-MM-DD/`
 
 Keep generated state and logs local because they can contain account size, decisions, symbols, timestamps, and operational details.

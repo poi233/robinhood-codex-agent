@@ -11,9 +11,9 @@ Read these local files first:
 - `config/strategy.md`
 - `config/runtime.env`
 - `config/dsa_strategy_weights.json`
-- `state/dsa_signals.json` if it exists and is for today
-- `state/kronos_signals.json` if it exists and is for today
-- `state/technical_signals.json` if it exists and is for today
+- `DSA_SIGNALS_PATH` if it exists and is for today
+- `KRONOS_SIGNALS_PATH` if it exists and is for today
+- `TECHNICAL_SIGNALS_PATH` if it exists and is for today
 
 Account scope:
 - Identify the dedicated Robinhood Agentic Account.
@@ -26,15 +26,15 @@ Tasks:
 2. Check whether today appears to be a normal U.S. equity trading day. If uncertain, set `market_regime` to `no_trade`.
 3. Check the Agentic Account portfolio, buying power, positions, and open equity orders.
 4. Read `config/universe.txt` as the maximum candidate universe.
-5. Read `state/dsa_signals.json` if present. Treat it as a non-binding research signal layer only:
+5. Read `DSA_SIGNALS_PATH` if present. Treat it as a non-binding research signal layer only:
    - It may promote, demote, or block candidates in the scoring process.
    - It must never override `config/risk.md`, Robinhood MCP account/quote/tradability checks, daily caps, trading mode, or the daily plan schema.
    - If it is missing, stale, invalid, or partial, continue the main scan and record `dsa_signal_status` accordingly.
-6. Read `state/kronos_signals.json` if present. Treat it as a non-binding forecast layer only:
+6. Read `KRONOS_SIGNALS_PATH` if present. Treat it as a non-binding forecast layer only:
    - It may improve candidate ranking, setup bias selection, and watch/block context.
    - It must never override `config/risk.md`, `config/risk_tiers.json`, Robinhood MCP account checks, tradability checks, daily caps, or the daily plan schema.
    - If it is missing, stale, invalid, or partial, continue the main scan and record `kronos_signal_status` accordingly.
-7. Read `state/technical_signals.json` if present. Treat it as a non-binding but execution-aware research layer:
+7. Read `TECHNICAL_SIGNALS_PATH` if present. Treat it as a non-binding but execution-aware research layer:
    - `technical_action` is the primary summary field for whether the symbol should be promoted, reduced, observed, held, or avoided.
    - `buy_bias` may promote a symbol in ranking but cannot bypass risk, account, or tradability checks.
    - `sell_bias` may reduce priority, block adds, or bias an existing long toward trim logic.
@@ -62,14 +62,14 @@ Tasks:
 12. Select 3-8 symbols for today's dynamic allowlist. Prefer AI, space, defense, nuclear/power, and infrastructure when their score and data quality justify it. Include broad ETFs only when single-name quality is weak or market risk is elevated.
 13. Decide today's `market_regime`: `normal`, `aggressive_ok`, `risk_off`, or `no_trade`.
 14. Decide today's `risk_level`, `risk_multiplier`, `today_watchlist`, `blocked_symbols`, `allowed_actions`, and per-symbol rules.
-15. Write `state/today_allowlist.txt` with today's selected symbols, one symbol per line. Include comments only after `#`.
-16. Write `state/dynamic_allowlist.json` with scores and reasons.
-17. Write `state/daily_plan.json` with the exact JSON schema below.
-18. Write `state/daily_plan.md` with a concise human-readable summary.
-19. Initialize or reset `state/daily_usage.json` for the current date, preserving no old usage if the date changed.
-20. Append one JSON line to `logs/decisions.jsonl` with `decision="premarket_plan"`.
+15. Write `TODAY_ALLOWLIST_PATH` with today's selected symbols, one symbol per line. Include comments only after `#`.
+16. Write `DYNAMIC_ALLOWLIST_PATH` with scores and reasons.
+17. Write `DAILY_PLAN_PATH` with the exact JSON schema below.
+18. Write `DAILY_PLAN_MARKDOWN_PATH` with a concise human-readable summary.
+19. Initialize or reset `DAILY_USAGE_PATH` for the current date, preserving no old usage if the date changed.
+20. Append one JSON line to `DECISIONS_LOG_PATH` with `decision="premarket_plan"`.
 
-`state/daily_plan.json` schema:
+`DAILY_PLAN_PATH` schema:
 {
   "date": "YYYY-MM-DD",
   "generated_at": "ISO-8601 timestamp with timezone",
@@ -79,7 +79,7 @@ Tasks:
   "market_regime": "normal|aggressive_ok|risk_off|no_trade",
   "risk_level": "aggressive|normal|reduced|no_trade|testing",
   "risk_multiplier": 0.0,
-  "today_allowlist_file": "state/today_allowlist.txt",
+  "today_allowlist_file": "TODAY_ALLOWLIST_PATH",
   "today_watchlist": ["SPY", "QQQ"],
   "blocked_symbols": [],
   "allowed_actions": ["small_limit_buy", "partial_take_profit"],
@@ -110,7 +110,7 @@ Tasks:
   "notes": "short text"
 }
 
-`state/dynamic_allowlist.json` schema:
+`DYNAMIC_ALLOWLIST_PATH` schema:
 {
   "date": "YYYY-MM-DD",
   "generated_at": "ISO-8601 timestamp with timezone",
@@ -157,8 +157,8 @@ Safety requirements:
 
 Output:
 - Print a short stdout summary.
-- Write `state/today_allowlist.txt`.
-- Write `state/dynamic_allowlist.json`.
-- Write `state/daily_plan.json`.
-- Write `state/daily_plan.md`.
+- Write `TODAY_ALLOWLIST_PATH`.
+- Write `DYNAMIC_ALLOWLIST_PATH`.
+- Write `DAILY_PLAN_PATH`.
+- Write `DAILY_PLAN_MARKDOWN_PATH`.
 - Append one JSONL decision record.

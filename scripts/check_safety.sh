@@ -135,8 +135,8 @@ fi
 
 if [[ -f "$AGENT_ROOT/config/dsa_strategy_weights.json" ]] \
   && [[ -f "$AGENT_ROOT/prompts/dsa_premarket_scan.txt" ]] \
-  && file_has_pattern 'state/dsa_signals.json' "$AGENT_ROOT/prompts/premarket_research.txt" \
-  && file_has_pattern 'state/dsa_signals.json' "$AGENT_ROOT/prompts/intraday_check.txt"; then
+  && file_has_pattern 'DSA_SIGNALS_PATH' "$AGENT_ROOT/prompts/premarket_research.txt" \
+  && file_has_pattern 'DSA_SIGNALS_PATH' "$AGENT_ROOT/prompts/intraday_check.txt"; then
   echo "  - DSA signal layer is configured and wired into premarket/intraday: ok"
 else
   echo "  - WARNING: DSA signal layer is incomplete or not wired into prompts."
@@ -148,7 +148,7 @@ if [[ -f "$AGENT_ROOT/scripts/kronos_generate_signals.py" ]] \
   && file_has_pattern '-m trading_agent premarket' "$PREMARKET_SCRIPT" \
   && file_has_pattern 'ENABLE_KRONOS_SIGNAL_LAYER' "$PREMARKET_PIPELINE" \
   && file_has_pattern '_write_kronos_signals' "$PREMARKET_PIPELINE" \
-  && file_has_pattern 'state/kronos_signals.json' "$AGENT_ROOT/prompts/premarket_research.txt"; then
+  && file_has_pattern 'KRONOS_SIGNALS_PATH' "$AGENT_ROOT/prompts/premarket_research.txt"; then
   echo "  - Kronos signal layer is configured and wired into premarket: ok"
 else
   echo "  - WARNING: Kronos signal layer is incomplete or not wired into premarket."
@@ -160,8 +160,8 @@ if [[ -f "$AGENT_ROOT/prompts/technical_research.txt" ]] \
   && file_has_pattern '-m trading_agent premarket' "$PREMARKET_SCRIPT" \
   && file_has_pattern 'collect_market_context' "$PREMARKET_PIPELINE" \
   && file_has_pattern 'technical_research\.txt' "$PREMARKET_PIPELINE" \
-  && file_has_pattern 'state/technical_signals.json' "$AGENT_ROOT/prompts/premarket_research.txt" \
-  && file_has_pattern 'state/technical_signals.json' "$AGENT_ROOT/prompts/intraday_check.txt"; then
+  && file_has_pattern 'TECHNICAL_SIGNALS_PATH' "$AGENT_ROOT/prompts/premarket_research.txt" \
+  && file_has_pattern 'TECHNICAL_SIGNALS_PATH' "$AGENT_ROOT/prompts/intraday_check.txt"; then
   echo "  - Technical signal layer is configured and wired into premarket/intraday: ok"
 else
   echo "  - WARNING: technical signal layer is incomplete or not wired into prompts."

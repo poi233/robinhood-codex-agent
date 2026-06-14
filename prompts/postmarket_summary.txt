@@ -10,33 +10,33 @@ Read:
 - `config/risk_tiers.json`
 - `config/strategy.md`
 - `config/runtime.env`
-- `state/daily_plan.json`
-- `state/dynamic_allowlist.json`
-- `state/dsa_signals.json`
-- `state/today_allowlist.txt`
-- `state/daily_usage.json`
-- `logs/decisions.jsonl`
-- `logs/orders.jsonl`
+- `DAILY_PLAN_PATH`
+- `DYNAMIC_ALLOWLIST_PATH`
+- `DSA_SIGNALS_PATH`
+- `TODAY_ALLOWLIST_PATH`
+- `DAILY_USAGE_PATH`
+- `DECISIONS_LOG_PATH`
+- `ORDERS_LOG_PATH`
 
 Tasks:
 1. Check current local time in America/Los_Angeles.
 2. Check the dedicated Robinhood Agentic Account, positions, open equity orders, order history, and fills.
 3. Summarize today's decisions: no-action, would-trade, review-only, blocked, and placed-order events.
-4. Reconcile `logs/orders.jsonl` with Robinhood order status where available.
+4. Reconcile `ORDERS_LOG_PATH` with Robinhood order status where available.
 5. Identify unexpected behavior, rule violations, data failures, duplicate runs, stale plan usage, or missing logs.
 6. Review today's dynamic allowlist quality: which selected symbols worked, which were noise, which sectors should be promoted or demoted tomorrow.
 7. Review DSA signal quality: which DSA-promoted symbols helped, which were noisy, which DSA blocks were useful, and which strategy lenses should be promoted or demoted tomorrow.
 8. Recommend tomorrow's mode: `aggressive`, `normal`, `reduced_risk`, or `no_trade`.
 9. Recommend whether to keep, lower, or manually raise `RISK_TIER`; never edit `config/runtime.env` yourself.
-10. Write `logs/postmarket_summary.md`.
-11. Append one JSON line to `logs/decisions.jsonl` with `decision="postmarket_summary"`.
+10. Write `POSTMARKET_SUMMARY_PATH`.
+11. Append one JSON line to `DECISIONS_LOG_PATH` with `decision="postmarket_summary"`.
 
 Safety:
 - Never place, review, or cancel orders in this run.
 - If Robinhood MCP is unavailable, write the summary from local logs and state that account reconciliation was not verified.
 - Do not output account numbers, raw MCP JSON, tokens, private profile fields, transfer details, card details, bank details, or sensitive order payloads.
 
-`logs/postmarket_summary.md` structure:
+`POSTMARKET_SUMMARY_PATH` structure:
 # Postmarket Summary - YYYY-MM-DD
 
 ## Runtime
@@ -98,5 +98,5 @@ Safety:
 
 Output:
 - Print a short stdout summary.
-- Write `logs/postmarket_summary.md`.
+- Write `POSTMARKET_SUMMARY_PATH`.
 - Append one JSONL decision record.

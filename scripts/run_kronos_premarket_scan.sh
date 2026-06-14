@@ -13,8 +13,8 @@ if ! is_weekday_pt && [[ "${ALLOW_WEEKEND_RUN:-0}" != "1" ]]; then
   exit 0
 fi
 
-OUTPUT_FILE="$AGENT_ROOT/state/kronos_signals.json"
-RUN_DATE="$(pt_date)"
+OUTPUT_FILE="$KRONOS_SIGNALS_PATH"
+RUN_DATE="$RUN_DATE_PT"
 
 cmd=(
   "$KRONOS_PYTHON_BIN"

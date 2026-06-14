@@ -48,7 +48,7 @@ Scoring:
 - Do not select more than 10 candidates.
 - Broad ETFs can be selected as defensive anchors when single-name signals are weak.
 
-Write `state/dsa_signals.json` with this exact schema:
+Write `DSA_SIGNALS_PATH` with this exact schema:
 {
   "date": "YYYY-MM-DD",
   "generated_at": "ISO-8601 timestamp with timezone",
@@ -93,7 +93,7 @@ Write `state/dsa_signals.json` with this exact schema:
   "notes": "short text"
 }
 
-Also append one JSON line to `logs/decisions.jsonl`:
+Also append one JSON line to `DECISIONS_LOG_PATH`:
 {
   "timestamp": "ISO-8601 timestamp with timezone",
   "run_kind": "dsa_premarket_scan",
@@ -108,10 +108,10 @@ Also append one JSON line to `logs/decisions.jsonl`:
 
 Safety:
 - Never output account numbers, raw MCP JSON, tokens, private profile fields, transfer details, card details, bank details, or sensitive identifiers.
-- If data is too poor to score, write a valid `state/dsa_signals.json` with empty `selected_candidates`, blocked/partial reasons, and `market_phase="unknown"`.
+- If data is too poor to score, write a valid `DSA_SIGNALS_PATH` file with empty `selected_candidates`, blocked/partial reasons, and `market_phase="unknown"`.
 - Signals are advisory only. The main premarket agent must still enforce Robinhood MCP account checks, risk rules, daily plan schema, and trading mode.
 
 Output:
 - Print a short stdout summary.
-- Write `state/dsa_signals.json`.
+- Write `DSA_SIGNALS_PATH`.
 - Append exactly one JSONL decision record.

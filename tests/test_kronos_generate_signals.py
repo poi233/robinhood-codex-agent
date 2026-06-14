@@ -12,11 +12,17 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
+from trading_agent.core.time import pt_date_string
 from trading_agent.signals.kronos import build_mock_kronos_payload
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 SCRIPT_PATH = REPO_ROOT / "scripts" / "kronos_generate_signals.py"
 RUNNER_PATH = REPO_ROOT / "scripts" / "run_kronos_premarket_scan.sh"
+
+
+def kronos_run_output(root: Path, run_date: str | None = None) -> Path:
+    resolved_date = run_date or pt_date_string()
+    return root / "state" / "runs" / resolved_date / "signals" / "kronos_signals.json"
 
 
 class CommonRuntimeTests(unittest.TestCase):
@@ -296,7 +302,7 @@ class PortableArtifactTests(unittest.TestCase):
 class PromptWiringTests(unittest.TestCase):
     def test_premarket_prompt_mentions_kronos_signal_file(self) -> None:
         prompt = (REPO_ROOT / "prompts" / "premarket_research.txt").read_text(encoding="utf-8")
-        self.assertIn("state/kronos_signals.json", prompt)
+        self.assertIn("KRONOS_SIGNALS_PATH", prompt)
         self.assertIn("kronos_signal_status", prompt)
         self.assertIn("kronos_direction_bias", prompt)
         self.assertIn("kronos_confidence", prompt)
@@ -354,7 +360,7 @@ class SafetyWiringTests(unittest.TestCase):
             (config_dir / "runtime.env.local.example").write_text("TRADING_MODE=paper\n", encoding="utf-8")
 
             (prompts_dir / "premarket_research.txt").write_text(
-                "Do not call place_equity_order\nstate/dsa_signals.json\nstate/kronos_signals.json\nstate/technical_signals.json\n",
+                "Do not call place_equity_order\nDSA_SIGNALS_PATH\nKRONOS_SIGNALS_PATH\nTECHNICAL_SIGNALS_PATH\n",
                 encoding="utf-8",
             )
             (prompts_dir / "postmarket_summary.txt").write_text(
@@ -365,9 +371,9 @@ class SafetyWiringTests(unittest.TestCase):
                 "never place, review, cancel, or modify orders\n",
                 encoding="utf-8",
             )
-            (prompts_dir / "technical_research.txt").write_text("state/technical_signals.json\n", encoding="utf-8")
+            (prompts_dir / "technical_research.txt").write_text("TECHNICAL_SIGNALS_PATH\n", encoding="utf-8")
             (prompts_dir / "intraday_check.txt").write_text(
-                "Runtime mode behavior\nstate/dsa_signals.json\nstate/technical_signals.json\n",
+                "Runtime mode behavior\nDSA_SIGNALS_PATH\nTECHNICAL_SIGNALS_PATH\n",
                 encoding="utf-8",
             )
 
@@ -612,7 +618,7 @@ class KronosRunnerTests(unittest.TestCase):
             )
 
             self.assertEqual(result.returncode, 0)
-            payload = json.loads((tmp / "state" / "kronos_signals.json").read_text(encoding="utf-8"))
+            payload = json.loads(kronos_run_output(tmp).read_text(encoding="utf-8"))
             self.assertEqual(payload["data_status"], "ok")
             self.assertIn("NVDA", payload["symbols"])
 
@@ -649,7 +655,7 @@ class KronosRunnerTests(unittest.TestCase):
             )
 
             self.assertEqual(result.returncode, 0)
-            self.assertFalse((tmp / "state" / "kronos_signals.json").exists())
+            self.assertFalse(kronos_run_output(tmp).exists())
 
     def test_premarket_runner_continues_when_kronos_fails(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -672,11 +678,11 @@ class KronosRunnerTests(unittest.TestCase):
             )
 
             self.assertEqual(result.returncode, 0)
-            payload = json.loads((tmp / "state" / "kronos_signals.json").read_text(encoding="utf-8"))
+            payload = json.loads(kronos_run_output(tmp).read_text(encoding="utf-8"))
             self.assertEqual(payload["data_status"], "failed")
 
     def test_mock_runner_writes_repo_state_file(self) -> None:
-        state_file = REPO_ROOT / "state" / "kronos_signals.json"
+        state_file = kronos_run_output(REPO_ROOT)
         original_contents = state_file.read_text(encoding="utf-8") if state_file.exists() else None
         try:
             if state_file.exists():

@@ -2,12 +2,16 @@ from __future__ import annotations
 
 import json
 import os
+import subprocess
+import sys
+import time
 from concurrent.futures import ThreadPoolExecutor, wait
 from dataclasses import dataclass
 from pathlib import Path
 
 from trading_agent.core.context import build_runtime_paths
 from trading_agent.core.io import read_json, write_json
+from trading_agent.core.run_history import append_stage_log, snapshot_stage_artifacts
 from trading_agent.core.time import PT, pt_date_string
 from trading_agent.data.market_context import collect_market_context
 from trading_agent.data.universe import parse_universe
@@ -62,10 +66,39 @@ def _is_weekday_pt() -> bool:
 
 
 def _write_kronos_signals(agent_root: Path) -> None:
-    universe_file = agent_root / "config" / "universe.txt"
-    output_file = agent_root / "state" / "kronos_signals.json"
+    paths = build_runtime_paths(agent_root)
+    universe_file = paths.config_dir / "universe.txt"
+    output_file = paths.kronos_signals_path
     symbols = parse_universe(universe_file)
-    run_date = pt_date_string()
+    run_date = paths.run_date
+    kronos_python = os.environ.get("KRONOS_PYTHON_BIN")
+    if kronos_python and Path(kronos_python).exists():
+        current_python = Path(sys.executable).resolve()
+        requested_python = Path(kronos_python).resolve()
+        if requested_python != current_python:
+            cmd = [
+                kronos_python,
+                str(agent_root / "scripts" / "kronos_generate_signals.py"),
+                "--universe-file",
+                str(universe_file),
+                "--output-file",
+                str(output_file),
+                "--date",
+                run_date,
+            ]
+            if os.environ.get("KRONOS_USE_MOCK", "0") == "1":
+                cmd.append("--mock")
+            result = subprocess.run(
+                cmd,
+                check=False,
+                capture_output=True,
+                text=True,
+                env=os.environ.copy(),
+            )
+            if result.returncode != 0:
+                message = (result.stderr or result.stdout or "external kronos runner failed").strip()
+                raise RuntimeError(message)
+            return
     payload = (
         build_mock_kronos_payload(symbols, run_date, str(universe_file))
         if os.environ.get("KRONOS_USE_MOCK", "0") == "1"
@@ -80,17 +113,47 @@ def run_premarket_pipeline(*, dry_run: bool) -> int:
         return 0
 
     paths = build_runtime_paths(agent_root)
-    market_feed_dir = Path(os.environ.get("MARKET_FEED_DIR", str(paths.state_dir / "market_feed" / pt_date_string())))
+    run_date = paths.run_date
+    market_feed_dir = paths.market_feed_dir
     timeframes = [value.strip() for value in os.environ.get("MARKET_FEED_TIMEFRAMES", "1w,1d,1h,15m").split(",") if value.strip()]
     news_limit = int(os.environ.get("MARKET_FEED_NEWS_LIMIT", "5"))
 
+    def run_stage(stage: str, fn: callable, *, snapshot: bool = True) -> None:
+        started = time.perf_counter()
+        append_stage_log(agent_root, run_date, stage, "started", f"{stage} started")
+        try:
+            fn()
+            copied = snapshot_stage_artifacts(agent_root, run_date, stage) if snapshot else []
+            append_stage_log(
+                agent_root,
+                run_date,
+                stage,
+                "completed",
+                f"{stage} completed",
+                elapsed_seconds=time.perf_counter() - started,
+                details={"artifacts": copied},
+            )
+        except Exception as exc:
+            copied = snapshot_stage_artifacts(agent_root, run_date, stage) if snapshot else []
+            append_stage_log(
+                agent_root,
+                run_date,
+                stage,
+                "failed",
+                f"{stage} failed: {exc}",
+                elapsed_seconds=time.perf_counter() - started,
+                details={"artifacts": copied},
+            )
+            raise
+
     def collect_context() -> None:
         if os.environ.get("ENABLE_MARKET_FEED_LAYER", "1") != "1":
+            append_stage_log(agent_root, run_date, "market_context", "skipped", "market feed layer disabled")
             return
         collect_market_context(
             universe_file=paths.config_dir / "universe.txt",
             output_dir=market_feed_dir,
-            run_date=pt_date_string(),
+            run_date=run_date,
             timeframes=timeframes,
             news_limit=news_limit,
             mock=dry_run,
@@ -98,6 +161,7 @@ def run_premarket_pipeline(*, dry_run: bool) -> int:
 
     def run_dsa() -> None:
         if os.environ.get("ENABLE_DSA_SIGNAL_LAYER", "1") != "1":
+            append_stage_log(agent_root, run_date, "dsa", "skipped", "DSA signal layer disabled")
             return
         status = run_codex_prompt("dsa_premarket_scan", agent_root, agent_root / "prompts" / "dsa_premarket_scan.txt")
         if status != 0:
@@ -105,21 +169,23 @@ def run_premarket_pipeline(*, dry_run: bool) -> int:
 
     def run_kronos() -> None:
         if os.environ.get("ENABLE_KRONOS_SIGNAL_LAYER", "1") != "1":
+            append_stage_log(agent_root, run_date, "kronos", "skipped", "Kronos signal layer disabled")
             return
         try:
             _write_kronos_signals(agent_root)
         except Exception as exc:
             payload = build_failed_kronos_payload(
-                pt_date_string(),
+                run_date,
                 str(paths.config_dir / "universe.txt"),
                 f"live Kronos generation failed: {exc}",
                 "inference_only",
             )
-            write_json(paths.state_dir / "kronos_signals.json", payload)
+            write_json(paths.kronos_signals_path, payload)
             raise
 
     def run_technical() -> None:
         if os.environ.get("ENABLE_TECHNICAL_SIGNAL_LAYER", "1") != "1":
+            append_stage_log(agent_root, run_date, "technical", "skipped", "technical signal layer disabled")
             return
         manifest_path = market_feed_dir / "manifest.json"
         if not manifest_path.exists():
@@ -127,10 +193,10 @@ def run_premarket_pipeline(*, dry_run: bool) -> int:
         manifest = read_json(manifest_path)
         if manifest.get("data_status") != "ok":
             write_json(
-                paths.state_dir / "technical_signals.json",
+                paths.technical_signals_path,
                 build_failed_technical_payload(
                     manifest,
-                    run_date=pt_date_string(),
+                    run_date=run_date,
                     reason="market feed was not complete enough for technical analysis; technical layer is fail-closed",
                 ),
             )
@@ -138,10 +204,10 @@ def run_premarket_pipeline(*, dry_run: bool) -> int:
         status = run_codex_prompt("technical_research", agent_root, agent_root / "prompts" / "technical_research.txt")
         if status != 0:
             write_json(
-                paths.state_dir / "technical_signals.json",
+                paths.technical_signals_path,
                 build_failed_technical_payload(
                     manifest,
-                    run_date=pt_date_string(),
+                    run_date=run_date,
                     reason="technical research prompt failed; archived conservative price levels for watch-only use",
                 ),
             )
@@ -153,32 +219,40 @@ def run_premarket_pipeline(*, dry_run: bool) -> int:
             raise RuntimeError("premarket prompt failed")
 
     def run_archive() -> None:
-        technical_path = paths.state_dir / "technical_signals.json"
+        technical_path = paths.technical_signals_path
         if not technical_path.exists():
             return
-        daily_plan_path = paths.state_dir / "daily_plan.json"
+        daily_plan_path = paths.daily_plan_path
         daily_plan = (
             read_json(daily_plan_path)
             if daily_plan_path.exists()
             else build_fail_closed_daily_plan(
-                pt_date_string(),
+                run_date,
                 "premarket planner output missing; archived technical layer only",
             )
         )
         payload = build_premarket_archive_payload(
-            run_date=pt_date_string(),
+            run_date=run_date,
             daily_plan=daily_plan,
             technical_payload=read_json(technical_path),
         )
-        write_premarket_archive_json(paths.reports_dir, pt_date_string(), payload)
+        archive_output = paths.archive_dir / "premarket_report.json"
+        archive_output.parent.mkdir(parents=True, exist_ok=True)
+        write_json(archive_output, payload)
 
     pipeline = PremarketPipeline(
-        collect_market_context=collect_context,
-        run_dsa=run_dsa,
-        run_kronos=run_kronos,
-        run_technical=run_technical,
-        run_planner=run_planner,
-        run_archive=run_archive,
+        collect_market_context=lambda: run_stage("market_context", collect_context),
+        run_dsa=lambda: run_stage("dsa", run_dsa),
+        run_kronos=lambda: run_stage("kronos", run_kronos),
+        run_technical=lambda: run_stage("technical", run_technical),
+        run_planner=lambda: run_stage("planner", run_planner),
+        run_archive=lambda: run_stage("archive", run_archive),
     )
-    pipeline.run()
+    append_stage_log(agent_root, run_date, "pipeline", "started", "premarket pipeline started")
+    try:
+        pipeline.run()
+    except Exception as exc:
+        append_stage_log(agent_root, run_date, "pipeline", "failed", f"premarket pipeline failed: {exc}")
+        raise
+    append_stage_log(agent_root, run_date, "pipeline", "completed", "premarket pipeline completed")
     return 0

@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 from typing import Any, Protocol
 
+from trading_agent.core.context import build_runtime_paths
 from trading_agent.data.universe import parse_universe
 from trading_agent.policy.models import OpenOrder, PolicyInputs, Position, Quote
 
@@ -42,7 +43,7 @@ def _read_allowlist(path: Path) -> list[str]:
 
 
 def _load_research_reports(root: Path, run_date: str) -> dict[str, dict[str, Any]]:
-    report_dir = root / "state" / "research_reports" / run_date
+    report_dir = build_runtime_paths(root, run_date=run_date).run_state_dir / "research_reports"
     if not report_dir.exists():
         return {}
     reports: dict[str, dict[str, Any]] = {}
@@ -179,10 +180,10 @@ def load_policy_inputs(
     robinhood_gateway: RobinhoodPolicyGateway | None = None,
 ) -> PolicyInputs:
     config_dir = agent_root / "config"
-    state_dir = agent_root / "state"
+    paths = build_runtime_paths(agent_root, run_date=run_date)
     risk_tiers = _read_json_if_exists(config_dir / "risk_tiers.json")
     risk_caps = risk_tiers.get(str(risk_tier), {}) if isinstance(risk_tiers, dict) else {}
-    daily_plan = _read_json_if_exists(state_dir / "daily_plan.json") or None
+    daily_plan = _read_json_if_exists(paths.daily_plan_path) or None
 
     inputs = PolicyInputs(
         run_date=run_date,
@@ -190,13 +191,13 @@ def load_policy_inputs(
         risk_tier=risk_tier,
         risk_caps=risk_caps,
         universe=parse_universe(config_dir / "universe.txt") if (config_dir / "universe.txt").exists() else [],
-        today_allowlist=_read_allowlist(state_dir / "today_allowlist.txt"),
+        today_allowlist=_read_allowlist(paths.today_allowlist_path),
         daily_plan=daily_plan,
-        dynamic_allowlist=_read_json_if_exists(state_dir / "dynamic_allowlist.json"),
-        daily_usage=_read_json_if_exists(state_dir / "daily_usage.json"),
-        dsa_signals=_read_json_if_exists(state_dir / "dsa_signals.json"),
-        kronos_signals=_read_json_if_exists(state_dir / "kronos_signals.json"),
-        technical_signals=_read_json_if_exists(state_dir / "technical_signals.json"),
+        dynamic_allowlist=_read_json_if_exists(paths.dynamic_allowlist_path),
+        daily_usage=_read_json_if_exists(paths.daily_usage_path),
+        dsa_signals=_read_json_if_exists(paths.dsa_signals_path),
+        kronos_signals=_read_json_if_exists(paths.kronos_signals_path),
+        technical_signals=_read_json_if_exists(paths.technical_signals_path),
         research_reports=_load_research_reports(agent_root, run_date),
         kill_switch_present=(agent_root / "KILL_SWITCH").exists(),
     )

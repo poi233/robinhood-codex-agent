@@ -7,7 +7,7 @@ Read these local files first:
 - `config/risk.md`
 - `config/strategy.md`
 - `config/runtime.env`
-- `state/dsa_signals.json` if it exists
+- `DSA_SIGNALS_PATH` if it exists
 - the manifest at `MARKET_FEED_DIR/manifest.json`
 - the artifacts under `MARKET_FEED_DIR/charts/`
 - the artifacts under `MARKET_FEED_DIR/ohlcv/`
@@ -38,5 +38,5 @@ Rules:
 - Always provide concrete price levels for triggers, invalidation, and targets when data quality allows.
 - Use `MARKET_FEED_DIR` from the runtime block as the authoritative artifact root.
 
-Write `state/technical_signals.json` using the exact schema in the repo design spec.
+Write `TECHNICAL_SIGNALS_PATH` using the exact schema in the repo design spec.
 Print a short stdout summary.

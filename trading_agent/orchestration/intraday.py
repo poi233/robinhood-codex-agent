@@ -6,6 +6,7 @@ from datetime import datetime
 from pathlib import Path
 
 from trading_agent.core.config import load_runtime_config
+from trading_agent.core.context import build_runtime_paths
 from trading_agent.core.time import PT
 from trading_agent.core.time import pt_date_string
 from trading_agent.policy.engine import generate_order_intent
@@ -15,7 +16,7 @@ from trading_agent.prompts.codex import run_codex_prompt
 
 
 def _append_local_decision(agent_root: Path, decision: str, reason: str) -> None:
-    log_path = agent_root / "logs" / "decisions.jsonl"
+    log_path = build_runtime_paths(agent_root).decisions_log_path
     log_path.parent.mkdir(parents=True, exist_ok=True)
     payload = {
         "timestamp": datetime.now(tz=PT).strftime("%Y-%m-%dT%H:%M:%S%z"),
@@ -30,7 +31,7 @@ def _append_local_decision(agent_root: Path, decision: str, reason: str) -> None
 
 
 def _append_policy_decision(agent_root: Path, decision: PolicyDecision) -> None:
-    log_path = agent_root / "logs" / "decisions.jsonl"
+    log_path = build_runtime_paths(agent_root).decisions_log_path
     log_path.parent.mkdir(parents=True, exist_ok=True)
     payload = decision.to_json_dict(timestamp=datetime.now(tz=PT).strftime("%Y-%m-%dT%H:%M:%S%z"))
     with log_path.open("a", encoding="utf-8") as handle:

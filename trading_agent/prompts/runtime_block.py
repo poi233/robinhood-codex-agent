@@ -3,17 +3,24 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-from trading_agent.core.time import pt_date_string, pt_now
+from trading_agent.core.context import build_runtime_paths
+from trading_agent.core.time import pt_now
 
 
 def build_runtime_block(run_kind: str, agent_root: Path) -> str:
     env = os.environ
+    paths = build_runtime_paths(agent_root)
     values = {
         "RUN_KIND": run_kind,
         "RUN_STARTED_AT": pt_now().strftime("%Y-%m-%dT%H:%M:%S%z"),
-        "RUN_DATE_PT": pt_date_string(),
+        "RUN_DATE_PT": paths.run_date,
         "TIMEZONE": "America/Los_Angeles",
         "AGENT_ROOT": str(agent_root),
+        "RUN_STATE_DIR": str(paths.run_state_dir),
+        "RUN_LOGS_DIR": str(paths.run_logs_dir),
+        "SIGNALS_DIR": str(paths.signals_dir),
+        "PLANNER_DIR": str(paths.planner_dir),
+        "ARCHIVE_DIR": str(paths.archive_dir),
         "TRADING_MODE": env.get("TRADING_MODE", "paper"),
         "RISK_TIER": env.get("RISK_TIER", "0"),
         "KILL_SWITCH_STATUS": "present" if (agent_root / "KILL_SWITCH").exists() else "absent",
@@ -24,8 +31,18 @@ def build_runtime_block(run_kind: str, agent_root: Path) -> str:
         "ENABLE_DSA_SIGNAL_LAYER": env.get("ENABLE_DSA_SIGNAL_LAYER", "1"),
         "ENABLE_MARKET_FEED_LAYER": env.get("ENABLE_MARKET_FEED_LAYER", "1"),
         "ENABLE_TECHNICAL_SIGNAL_LAYER": env.get("ENABLE_TECHNICAL_SIGNAL_LAYER", "1"),
-        "MARKET_FEED_DIR": env.get("MARKET_FEED_DIR", str(agent_root / "state" / "market_feed" / pt_date_string())),
-        "TECHNICAL_SIGNALS_PATH": env.get("TECHNICAL_SIGNALS_PATH", str(agent_root / "state" / "technical_signals.json")),
+        "MARKET_FEED_DIR": str(paths.market_feed_dir),
+        "DSA_SIGNALS_PATH": str(paths.dsa_signals_path),
+        "KRONOS_SIGNALS_PATH": str(paths.kronos_signals_path),
+        "TECHNICAL_SIGNALS_PATH": str(paths.technical_signals_path),
+        "DAILY_PLAN_PATH": str(paths.daily_plan_path),
+        "DAILY_PLAN_MARKDOWN_PATH": str(paths.daily_plan_markdown_path),
+        "DYNAMIC_ALLOWLIST_PATH": str(paths.dynamic_allowlist_path),
+        "TODAY_ALLOWLIST_PATH": str(paths.today_allowlist_path),
+        "DAILY_USAGE_PATH": str(paths.daily_usage_path),
+        "DECISIONS_LOG_PATH": str(paths.decisions_log_path),
+        "ORDERS_LOG_PATH": str(paths.orders_log_path),
+        "POSTMARKET_SUMMARY_PATH": str(paths.postmarket_summary_path),
     }
     lines = ["<runtime>"]
     lines.extend(f"{key}={value}" for key, value in values.items())
