@@ -341,6 +341,7 @@ TIMEZONE=America/Los_Angeles
 AGENT_ROOT=$AGENT_ROOT
 RUN_STATE_DIR=$RUN_STATE_DIR
 RUN_LOGS_DIR=$RUN_LOG_DIR
+PROGRESS_LOG_PATH=$RUN_LOG_DIR/${run_kind}.progress.jsonl
 SIGNALS_DIR=$SIGNALS_DIR
 PLANNER_DIR=$PLANNER_DIR
 ARCHIVE_DIR=$ARCHIVE_DIR
@@ -358,18 +359,23 @@ MARKET_FEED_DIR=$MARKET_FEED_DIR
 DSA_SIGNALS_PATH=$DSA_SIGNALS_PATH
 KRONOS_SIGNALS_PATH=$KRONOS_SIGNALS_PATH
 TECHNICAL_SIGNALS_PATH=$TECHNICAL_SIGNALS_PATH
+TRADER_WATCH_LEVELS_PATH=$TRADER_WATCH_LEVELS_PATH
 DAILY_PLAN_PATH=$DAILY_PLAN_PATH
 DAILY_PLAN_MARKDOWN_PATH=$DAILY_PLAN_MARKDOWN_PATH
 DYNAMIC_ALLOWLIST_PATH=$DYNAMIC_ALLOWLIST_PATH
 TODAY_ALLOWLIST_PATH=$TODAY_ALLOWLIST_PATH
 DAILY_USAGE_PATH=$DAILY_USAGE_PATH
 ACCOUNT_SNAPSHOT_PATH=$ACCOUNT_SNAPSHOT_PATH
+CAPITAL_SNAPSHOT_PATH=$CAPITAL_SNAPSHOT_PATH
 MARKET_CALENDAR_PATH=$MARKET_CALENDAR_PATH
 QUOTE_SNAPSHOT_CORE_PATH=$QUOTE_SNAPSHOT_CORE_PATH
 CANDIDATE_SNAPSHOT_PATH=$CANDIDATE_SNAPSHOT_PATH
+CANDIDATE_SCORES_PATH=$CANDIDATE_SCORES_PATH
 QUOTE_SNAPSHOT_CANDIDATES_PATH=$QUOTE_SNAPSHOT_CANDIDATES_PATH
 TRADABILITY_SNAPSHOT_PATH=$TRADABILITY_SNAPSHOT_PATH
 CATALYST_SNAPSHOT_PATH=$CATALYST_SNAPSHOT_PATH
+DATA_STATUS_SUMMARY_PATH=$DATA_STATUS_SUMMARY_PATH
+RISK_OVERLAY_PATH=$RISK_OVERLAY_PATH
 DECISIONS_LOG_PATH=$DECISIONS_LOG
 ORDERS_LOG_PATH=$ORDERS_LOG
 POSTMARKET_SUMMARY_PATH=$POSTMARKET_SUMMARY_PATH
@@ -389,9 +395,13 @@ run_codex_prompt() {
   fi
 
   log_line "$run_kind starting mode=$TRADING_MODE model=$CODEX_MODEL kill_switch=$(kill_switch_status)"
+  printf '{"timestamp":"%s","date":"%s","run_kind":"%s","status":"started","message":"prompt started"}\n' \
+    "$(pt_now)" "$RUN_DATE_PT" "$run_kind" >> "$RUN_LOG_DIR/${run_kind}.progress.jsonl"
 
   if [[ "${CODEX_EXEC_DRY_RUN:-0}" == "1" ]]; then
     log_line "$run_kind CODEX_EXEC_DRY_RUN=1, not invoking codex exec."
+    printf '{"timestamp":"%s","date":"%s","run_kind":"%s","status":"skipped","message":"CODEX_EXEC_DRY_RUN=1"}\n' \
+      "$(pt_now)" "$RUN_DATE_PT" "$run_kind" >> "$RUN_LOG_DIR/${run_kind}.progress.jsonl"
     printf '%s DRY_RUN %s mode=%s kill_switch=%s prompt=%s\n' \
       "$(pt_now)" "$run_kind" "$TRADING_MODE" "$(kill_switch_status)" "$prompt_file" >> "$RUN_LOG"
     return 0
@@ -438,8 +448,12 @@ run_codex_prompt() {
 
   if [[ "$status" -ne 0 ]]; then
     log_line "$run_kind failed status=$status"
+    printf '{"timestamp":"%s","date":"%s","run_kind":"%s","status":"failed","message":"codex exited with status %s"}\n' \
+      "$(pt_now)" "$RUN_DATE_PT" "$run_kind" "$status" >> "$RUN_LOG_DIR/${run_kind}.progress.jsonl"
     return "$status"
   fi
 
   log_line "$run_kind completed status=0"
+  printf '{"timestamp":"%s","date":"%s","run_kind":"%s","status":"completed","message":"codex completed"}\n' \
+    "$(pt_now)" "$RUN_DATE_PT" "$run_kind" >> "$RUN_LOG_DIR/${run_kind}.progress.jsonl"
 }

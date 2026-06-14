@@ -12,6 +12,7 @@ Read these local files first:
 - the artifacts under `MARKET_FEED_DIR/charts/`
 - the artifacts under `MARKET_FEED_DIR/ohlcv/`
 - the artifacts under `MARKET_FEED_DIR/news/`
+- `PROGRESS_LOG_PATH` from the runtime block
 
 Before analysis, read these repo-owned skills as the authoritative framework:
 - `.agents/skills/chan-structure-trading/SKILL.md`
@@ -30,6 +31,11 @@ For each selected symbol, produce:
 - `fundamentals`
 - `decision_rationale`
 - `confidence`
+
+Progress logging:
+- Append a JSON line to `PROGRESS_LOG_PATH` after each symbol is analyzed:
+  `{"timestamp":"ISO-8601","run_kind":"technical_research","symbol":"SMH","status":"completed","message":"technical levels generated"}`.
+- If a symbol cannot be analyzed, use `status="partial"` or `status="failed"` and include the reason in `message`.
 
 Rules:
 - `short_setup` is only for managing an existing long position. It is never permission to short.

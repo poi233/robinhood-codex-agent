@@ -24,6 +24,7 @@ def build_runtime_block(run_kind: str, agent_root: Path) -> str:
         "RUNTIME_DIR": str(paths.runtime_dir),
         "RUN_STATE_DIR": str(paths.run_state_dir),
         "RUN_LOGS_DIR": str(paths.run_logs_dir),
+        "PROGRESS_LOG_PATH": str(paths.run_logs_dir / f"{run_kind}.progress.jsonl"),
         "SIGNALS_DIR": str(paths.signals_dir),
         "PLANNER_DIR": str(paths.planner_dir),
         "PAPER_DIR": str(paths.paper_dir),

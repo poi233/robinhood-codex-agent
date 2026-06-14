@@ -63,6 +63,30 @@ def append_run_output_log(
             handle.write("\n")
 
 
+def append_prompt_progress_log(
+    agent_root: Path,
+    run_date: str,
+    run_kind: str,
+    status: str,
+    message: str,
+    *,
+    details: dict[str, Any] | None = None,
+) -> None:
+    payload: dict[str, Any] = {
+        "timestamp": datetime.now().astimezone().isoformat(),
+        "date": run_date,
+        "run_kind": run_kind,
+        "status": status,
+        "message": message,
+    }
+    if details:
+        payload["details"] = details
+    output = daily_logs_run_dir(agent_root, run_date) / f"{run_kind}.progress.jsonl"
+    ensure_dir(output.parent)
+    with output.open("a", encoding="utf-8") as handle:
+        handle.write(json.dumps(payload, ensure_ascii=False, sort_keys=True) + "\n")
+
+
 def snapshot_stage_artifacts(agent_root: Path, run_date: str, stage: str) -> list[str]:
     paths = build_runtime_paths(agent_root, run_date=run_date)
     run_dir = paths.run_state_dir

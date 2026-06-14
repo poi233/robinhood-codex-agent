@@ -13,6 +13,12 @@ Read these local files first:
 - `src/config/risk.md`
 - `src/config/dsa_strategy_weights.json`
 - `runtime/state/wash_sale_blocks.json` if it exists
+- `PROGRESS_LOG_PATH` from the runtime block
+
+Progress logging:
+- Append a JSON line to `PROGRESS_LOG_PATH` after each symbol or small symbol batch is checked:
+  `{"timestamp":"ISO-8601","run_kind":"dsa_premarket_scan","symbol":"NVDA","status":"completed","message":"DSA signal checked"}`.
+- If a symbol cannot be checked, use `status="partial"` or `status="failed"` and include the reason in `message`.
 
 Allowed data behavior:
 - You may use public web/search tools if available.

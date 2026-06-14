@@ -6,6 +6,12 @@ Read:
 - `CANDIDATE_SNAPSHOT_PATH`
 - `MARKET_FEED_DIR/manifest.json`
 - `MARKET_FEED_DIR/news/` files for shortlisted symbols when present
+- `PROGRESS_LOG_PATH` from the runtime block
+
+Progress logging:
+- Append a JSON line to `PROGRESS_LOG_PATH` after each candidate symbol is checked:
+  `{"timestamp":"ISO-8601","run_kind":"catalyst_enrichment","symbol":"SMH","status":"completed","message":"catalysts checked"}`.
+- If catalyst evidence is weak or unavailable, use `status="partial"` and explain briefly in `message`.
 
 Task:
 1. Summarize near-term catalysts, earnings risk, guidance/news, launches, contracts, regulatory items, and unverified-news risks for symbols in `CANDIDATE_SNAPSHOT_PATH`.

@@ -216,6 +216,7 @@ runtime/state/runs/YYYY-MM-DD/
 runtime/logs/runs/YYYY-MM-DD/
   pipeline.jsonl
   codex_runs.log
+  *.progress.jsonl
   errors.log
   decisions.jsonl
   orders.jsonl
@@ -246,6 +247,9 @@ Important state contracts:
   visualization-friendly daily paper snapshots and equity curve.
 - `paper/account.json`, `paper/positions.json`, and `paper/orders.jsonl` are the current simulated
   account ledger used only in `TRADING_MODE=paper`.
+- `runtime/logs/runs/YYYY-MM-DD/*.progress.jsonl` records prompt-level progress. The Python runner
+  always writes started/skipped/completed/failed records; long research prompts are instructed to add
+  per-symbol progress records.
 - Paper mode starts from `PAPER_STARTING_CASH` when the local ledger does not yet exist.
 - In paper mode, policy loading first reads real snapshots and then overlays the paper ledger cash
   and positions.
