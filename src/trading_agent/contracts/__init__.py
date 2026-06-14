@@ -5,4 +5,5 @@ __all__ = [
     "market_feed",
     "reports",
     "technical",
+    "trader_watch_levels",
 ]

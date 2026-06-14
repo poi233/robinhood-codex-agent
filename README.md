@@ -71,7 +71,8 @@ flowchart TD
         CoreQuotes["Codex prompt: core quotes"]
     end
 
-    G1 --> CandidateMerge["local candidate merge"]
+    G1 --> TraderLevels["local trader watch levels"]
+    TraderLevels --> CandidateMerge["local candidate merge"]
 
     CandidateMerge --> G2
     subgraph G2["parallel candidate enrichment"]
@@ -102,7 +103,7 @@ src/
     prompts/                 Codex subprocess runner and runtime variable block
     policy/                  deterministic intraday buy/sell/risk/scoring logic
     paper/                   local paper broker and ledger updates
-    planner/                 deterministic candidate snapshot builder
+    planner/                 deterministic candidate snapshot, scoring, and risk helpers
     data/                    yfinance-backed market context and chart collection
     signals/                 Kronos and technical fallback payload helpers
     reporting/               premarket archive and postmarket report helpers
@@ -190,6 +191,7 @@ runtime/state/runs/YYYY-MM-DD/
     quote_snapshot_candidates.json
     tradability_snapshot.json
     catalyst_snapshot.json
+    trader_watch_levels.json
     today_allowlist.txt
     dynamic_allowlist.json
     daily_plan.json
@@ -222,6 +224,9 @@ Important state contracts:
   premarket account snapshot prompt.
 - `planner/quote_snapshot_core.json` and `planner/quote_snapshot_candidates.json` provide intraday
   prices.
+- `planner/trader_watch_levels.json` is a normalized, trader-facing copy of technical price levels:
+  reference price, supports, resistances, entry zone, buy trigger, invalidation, targets,
+  no-trade zone, and existing-long risk-reduction levels.
 - `planner/daily_usage.json` starts from the final premarket planner and is updated by paper fills.
 - `paper/day_start.json`, `paper/day_end.json`, and `paper/equity_curve.jsonl` are the
   visualization-friendly daily paper snapshots and equity curve.
@@ -252,12 +257,14 @@ Premarket does the following:
    - Repo-owned technical research through Codex.
    - Market calendar snapshot through Codex.
    - Core quote snapshot through Codex.
-4. Builds `planner/candidate_snapshot.json` locally from account holdings, open orders, and advisory
+4. Builds `planner/trader_watch_levels.json` locally from the technical layer. This is a schema
+   normalization step only; it does not create new technical opinions.
+5. Builds `planner/candidate_snapshot.json` locally from account holdings, open orders, and advisory
    signals.
-5. Runs candidate quote, tradability, and catalyst enrichment prompts in parallel.
-6. Runs the final premarket planner prompt.
-7. Archives `archive/premarket_report.json`.
-8. Logs stage status to `runtime/logs/runs/YYYY-MM-DD/pipeline.jsonl`.
+6. Runs candidate quote, tradability, and catalyst enrichment prompts in parallel.
+7. Runs the final premarket planner prompt.
+8. Archives `archive/premarket_report.json`.
+9. Logs stage status to `runtime/logs/runs/YYYY-MM-DD/pipeline.jsonl`.
 
 The final planner writes:
 

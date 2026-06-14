@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from trading_agent.signals.technical_levels import build_trader_watch_levels
+from trading_agent.reporting.trader_watch_levels import build_trader_watch_levels
 
 
 def build_fail_closed_daily_plan(run_date: str, reason: str) -> dict[str, object]:

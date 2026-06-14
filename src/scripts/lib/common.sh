@@ -8,7 +8,7 @@ CONFIG_ENV="$SRC_ROOT/config/runtime.env"
 CONFIG_ENV_LOCAL="$SRC_ROOT/config/runtime.env.local"
 
 export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:${PATH:-}"
-export PYTHONPATH="$SRC_ROOT:${PYTHONPATH:-}"
+export PYTHONPATH="$SRC_ROOT:$AGENT_ROOT:${PYTHONPATH:-}"
 
 mkdir -p "$AGENT_ROOT/runtime/logs" "$AGENT_ROOT/runtime/state" "$AGENT_ROOT/runtime/reports"
 
@@ -174,6 +174,7 @@ MARKET_FEED_DIR="${MARKET_FEED_DIR:-${RUN_STATE_DIR}/market_feed}"
 DSA_SIGNALS_PATH="${DSA_SIGNALS_PATH:-${SIGNALS_DIR}/dsa_signals.json}"
 KRONOS_SIGNALS_PATH="${KRONOS_SIGNALS_PATH:-${SIGNALS_DIR}/kronos_signals.json}"
 TECHNICAL_SIGNALS_PATH="${TECHNICAL_SIGNALS_PATH:-${SIGNALS_DIR}/technical_signals.json}"
+TRADER_WATCH_LEVELS_PATH="${TRADER_WATCH_LEVELS_PATH:-${PLANNER_DIR}/trader_watch_levels.json}"
 DAILY_PLAN_PATH="${DAILY_PLAN_PATH:-${PLANNER_DIR}/daily_plan.json}"
 DAILY_PLAN_MARKDOWN_PATH="${DAILY_PLAN_MARKDOWN_PATH:-${PLANNER_DIR}/daily_plan.md}"
 DYNAMIC_ALLOWLIST_PATH="${DYNAMIC_ALLOWLIST_PATH:-${PLANNER_DIR}/dynamic_allowlist.json}"
@@ -215,6 +216,7 @@ export MARKET_FEED_DIR
 export DSA_SIGNALS_PATH
 export KRONOS_SIGNALS_PATH
 export TECHNICAL_SIGNALS_PATH
+export TRADER_WATCH_LEVELS_PATH
 export DAILY_PLAN_PATH
 export DAILY_PLAN_MARKDOWN_PATH
 export DYNAMIC_ALLOWLIST_PATH

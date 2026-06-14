@@ -43,6 +43,7 @@ def build_runtime_block(run_kind: str, agent_root: Path) -> str:
         "DSA_SIGNALS_PATH": str(paths.dsa_signals_path),
         "KRONOS_SIGNALS_PATH": str(paths.kronos_signals_path),
         "TECHNICAL_SIGNALS_PATH": str(paths.technical_signals_path),
+        "TRADER_WATCH_LEVELS_PATH": str(paths.trader_watch_levels_path),
         "DAILY_PLAN_PATH": str(paths.daily_plan_path),
         "DAILY_PLAN_MARKDOWN_PATH": str(paths.daily_plan_markdown_path),
         "DYNAMIC_ALLOWLIST_PATH": str(paths.dynamic_allowlist_path),

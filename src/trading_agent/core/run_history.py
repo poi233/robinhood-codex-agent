@@ -77,6 +77,9 @@ def snapshot_stage_artifacts(agent_root: Path, run_date: str, stage: str) -> lis
         "technical": [
             (paths.technical_signals_path, run_dir / "signals" / "technical_signals.json"),
         ],
+        "trader_watch_levels": [
+            (paths.trader_watch_levels_path, run_dir / "planner" / "trader_watch_levels.json"),
+        ],
         "account_snapshot": [
             (paths.account_snapshot_path, run_dir / "planner" / "account_snapshot.json"),
         ],
@@ -106,6 +109,7 @@ def snapshot_stage_artifacts(agent_root: Path, run_date: str, stage: str) -> lis
             (paths.quote_snapshot_candidates_path, run_dir / "planner" / "quote_snapshot_candidates.json"),
             (paths.tradability_snapshot_path, run_dir / "planner" / "tradability_snapshot.json"),
             (paths.catalyst_snapshot_path, run_dir / "planner" / "catalyst_snapshot.json"),
+            (paths.trader_watch_levels_path, run_dir / "planner" / "trader_watch_levels.json"),
             (paths.daily_plan_path, run_dir / "planner" / "daily_plan.json"),
             (paths.daily_plan_markdown_path, run_dir / "planner" / "daily_plan.md"),
             (paths.dynamic_allowlist_path, run_dir / "planner" / "dynamic_allowlist.json"),

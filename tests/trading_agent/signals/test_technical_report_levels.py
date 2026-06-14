@@ -28,7 +28,7 @@ class TechnicalReportLevelTests(unittest.TestCase):
             technical_payload=technical_payload,
         )
         self.assertIn("trader_watch_levels", payload)
-        self.assertIn("NVDA", payload["trader_watch_levels"])
+        self.assertIn("NVDA", payload["trader_watch_levels"]["symbols"])
 
     def test_build_fail_closed_daily_plan_marks_no_trade(self) -> None:
         payload = build_fail_closed_daily_plan("2026-06-14", "planner missing")

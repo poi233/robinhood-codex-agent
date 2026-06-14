@@ -20,6 +20,7 @@ class PremarketOrchestrationTests(unittest.TestCase):
             run_technical=lambda: events.append("technical"),
             run_market_calendar=lambda: events.append("market_calendar"),
             run_quote_snapshot_core=lambda: events.append("quote_snapshot_core"),
+            run_trader_watch_levels=lambda: events.append("trader_watch_levels"),
             run_candidate_merge=lambda: events.append("candidate_merge"),
             run_quote_snapshot_candidates=lambda: events.append("quote_snapshot_candidates"),
             run_tradability_candidates=lambda: events.append("tradability_candidates"),
@@ -32,6 +33,8 @@ class PremarketOrchestrationTests(unittest.TestCase):
 
         self.assertEqual(events[:2], ["account_snapshot", "market_context"])
         self.assertLess(events.index("account_snapshot"), events.index("quote_snapshot_core"))
+        self.assertLess(events.index("technical"), events.index("trader_watch_levels"))
+        self.assertLess(events.index("trader_watch_levels"), events.index("candidate_merge"))
         self.assertLess(events.index("candidate_merge"), events.index("quote_snapshot_candidates"))
         self.assertLess(events.index("candidate_merge"), events.index("tradability_candidates"))
         self.assertLess(events.index("candidate_merge"), events.index("catalyst_enrichment"))
@@ -52,6 +55,7 @@ class PremarketOrchestrationTests(unittest.TestCase):
             run_technical=lambda: events.append("technical"),
             run_market_calendar=lambda: events.append("market_calendar"),
             run_quote_snapshot_core=lambda: events.append("quote_snapshot_core"),
+            run_trader_watch_levels=lambda: events.append("trader_watch_levels"),
             run_candidate_merge=lambda: events.append("candidate_merge"),
             run_quote_snapshot_candidates=lambda: events.append("quote_snapshot_candidates"),
             run_tradability_candidates=lambda: events.append("tradability_candidates"),
@@ -75,6 +79,7 @@ class PremarketOrchestrationTests(unittest.TestCase):
             run_technical=lambda: events.append("technical"),
             run_market_calendar=lambda: events.append("market_calendar"),
             run_quote_snapshot_core=lambda: events.append("quote_snapshot_core"),
+            run_trader_watch_levels=lambda: events.append("trader_watch_levels"),
             run_candidate_merge=lambda: events.append("candidate_merge"),
             run_quote_snapshot_candidates=lambda: events.append("quote_snapshot_candidates"),
             run_tradability_candidates=lambda: events.append("tradability_candidates"),

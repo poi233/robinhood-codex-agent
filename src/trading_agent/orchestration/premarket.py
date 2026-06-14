@@ -18,6 +18,7 @@ from trading_agent.data.universe import parse_universe
 from trading_agent.planner.candidates import build_candidate_snapshot
 from trading_agent.prompts.codex import run_codex_prompt
 from trading_agent.reporting.premarket import build_fail_closed_daily_plan, build_premarket_archive_payload
+from trading_agent.reporting.trader_watch_levels import build_trader_watch_levels
 from trading_agent.signals.kronos import (
     build_failed_kronos_payload,
     build_live_kronos_payload,
@@ -35,6 +36,7 @@ class PremarketPipeline:
     run_technical: callable
     run_market_calendar: callable
     run_quote_snapshot_core: callable
+    run_trader_watch_levels: callable
     run_candidate_merge: callable
     run_quote_snapshot_candidates: callable
     run_tradability_candidates: callable
@@ -54,6 +56,7 @@ class PremarketPipeline:
                 executor.submit(self._run_advisory, self.run_quote_snapshot_core),
             ]
             wait(futures)
+        self.run_trader_watch_levels()
         self.run_candidate_merge()
         with ThreadPoolExecutor(max_workers=3) as executor:
             futures = [
@@ -261,6 +264,12 @@ def run_premarket_pipeline(*, dry_run: bool) -> int:
     def run_candidate_merge() -> None:
         build_candidate_snapshot(agent_root, run_date)
 
+    def run_trader_watch_levels() -> None:
+        if not paths.technical_signals_path.exists():
+            write_json(paths.trader_watch_levels_path, {"schema_version": 1, "symbols": {}})
+            return
+        write_json(paths.trader_watch_levels_path, build_trader_watch_levels(read_json(paths.technical_signals_path)))
+
     def run_quote_snapshot_candidates() -> None:
         status = run_codex_prompt(
             "quote_snapshot_candidates",
@@ -323,6 +332,7 @@ def run_premarket_pipeline(*, dry_run: bool) -> int:
         run_technical=lambda: run_stage("technical", run_technical),
         run_market_calendar=lambda: run_stage("market_calendar", run_market_calendar),
         run_quote_snapshot_core=lambda: run_stage("quote_snapshot_core", run_quote_snapshot_core),
+        run_trader_watch_levels=lambda: run_stage("trader_watch_levels", run_trader_watch_levels),
         run_candidate_merge=lambda: run_stage("candidate_merge", run_candidate_merge),
         run_quote_snapshot_candidates=lambda: run_stage("quote_snapshot_candidates", run_quote_snapshot_candidates),
         run_tradability_candidates=lambda: run_stage("tradability_candidates", run_tradability_candidates),
