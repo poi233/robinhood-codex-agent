@@ -76,8 +76,8 @@ flowchart TD
 
     CandidateMerge --> G2
     subgraph G2["parallel candidate enrichment"]
-        CandidateQuotes["Codex prompt: candidate quotes"]
-        Tradability["Codex prompt: candidate tradability"]
+        CandidateQuotes["local candidate quotes"]
+        Tradability["local candidate tradability"]
         Catalysts["Codex prompt: catalysts / news"]
     end
 
@@ -281,7 +281,8 @@ Premarket does the following:
    normalization step only; it does not create new technical opinions.
 6. Builds `planner/candidate_snapshot.json` locally from account holdings, open orders, and advisory
    signals.
-7. Runs candidate quote, tradability, and catalyst enrichment prompts in parallel.
+7. Runs deterministic candidate quote and tradability builders in parallel with the catalyst
+   enrichment prompt.
 8. Writes `planner/data_status_summary.json` with structured status reason codes.
 9. Writes `planner/candidate_scores.json` and `planner/risk_overlay.json` with deterministic
    ranking and risk gates.
@@ -297,6 +298,15 @@ The final planner writes:
 - `planner/daily_plan.md`
 - `planner/daily_usage.json`
 - one `premarket_plan` record in `decisions.jsonl`
+
+Deterministic versus reasoning boundaries:
+
+- Python owns candidate merge, candidate quote extraction, candidate tradability gating,
+  trader-watch-level normalization, data-status normalization, scoring aggregation, and risk overlay.
+- Codex still owns DSA reasoning, technical research, catalyst interpretation, account/calendar/core
+  snapshot prompts, and final narrative writing.
+- Python scoring aggregates existing signal-layer outputs; it does not invent technical setups,
+  catalyst judgments, or DSA classifications.
 
 Layer flags:
 

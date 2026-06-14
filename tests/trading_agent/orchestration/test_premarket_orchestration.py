@@ -143,6 +143,37 @@ class PremarketOrchestrationTests(unittest.TestCase):
         self.assertEqual(collect_market_context.call_count, 1)
         self.assertFalse(collect_market_context.call_args.kwargs["mock"])
 
+    def test_candidate_quote_and_tradability_stages_do_not_call_codex_prompts(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            (root / "src" / "config").mkdir(parents=True)
+            (root / "src" / "config" / "universe.txt").write_text("NVDA\n", encoding="utf-8")
+
+            with mock.patch.object(premarket_module, "_is_weekday_pt", return_value=True), \
+                mock.patch.object(premarket_module, "collect_market_context"), \
+                mock.patch.object(premarket_module, "run_codex_prompt", return_value=0) as run_codex_prompt, \
+                mock.patch.object(premarket_module, "_write_kronos_signals"):
+                original_cwd = os.getcwd()
+                os.chdir(root)
+                try:
+                    with mock.patch.dict(
+                        premarket_module.os.environ,
+                        {
+                            "ENABLE_DSA_SIGNAL_LAYER": "0",
+                            "ENABLE_KRONOS_SIGNAL_LAYER": "0",
+                            "ENABLE_TECHNICAL_SIGNAL_LAYER": "0",
+                            "ALLOW_WEEKEND_RUN": "1",
+                        },
+                        clear=False,
+                    ):
+                        premarket_module.run_premarket_pipeline(dry_run=False)
+                finally:
+                    os.chdir(original_cwd)
+
+        run_kinds = [call.args[0] for call in run_codex_prompt.call_args_list]
+        self.assertNotIn("quote_snapshot_candidates", run_kinds)
+        self.assertNotIn("tradability_candidates", run_kinds)
+
     def test_explicit_dry_run_uses_mock_market_feed(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)

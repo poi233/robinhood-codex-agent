@@ -17,8 +17,10 @@ from trading_agent.data.market_context import collect_market_context
 from trading_agent.data.universe import parse_universe
 from trading_agent.planner.candidates import build_candidate_snapshot
 from trading_agent.planner.data_status import build_data_status_summary_from_paths
+from trading_agent.planner.quote_snapshot import build_candidate_quote_snapshot_from_paths
 from trading_agent.planner.risk_overlay import build_capital_snapshot, build_risk_overlay_from_paths
 from trading_agent.planner.scoring import build_candidate_scores_from_paths
+from trading_agent.planner.tradability import build_tradability_snapshot_from_paths
 from trading_agent.prompts.codex import run_codex_prompt
 from trading_agent.reporting.premarket import build_fail_closed_daily_plan, build_premarket_archive_payload
 from trading_agent.reporting.trader_watch_levels import build_trader_watch_levels
@@ -297,22 +299,10 @@ def run_premarket_pipeline(*, dry_run: bool) -> int:
         write_json(paths.trader_watch_levels_path, build_trader_watch_levels(read_json(paths.technical_signals_path)))
 
     def run_quote_snapshot_candidates() -> None:
-        status = run_codex_prompt(
-            "quote_snapshot_candidates",
-            agent_root,
-            paths.prompts_dir / "premarket" / "quote_snapshot_candidates.txt",
-        )
-        if status != 0:
-            raise RuntimeError("quote snapshot candidates prompt failed")
+        build_candidate_quote_snapshot_from_paths(agent_root, run_date)
 
     def run_tradability_candidates() -> None:
-        status = run_codex_prompt(
-            "tradability_candidates",
-            agent_root,
-            paths.prompts_dir / "premarket" / "tradability_candidates.txt",
-        )
-        if status != 0:
-            raise RuntimeError("tradability candidates prompt failed")
+        build_tradability_snapshot_from_paths(agent_root, run_date)
 
     def run_catalyst_enrichment() -> None:
         status = run_codex_prompt(

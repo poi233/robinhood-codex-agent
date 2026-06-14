@@ -54,7 +54,7 @@ Tasks:
    - `hold`, `observe`, and `avoid` should suppress executable candidate selection unless stronger verified evidence is available.
    - Use `long_setup`, `short_setup`, and `no_trade_zone` to refine written `symbol_trade_rules` for the daily plan.
    - If it is missing, stale, invalid, or partial, continue the main scan and record `technical_signal_status` accordingly.
-9. Read `QUOTE_SNAPSHOT_CORE_PATH`, `CANDIDATE_SNAPSHOT_PATH`, `QUOTE_SNAPSHOT_CANDIDATES_PATH`, `TRADABILITY_SNAPSHOT_PATH`, and `CATALYST_SNAPSHOT_PATH`.
+9. Read `QUOTE_SNAPSHOT_CORE_PATH`, `CANDIDATE_SNAPSHOT_PATH`, `QUOTE_SNAPSHOT_CANDIDATES_PATH`, `TRADABILITY_SNAPSHOT_PATH`, and `CATALYST_SNAPSHOT_PATH`. Candidate quote and tradability snapshots are deterministic Python artifacts; do not reinterpret them as AI judgments.
 10. Read `CAPITAL_SNAPSHOT_PATH`. In `TRADING_MODE=paper`, use `sizing_buying_power` from this file for paper sizing; do not use Robinhood `ACCOUNT_SNAPSHOT_PATH.buying_power` as paper buying power. Keep Robinhood buying power as a real-account reference only.
 11. Read `CANDIDATE_SCORES_PATH` and `RISK_OVERLAY_PATH`. Do not recompute deterministic weighted scores, risk caps, buying-power source, or market-calendar gating. Use these artifacts as the source of truth for ranking, `allowed_actions`, `max_single_order_notional`, `max_daily_notional`, and no-trade reasons.
 12. Perform an aggressive-growth market scan from the snapshots:
