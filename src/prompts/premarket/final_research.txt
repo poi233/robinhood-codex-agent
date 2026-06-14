@@ -80,8 +80,9 @@ Tasks:
 18. Write `DYNAMIC_ALLOWLIST_PATH` with scores and reasons from `CANDIDATE_SCORES_PATH`, enriched with concise narrative reasons.
 19. Write `DAILY_PLAN_PATH` with the exact JSON schema below.
 20. Write `DAILY_PLAN_MARKDOWN_PATH` with a concise human-readable summary. Include both `Paper buying power` and `Robinhood Agentic account buying power` in the Account Fit section.
-21. Initialize or reset `DAILY_USAGE_PATH` for the current date, preserving no old usage if the date changed.
-22. Append one JSON line to `DECISIONS_LOG_PATH` with `decision="premarket_plan"`.
+21. Write `DAILY_PLAN_ZH_MARKDOWN_PATH` with a concise Chinese summary for human review. It should mirror the important conclusions from `DAILY_PLAN_MARKDOWN_PATH`, including market regime, no-trade reasons, watchlist/ranking, account fit, paper buying power, Robinhood Agentic account buying power, and risk limits.
+22. Initialize or reset `DAILY_USAGE_PATH` for the current date, preserving no old usage if the date changed.
+23. Append one JSON line to `DECISIONS_LOG_PATH` with `decision="premarket_plan"`.
 
 `DAILY_PLAN_PATH` schema:
 {
@@ -186,4 +187,5 @@ Output:
 - Write `DYNAMIC_ALLOWLIST_PATH`.
 - Write `DAILY_PLAN_PATH`.
 - Write `DAILY_PLAN_MARKDOWN_PATH`.
+- Write `DAILY_PLAN_ZH_MARKDOWN_PATH`.
 - Append one JSONL decision record.

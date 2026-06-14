@@ -18,6 +18,7 @@ class CoreRuntimeTests(unittest.TestCase):
             self.assertEqual(paths.agent_root, root)
             self.assertEqual(paths.state_dir, root / "runtime" / "state")
             self.assertEqual(paths.reports_dir, root / "runtime" / "reports")
+            self.assertEqual(paths.daily_plan_zh_markdown_path, root / "runtime" / "state" / "runs" / paths.run_date / "planner" / "daily_plan.zh.md")
             self.assertEqual(paths.paper_account_path, root / "runtime" / "state" / "runs" / paths.run_date / "paper" / "account.json")
             self.assertEqual(paths.paper_positions_path, root / "runtime" / "state" / "runs" / paths.run_date / "paper" / "positions.json")
 

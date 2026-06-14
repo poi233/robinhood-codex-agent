@@ -200,6 +200,7 @@ runtime/state/runs/YYYY-MM-DD/
     dynamic_allowlist.json
     daily_plan.json
     daily_plan.md
+    daily_plan.zh.md
     daily_usage.json
   paper/
     day_start.json
@@ -243,6 +244,7 @@ Important state contracts:
 - `planner/risk_overlay.json` applies market-calendar, capital, risk-tier, account, and data-status
   gates before the final prompt writes narrative.
 - `planner/daily_usage.json` starts from the final premarket planner and is updated by paper fills.
+- `planner/daily_plan.zh.md` is the Chinese human-readable version of the premarket report.
 - `paper/day_start.json`, `paper/day_end.json`, and `paper/equity_curve.jsonl` are the
   visualization-friendly daily paper snapshots and equity curve.
 - `paper/account.json`, `paper/positions.json`, and `paper/orders.jsonl` are the current simulated
@@ -296,6 +298,7 @@ The final planner writes:
 - `planner/dynamic_allowlist.json`
 - `planner/daily_plan.json`
 - `planner/daily_plan.md`
+- `planner/daily_plan.zh.md`
 - `planner/daily_usage.json`
 - one `premarket_plan` record in `decisions.jsonl`
 

@@ -33,6 +33,7 @@ class RuntimePaths:
     trader_watch_levels_path: Path
     daily_plan_path: Path
     daily_plan_markdown_path: Path
+    daily_plan_zh_markdown_path: Path
     dynamic_allowlist_path: Path
     today_allowlist_path: Path
     daily_usage_path: Path
@@ -110,6 +111,7 @@ def build_runtime_paths(agent_root: Path, *, run_date: str | None = None) -> Run
         trader_watch_levels_path=_resolve_env_path(agent_root, "TRADER_WATCH_LEVELS_PATH", planner_dir / "trader_watch_levels.json"),
         daily_plan_path=_resolve_env_path(agent_root, "DAILY_PLAN_PATH", planner_dir / "daily_plan.json"),
         daily_plan_markdown_path=_resolve_env_path(agent_root, "DAILY_PLAN_MARKDOWN_PATH", planner_dir / "daily_plan.md"),
+        daily_plan_zh_markdown_path=_resolve_env_path(agent_root, "DAILY_PLAN_ZH_MARKDOWN_PATH", planner_dir / "daily_plan.zh.md"),
         dynamic_allowlist_path=_resolve_env_path(agent_root, "DYNAMIC_ALLOWLIST_PATH", planner_dir / "dynamic_allowlist.json"),
         today_allowlist_path=_resolve_env_path(agent_root, "TODAY_ALLOWLIST_PATH", planner_dir / "today_allowlist.txt"),
         daily_usage_path=_resolve_env_path(agent_root, "DAILY_USAGE_PATH", planner_dir / "daily_usage.json"),

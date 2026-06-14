@@ -47,6 +47,7 @@ def build_runtime_block(run_kind: str, agent_root: Path) -> str:
         "TRADER_WATCH_LEVELS_PATH": str(paths.trader_watch_levels_path),
         "DAILY_PLAN_PATH": str(paths.daily_plan_path),
         "DAILY_PLAN_MARKDOWN_PATH": str(paths.daily_plan_markdown_path),
+        "DAILY_PLAN_ZH_MARKDOWN_PATH": str(paths.daily_plan_zh_markdown_path),
         "DYNAMIC_ALLOWLIST_PATH": str(paths.dynamic_allowlist_path),
         "TODAY_ALLOWLIST_PATH": str(paths.today_allowlist_path),
         "DAILY_USAGE_PATH": str(paths.daily_usage_path),
