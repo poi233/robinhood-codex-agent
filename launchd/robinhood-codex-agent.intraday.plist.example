@@ -3,12 +3,13 @@
   "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+  <!-- Replace __REPO_ROOT__ with your local checkout path before loading. -->
   <key>Label</key>
-  <string>com.yinyin.robinhood-codex-agent.intraday</string>
+  <string>com.example.robinhood-codex-agent.intraday</string>
   <key>ProgramArguments</key>
   <array>
     <string>/bin/bash</string>
-    <string>/Users/yinyin-jiang/Documents/Codex/2026-06-12/codex-30-cron-launchd-codex-exec/robinhood-codex-agent/scripts/run_intraday.sh</string>
+    <string>__REPO_ROOT__/scripts/run_intraday.sh</string>
   </array>
   <key>StartCalendarInterval</key>
   <array>
@@ -27,8 +28,8 @@
     <dict><key>Hour</key><integer>12</integer><key>Minute</key><integer>45</integer></dict>
   </array>
   <key>StandardOutPath</key>
-  <string>/Users/yinyin-jiang/Documents/Codex/2026-06-12/codex-30-cron-launchd-codex-exec/robinhood-codex-agent/logs/launchd.intraday.out</string>
+  <string>__REPO_ROOT__/logs/launchd.intraday.out</string>
   <key>StandardErrorPath</key>
-  <string>/Users/yinyin-jiang/Documents/Codex/2026-06-12/codex-30-cron-launchd-codex-exec/robinhood-codex-agent/logs/launchd.intraday.err</string>
+  <string>__REPO_ROOT__/logs/launchd.intraday.err</string>
 </dict>
 </plist>

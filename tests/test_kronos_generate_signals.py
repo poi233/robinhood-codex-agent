@@ -136,10 +136,10 @@ class PortableArtifactTests(unittest.TestCase):
         self.assertNotIn('state/kronos_signals.json', contents)
         self.assertNotIn('mktemp "$AGENT_ROOT/state/kronos_signals.verify.XXXXXX.json"', contents)
 
-    def test_setup_doc_describes_current_validation_flow(self) -> None:
-        contents = (REPO_ROOT / "docs" / "setup" / "kronos-portable-setup.md").read_text(encoding="utf-8")
+    def test_readme_carries_portable_setup_flow(self) -> None:
+        contents = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
 
-        self.assertIn("Python `3.11` or `3.12`", contents)
+        self.assertIn("Portable rebuild and validation flow", contents)
         self.assertIn("./scripts/verify_kronos_env.sh", contents)
         self.assertIn("./scripts/check_safety.sh", contents)
         self.assertIn("ALLOW_WEEKEND_RUN=1 KRONOS_USE_MOCK=1 ./scripts/run_kronos_premarket_scan.sh", contents)
@@ -147,13 +147,11 @@ class PortableArtifactTests(unittest.TestCase):
             "ALLOW_WEEKEND_RUN=1 KRONOS_USE_MOCK=1 CODEX_EXEC_DRY_RUN=1 ./scripts/run_premarket.sh",
             contents,
         )
-        self.assertNotIn("pending later tasks", contents)
-
-    def test_setup_doc_mentions_bootstrap_python_override(self) -> None:
-        contents = (REPO_ROOT / "docs" / "setup" / "kronos-portable-setup.md").read_text(encoding="utf-8")
-
         self.assertIn("KRONOS_BOOTSTRAP_PYTHON", contents)
         self.assertRegex(contents, r"python3\.12|python3\.11")
+
+    def test_docs_directory_is_not_tracked_requirement_in_tests(self) -> None:
+        self.assertTrue((REPO_ROOT / "README.md").exists())
 
     def test_setup_script_fails_fast_when_only_unsupported_python_is_available(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

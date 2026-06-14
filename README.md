@@ -78,6 +78,8 @@ KILL_SWITCH              default safety stop file
 .codex/config.toml       project MCP approval policy
 ```
 
+`launchd` is the built-in macOS scheduler. In this repo it serves the same role as `cron`: starting `premarket`, `intraday`, and `postmarket` runs on a schedule. Use `launchd` on macOS if you want the jobs managed by LaunchAgents; use `cron` if you prefer a shell-level scheduler.
+
 ## Lifecycle
 
 ### Premarket
@@ -274,18 +276,6 @@ codex
 
 Complete Robinhood Agentic Account authentication on desktop.
 
-Then run:
-
-```bash
-cd /path/to/robinhood-codex-agent
-chmod +x scripts/*.sh
-./scripts/setup_kronos_env.sh
-./scripts/verify_kronos_env.sh
-./scripts/check_safety.sh
-ALLOW_WEEKEND_RUN=1 KRONOS_USE_MOCK=1 ./scripts/run_kronos_premarket_scan.sh
-ALLOW_WEEKEND_RUN=1 KRONOS_USE_MOCK=1 CODEX_EXEC_DRY_RUN=1 ./scripts/run_premarket.sh
-```
-
 ## Dry Run
 
 Dry-run the shell layer without invoking Codex after setup and safety checks pass:
@@ -317,7 +307,14 @@ Times are America/Los_Angeles:
 - every 30 minutes until `12:45`
 - `13:10` postmarket summary
 
-Use `cron.example` or the `launchd/*.plist.example` files.
+Use `cron.example` or the `launchd/*.plist.example` files after replacing `__REPO_ROOT__` with your local repository path.
+
+## Portability Notes
+
+- `README.md` is the source of truth for setup and runtime usage.
+- `docs/` is intentionally local-only and should not be committed or uploaded.
+- Machine-specific values belong in `config/runtime.env.local`, which is git-ignored.
+- Scheduler examples use placeholders and must be customized locally.
 
 ## Rollout
 

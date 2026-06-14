@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <!-- Replace __REPO_ROOT__ with your local checkout path before loading. -->
+  <key>Label</key>
+  <string>com.example.robinhood-codex-agent.postmarket</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/bash</string>
+    <string>__REPO_ROOT__/scripts/run_postmarket.sh</string>
+  </array>
+  <key>StartCalendarInterval</key>
+  <dict>
+    <key>Hour</key>
+    <integer>13</integer>
+    <key>Minute</key>
+    <integer>10</integer>
+  </dict>
+  <key>StandardOutPath</key>
+  <string>__REPO_ROOT__/logs/launchd.postmarket.out</string>
+  <key>StandardErrorPath</key>
+  <string>__REPO_ROOT__/logs/launchd.postmarket.err</string>
+</dict>
+</plist>

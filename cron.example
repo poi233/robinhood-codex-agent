@@ -3,13 +3,14 @@ PATH=/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin
 
 # Robinhood Codex Agent, America/Los_Angeles.
 # Scripts also skip weekends, enforce KILL_SWITCH, and use config/runtime.env.
+# Replace __REPO_ROOT__ with your local checkout path before installing.
 
 # Premarket research, no trading.
-30 5 * * 1-5 /Users/yinyin-jiang/Documents/Codex/2026-06-12/codex-30-cron-launchd-codex-exec/robinhood-codex-agent/scripts/run_premarket.sh
+30 5 * * 1-5 __REPO_ROOT__/scripts/run_premarket.sh
 
 # Intraday checks every 30 minutes, starting 15 minutes after market open.
-45 6 * * 1-5 /Users/yinyin-jiang/Documents/Codex/2026-06-12/codex-30-cron-launchd-codex-exec/robinhood-codex-agent/scripts/run_intraday.sh
-15,45 7-12 * * 1-5 /Users/yinyin-jiang/Documents/Codex/2026-06-12/codex-30-cron-launchd-codex-exec/robinhood-codex-agent/scripts/run_intraday.sh
+45 6 * * 1-5 __REPO_ROOT__/scripts/run_intraday.sh
+15,45 7-12 * * 1-5 __REPO_ROOT__/scripts/run_intraday.sh
 
 # Postmarket summary, no trading.
-10 13 * * 1-5 /Users/yinyin-jiang/Documents/Codex/2026-06-12/codex-30-cron-launchd-codex-exec/robinhood-codex-agent/scripts/run_postmarket.sh
+10 13 * * 1-5 __REPO_ROOT__/scripts/run_postmarket.sh

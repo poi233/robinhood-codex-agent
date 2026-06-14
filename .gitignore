@@ -20,6 +20,7 @@ config/runtime.env.local
 .codex/tmp/
 .superpowers/
 *.lock
+docs/
 state/*
 !state/.gitkeep
 logs/*
