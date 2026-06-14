@@ -16,7 +16,7 @@ The package already has:
 - Safety defaults in `config/runtime.env`, `config/risk.md`, `config/risk_tiers.json`, and `KILL_SWITCH`.
 - Advisory files such as `state/dsa_signals.json`, `state/kronos_signals.json`, and `state/technical_signals.json`.
 
-The current gap is that final intraday trading logic is still prompt-owned. That makes the strategy difficult to reproduce, unit test, backtest, and audit.
+The current gap is that final intraday trading logic is still prompt-owned. That makes the strategy difficult to reproduce, unit test, and audit.
 
 ## Target Architecture
 
@@ -36,7 +36,6 @@ policy layer
   -> hard risk gates
 
 runtime layer
-  -> backtest
   -> paper
   -> review
   -> live
@@ -252,40 +251,6 @@ The skill cannot:
 - Open short positions.
 - Convert a missing quote or stale daily plan into a tradeable setup.
 
-## Backtest Roadmap
-
-Create a later backtest package:
-
-```text
-trading_agent/backtest/
-  __init__.py
-  data_loader.py
-  engine.py
-  broker_sim.py
-  metrics.py
-  report.py
-```
-
-Add CLI:
-
-```bash
-python3 -m trading_agent backtest \
-  --start 2024-01-01 \
-  --end 2026-06-01 \
-  --strategy policy_v0 \
-  --cash 10000
-```
-
-The first backtest version should be long-only, no margin, no short, no options, no crypto, fixed slippage, and should reuse `generate_order_intent()`. Outputs:
-
-```text
-reports/backtests/<date>_policy_v0/
-  summary.json
-  trades.csv
-  equity_curve.csv
-  report.md
-```
-
 ## Testing Strategy
 
 Add tests:
@@ -297,7 +262,6 @@ tests/test_policy_risk.py
 tests/test_policy_engine.py
 tests/test_intraday_policy_integration.py
 tests/test_research_skill_integration.py
-tests/test_backtest_cli.py
 ```
 
 First-slice required cases:
@@ -346,7 +310,6 @@ The first implementation slice is successful when:
 
 - Broker/account snapshot adapter.
 - Robinhood review/place execution adapter.
-- Full backtest implementation.
 - Research skill installation automation.
 - Postmarket policy attribution report.
 - Weekly and monthly experiment tracking.

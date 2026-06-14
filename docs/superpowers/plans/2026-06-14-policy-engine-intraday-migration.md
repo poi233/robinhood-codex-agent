@@ -4,7 +4,7 @@
 
 **Goal:** Move intraday trade decision authority from Codex prompts into a deterministic Python policy engine while keeping first-slice review/live execution blocked.
 
-**Architecture:** Add a pure `trading_agent.policy` package for typed inputs, scoring, risk gates, buy/sell intent evaluation, and a single `generate_order_intent()` entrypoint. Update intraday orchestration to load local state, call policy, and append a decision log instead of asking Codex to decide. Add a backtest CLI skeleton that establishes the future policy reuse boundary without implementing full historical simulation yet.
+**Architecture:** Add a pure `trading_agent.policy` package for typed inputs, scoring, risk gates, buy/sell intent evaluation, and a single `generate_order_intent()` entrypoint. Update intraday orchestration to load local state, call policy, and append a decision log instead of asking Codex to decide.
 
 **Tech Stack:** Python 3.11+, dataclasses, argparse, unittest, local JSON state files, existing `trading_agent.core` helpers
 
@@ -20,15 +20,12 @@
 - Create: `trading_agent/policy/buy.py`
 - Create: `trading_agent/policy/sell.py`
 - Create: `trading_agent/policy/engine.py`
-- Create: `trading_agent/backtest/__init__.py`
-- Create: `trading_agent/backtest/engine.py`
 - Modify: `trading_agent/orchestration/intraday.py`
 - Modify: `trading_agent/cli.py`
 - Create: `tests/test_policy_engine.py`
 - Create: `tests/test_policy_buy_sell.py`
 - Create: `tests/test_policy_loaders.py`
 - Create: `tests/test_intraday_policy_integration.py`
-- Create: `tests/test_backtest_cli.py`
 
 ## Responsibility Split
 
@@ -40,7 +37,6 @@
 - `sell.py`: sell intent rules for reducing existing long positions only.
 - `engine.py`: pure decision priority: global block, sell, buy, no-action.
 - `intraday.py`: runtime gates, load inputs, call policy, append one decision record.
-- `backtest/engine.py`: first CLI-compatible skeleton for later policy reuse.
 
 ### Task 1: Policy Models and Engine Failing Tests
 
@@ -160,34 +156,7 @@ Modify `run_intraday_pipeline()` to load runtime config, load policy inputs, cal
 Run: `python3 -m unittest tests/test_intraday_policy_integration.py -v`
 Expected: PASS.
 
-### Task 5: Backtest CLI Skeleton
-
-**Files:**
-- Create: `tests/test_backtest_cli.py`
-- Create: `trading_agent/backtest/__init__.py`
-- Create: `trading_agent/backtest/engine.py`
-- Modify: `trading_agent/cli.py`
-- Modify: `tests/test_package_cli.py`
-
-- [ ] **Step 1: Write failing CLI tests**
-
-Create `tests/test_backtest_cli.py` asserting `python3 -m trading_agent backtest --strategy policy_v0 --start 2024-01-01 --end 2024-01-31` exits zero and prints a first-slice skeleton message. Update `tests/test_package_cli.py` to expect `backtest` in top-level help.
-
-- [ ] **Step 2: Run CLI tests and verify failure**
-
-Run: `python3 -m unittest tests/test_backtest_cli.py tests/test_package_cli.py -v`
-Expected: FAIL because `backtest` command does not exist.
-
-- [ ] **Step 3: Add backtest skeleton**
-
-Create `trading_agent/backtest/engine.py` with `run_backtest_skeleton()` returning a stable message and no broker access. Update `cli.py` to add `backtest` parser args.
-
-- [ ] **Step 4: Re-run CLI tests**
-
-Run: `python3 -m unittest tests/test_backtest_cli.py tests/test_package_cli.py -v`
-Expected: PASS.
-
-### Task 6: Full Verification
+### Task 5: Full Verification
 
 **Files:**
 - All changed files
@@ -204,7 +173,6 @@ Run:
 ```bash
 python3 -m trading_agent --help
 python3 -m trading_agent intraday --help
-python3 -m trading_agent backtest --help
 ```
 
 Expected: All exit zero.
@@ -212,4 +180,4 @@ Expected: All exit zero.
 - [ ] **Step 3: Inspect git diff**
 
 Run: `git diff --stat` and `git diff -- trading_agent tests docs/superpowers/plans/2026-06-14-policy-engine-intraday-migration.md`.
-Expected: Only policy, intraday, CLI, backtest skeleton, tests, and this plan changed. Existing unrelated edits in `config/runtime.env` and `trading_agent/prompts/codex.py` remain untouched.
+Expected: Only policy, intraday, CLI, tests, and this plan changed. Existing unrelated edits in `config/runtime.env` and `trading_agent/prompts/codex.py` remain untouched.
