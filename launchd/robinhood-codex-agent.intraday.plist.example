@@ -9,7 +9,7 @@
   <key>ProgramArguments</key>
   <array>
     <string>/bin/bash</string>
-    <string>__REPO_ROOT__/scripts/entrypoints/run_intraday.sh</string>
+    <string>__REPO_ROOT__/src/scripts/entrypoints/run_intraday.sh</string>
   </array>
   <key>StartCalendarInterval</key>
   <array>
@@ -28,8 +28,8 @@
     <dict><key>Hour</key><integer>12</integer><key>Minute</key><integer>45</integer></dict>
   </array>
   <key>StandardOutPath</key>
-  <string>__REPO_ROOT__/logs/launchd.intraday.out</string>
+  <string>__REPO_ROOT__/runtime/logs/launchd.intraday.out</string>
   <key>StandardErrorPath</key>
-  <string>__REPO_ROOT__/logs/launchd.intraday.err</string>
+  <string>__REPO_ROOT__/runtime/logs/launchd.intraday.err</string>
 </dict>
 </plist>

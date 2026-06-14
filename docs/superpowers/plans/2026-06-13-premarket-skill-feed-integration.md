@@ -4,7 +4,7 @@
 
 **Goal:** Add a repo-owned skill pack, a portable market-feed collector, and a dedicated technical-analysis layer that feeds execution-aware price levels into the existing premarket and intraday workflows without disturbing the already-wired Kronos premarket layer.
 
-**Architecture:** Keep `.agents/skills/` as the repository source of truth, copy those skills into both `$HOME/.agents/skills` and `~/.codex/skills`, preserve the current `DSA -> Kronos -> main premarket` ordering, insert normalized market artifacts under `state/runs/<date>/market_feed/` after the Kronos layer, run a separate Codex technical-analysis prompt that writes `state/runs/<date>/signals/technical_signals.json`, then let the main premarket and intraday prompts consume that contract while preserving long-only execution rules.
+**Architecture:** Keep `.agents/skills/` as the repository source of truth, copy those skills into both `$HOME/.agents/skills` and `~/.codex/skills`, preserve the current `DSA -> Kronos -> main premarket` ordering, insert normalized market artifacts under `runtime/state/runs/<date>/market_feed/` after the Kronos layer, run a separate Codex technical-analysis prompt that writes `runtime/state/runs/<date>/signals/technical_signals.json`, then let the main premarket and intraday prompts consume that contract while preserving long-only execution rules.
 
 **Tech Stack:** Bash, Python 3.11, `unittest`, `json`, `pathlib`, `subprocess`, `yfinance`, `pandas`, `matplotlib`, Codex prompts, local JSON state files
 
@@ -18,38 +18,38 @@
 - Create: `.agents/skills/trading-research-casebook-maintenance/**`
 - Create: `docs/setup/repo-skills.md`
 - Create: `docs/setup/market-feed.md`
-- Create: `prompts/technical/research.txt`
-- Create: `scripts/skills/install_repo_skills.sh`
-- Create: `scripts/skills/verify_repo_skills.sh`
-- Create: `scripts/data/collect_market_feed.py`
-- Create: `scripts/data/run_market_feed_collection.sh`
-- Create: `scripts/data/run_technical_research.sh`
-- Create: `scripts/data/run_symbol_research.sh`
+- Create: `src/prompts/technical/research.txt`
+- Create: `src/scripts/skills/install_repo_skills.sh`
+- Create: `src/scripts/skills/verify_repo_skills.sh`
+- Create: `src/scripts/data/collect_market_feed.py`
+- Create: `src/scripts/data/run_market_feed_collection.sh`
+- Create: `src/scripts/data/run_technical_research.sh`
+- Create: `src/scripts/data/run_symbol_research.sh`
 - Create: `tests/test_install_repo_skills.py`
 - Create: `tests/test_collect_market_feed.py`
 - Create: `tests/test_technical_signal_schema.py`
 - Modify: `.gitignore`
 - Modify: `README.md`
-- Modify: `config/runtime.env`
-- Modify: `scripts/safety/check_safety.sh`
-- Modify: `scripts/lib/common.sh`
-- Modify: `scripts/entrypoints/run_premarket.sh`
-- Modify: `prompts/intraday/check.txt`
-- Modify: `prompts/premarket/final_research.txt`
+- Modify: `src/config/runtime.env`
+- Modify: `src/scripts/safety/check_safety.sh`
+- Modify: `src/scripts/lib/common.sh`
+- Modify: `src/scripts/entrypoints/run_premarket.sh`
+- Modify: `src/prompts/intraday/check.txt`
+- Modify: `src/prompts/premarket/final_research.txt`
 
 ## Responsibility Split
 
 - `.agents/skills/**`: repo-owned skill source of truth.
-- `scripts/skills/install_repo_skills.sh`: copy repo skills into both user-level skill destinations.
-- `scripts/skills/verify_repo_skills.sh`: verify installed skills are complete copies.
-- `scripts/lib/common.sh`: shared runtime flags, helper paths, and prompt runtime block fields.
-- `scripts/data/collect_market_feed.py`: deterministic artifact collector for OHLCV, charts, news, earnings, and filings.
-- `scripts/data/run_market_feed_collection.sh`: shell entrypoint for scheduled collector runs.
-- `prompts/technical/research.txt`: explicit technical-analysis prompt that uses repo skills and writes `state/runs/<date>/signals/technical_signals.json`.
-- `scripts/data/run_technical_research.sh`: scheduled and manual runner for the technical-analysis step.
-- `prompts/premarket/final_research.txt`: consume technical signals instead of re-deriving all raw chart interpretation.
-- `prompts/intraday/check.txt`: consume key price levels and no-trade zones from `state/runs/<date>/signals/technical_signals.json`.
-- `scripts/data/run_symbol_research.sh`: ad hoc single-symbol collector + technical-analysis path.
+- `src/scripts/skills/install_repo_skills.sh`: copy repo skills into both user-level skill destinations.
+- `src/scripts/skills/verify_repo_skills.sh`: verify installed skills are complete copies.
+- `src/scripts/lib/common.sh`: shared runtime flags, helper paths, and prompt runtime block fields.
+- `src/scripts/data/collect_market_feed.py`: deterministic artifact collector for OHLCV, charts, news, earnings, and filings.
+- `src/scripts/data/run_market_feed_collection.sh`: shell entrypoint for scheduled collector runs.
+- `src/prompts/technical/research.txt`: explicit technical-analysis prompt that uses repo skills and writes `runtime/state/runs/<date>/signals/technical_signals.json`.
+- `src/scripts/data/run_technical_research.sh`: scheduled and manual runner for the technical-analysis step.
+- `src/prompts/premarket/final_research.txt`: consume technical signals instead of re-deriving all raw chart interpretation.
+- `src/prompts/intraday/check.txt`: consume key price levels and no-trade zones from `runtime/state/runs/<date>/signals/technical_signals.json`.
+- `src/scripts/data/run_symbol_research.sh`: ad hoc single-symbol collector + technical-analysis path.
 - `tests/test_install_repo_skills.py`: install/verify script contract.
 - `tests/test_collect_market_feed.py`: collector artifact contract and mock mode.
 - `tests/test_technical_signal_schema.py`: technical signal schema and prompt wiring.
@@ -58,7 +58,7 @@
 ## Implementation Notes
 
 - Keep `.agents/skills/` committed. Do not ignore it.
-- Keep `state/market_feed/` ignored the same way other runtime state is ignored.
+- Keep `runtime/state/market_feed/` ignored the same way other runtime state is ignored.
 - Add a deterministic `--mock` collector mode so tests do not depend on live network calls.
 - Keep `short_setup` strictly informational for existing long positions. It must not authorize short selling.
 - Keep `trading-research-casebook-maintenance` out of the critical trading path.
@@ -71,8 +71,8 @@
 - Create: `.agents/skills/brooks-trading-range-price-action/**`
 - Create: `.agents/skills/equity-fundamentals-analysis/**`
 - Create: `.agents/skills/trading-research-casebook-maintenance/**`
-- Create: `scripts/skills/install_repo_skills.sh`
-- Create: `scripts/skills/verify_repo_skills.sh`
+- Create: `src/scripts/skills/install_repo_skills.sh`
+- Create: `src/scripts/skills/verify_repo_skills.sh`
 - Create: `tests/test_install_repo_skills.py`
 
 - [ ] **Step 1: Write failing install-script contract tests**
@@ -144,7 +144,7 @@ cp -R "$HOME/.codex/skills/trading-research-casebook-maintenance" .agents/skills
 
 - [ ] **Step 4: Create the installer script**
 
-Create `scripts/skills/install_repo_skills.sh` with:
+Create `src/scripts/skills/install_repo_skills.sh` with:
 
 ```bash
 #!/usr/bin/env bash
@@ -187,7 +187,7 @@ echo "installed repo skills into ${TARGETS[*]}"
 
 - [ ] **Step 5: Create the verifier script**
 
-Create `scripts/skills/verify_repo_skills.sh` with:
+Create `src/scripts/skills/verify_repo_skills.sh` with:
 
 ```bash
 #!/usr/bin/env bash
@@ -237,7 +237,7 @@ Expected: PASS for both script existence and copy behavior.
 - [ ] **Step 7: Commit the skill-pack and install tooling**
 
 ```bash
-git add .agents/skills scripts/skills/install_repo_skills.sh scripts/skills/verify_repo_skills.sh tests/test_install_repo_skills.py
+git add .agents/skills src/scripts/skills/install_repo_skills.sh src/scripts/skills/verify_repo_skills.sh tests/test_install_repo_skills.py
 git commit -m "feat: add repo-owned trading skill pack"
 ```
 
@@ -245,8 +245,8 @@ git commit -m "feat: add repo-owned trading skill pack"
 
 **Files:**
 - Modify: `.gitignore`
-- Modify: `config/runtime.env`
-- Modify: `scripts/lib/common.sh`
+- Modify: `src/config/runtime.env`
+- Modify: `src/scripts/lib/common.sh`
 
 - [ ] **Step 1: Add failing coverage for new runtime exports**
 
@@ -270,7 +270,7 @@ class CommonRuntimeSkillFeedTests(unittest.TestCase):
                     "bash",
                     "-lc",
                     (
-                        f"cd {tmp} && source scripts/lib/common.sh && "
+                        f"cd {tmp} && source src/scripts/lib/common.sh && "
                         "printf '%s\n%s\n%s' "
                         "\"$ENABLE_MARKET_FEED_LAYER\" "
                         "\"$MARKET_FEED_DIR\" "
@@ -283,8 +283,8 @@ class CommonRuntimeSkillFeedTests(unittest.TestCase):
             )
 
             self.assertEqual(result.returncode, 0)
-            self.assertIn("/state/market_feed/", result.stdout)
-            self.assertIn("/state/runs/<date>/signals/technical_signals.json", result.stdout)
+            self.assertIn("/runtime/state/market_feed/", result.stdout)
+            self.assertIn("/runtime/state/runs/<date>/signals/technical_signals.json", result.stdout)
 ```
 
 - [ ] **Step 2: Run the test and verify it fails before the new exports exist**
@@ -301,9 +301,9 @@ Add:
 .superpowers/
 ```
 
-Keep existing `state/*` ignore rules; no extra ignore is needed for `state/market_feed/**`.
+Keep existing `runtime/state/*` ignore rules; no extra ignore is needed for `runtime/state/market_feed/**`.
 
-- [ ] **Step 4: Add committed defaults to `config/runtime.env`**
+- [ ] **Step 4: Add committed defaults to `src/config/runtime.env`**
 
 Append:
 
@@ -314,10 +314,10 @@ ENABLE_TECHNICAL_SIGNAL_LAYER=1
 MARKET_FEED_PYTHON_BIN=python3
 MARKET_FEED_TIMEFRAMES=1w,1d,1h,15m
 MARKET_FEED_NEWS_LIMIT=5
-TECHNICAL_SIGNALS_FILE=state/runs/<date>/signals/technical_signals.json
+TECHNICAL_SIGNALS_FILE=runtime/state/runs/<date>/signals/technical_signals.json
 ```
 
-- [ ] **Step 5: Export new shared paths from `scripts/lib/common.sh`**
+- [ ] **Step 5: Export new shared paths from `src/scripts/lib/common.sh`**
 
 Add override variables:
 
@@ -338,8 +338,8 @@ ENABLE_TECHNICAL_SIGNAL_LAYER="${ENABLE_TECHNICAL_SIGNAL_LAYER:-1}"
 MARKET_FEED_PYTHON_BIN="${MARKET_FEED_PYTHON_BIN:-python3}"
 MARKET_FEED_TIMEFRAMES="${MARKET_FEED_TIMEFRAMES:-1w,1d,1h,15m}"
 MARKET_FEED_NEWS_LIMIT="${MARKET_FEED_NEWS_LIMIT:-5}"
-MARKET_FEED_DIR="${AGENT_ROOT}/state/market_feed/$(pt_date)"
-TECHNICAL_SIGNALS_FILE="${TECHNICAL_SIGNALS_FILE:-state/runs/<date>/signals/technical_signals.json}"
+MARKET_FEED_DIR="${AGENT_ROOT}/runtime/state/market_feed/$(pt_date)"
+TECHNICAL_SIGNALS_FILE="${TECHNICAL_SIGNALS_FILE:-runtime/state/runs/<date>/signals/technical_signals.json}"
 TECHNICAL_SIGNALS_PATH="${AGENT_ROOT}/${TECHNICAL_SIGNALS_FILE}"
 
 export ENABLE_MARKET_FEED_LAYER
@@ -370,15 +370,15 @@ Expected: PASS for `test_common_sh_exports_market_feed_paths`.
 - [ ] **Step 7: Commit the runtime-layer changes**
 
 ```bash
-git add .gitignore config/runtime.env scripts/lib/common.sh tests/test_install_repo_skills.py
+git add .gitignore src/config/runtime.env src/scripts/lib/common.sh tests/test_install_repo_skills.py
 git commit -m "feat: add runtime config for skill feed pipeline"
 ```
 
 ### Task 3: Implement the Market-Feed Collector and Artifact Contract
 
 **Files:**
-- Create: `scripts/data/collect_market_feed.py`
-- Create: `scripts/data/run_market_feed_collection.sh`
+- Create: `src/scripts/data/collect_market_feed.py`
+- Create: `src/scripts/data/run_market_feed_collection.sh`
 - Create: `tests/test_collect_market_feed.py`
 
 - [ ] **Step 1: Write failing collector contract tests**
@@ -436,11 +436,11 @@ class MarketFeedCollectorTests(unittest.TestCase):
 
 Run: `python3 -m unittest tests/test_collect_market_feed.py -v`
 
-Expected: FAIL on missing `scripts/data/collect_market_feed.py`.
+Expected: FAIL on missing `src/scripts/data/collect_market_feed.py`.
 
 - [ ] **Step 3: Implement the collector module with deterministic mock mode**
 
-Create `scripts/data/collect_market_feed.py` with this structure:
+Create `src/scripts/data/collect_market_feed.py` with this structure:
 
 ```python
 #!/usr/bin/env python3
@@ -514,7 +514,7 @@ def write_manifest(output_dir: Path, payload: dict) -> None:
 
 - [ ] **Step 4: Add the shell runner for scheduled use**
 
-Create `scripts/data/run_market_feed_collection.sh` with:
+Create `src/scripts/data/run_market_feed_collection.sh` with:
 
 ```bash
 #!/usr/bin/env bash
@@ -530,8 +530,8 @@ if [[ "${ENABLE_MARKET_FEED_LAYER:-1}" != "1" ]]; then
   exit 0
 fi
 
-"$MARKET_FEED_PYTHON_BIN" "$AGENT_ROOT/scripts/data/collect_market_feed.py" \
-  --universe-file "$AGENT_ROOT/config/universe.txt" \
+"$MARKET_FEED_PYTHON_BIN" "$SRC_ROOT/scripts/data/collect_market_feed.py" \
+  --universe-file "$SRC_ROOT/config/universe.txt" \
   --output-dir "$MARKET_FEED_DIR" \
   --date "$(pt_date)"
 ```
@@ -545,15 +545,15 @@ Expected: PASS for `test_mock_mode_writes_manifest_and_symbol_artifacts`.
 - [ ] **Step 6: Commit the collector layer**
 
 ```bash
-git add scripts/data/collect_market_feed.py scripts/data/run_market_feed_collection.sh tests/test_collect_market_feed.py
+git add src/scripts/data/collect_market_feed.py src/scripts/data/run_market_feed_collection.sh tests/test_collect_market_feed.py
 git commit -m "feat: add market feed collector"
 ```
 
 ### Task 4: Add Technical Research Prompt, Runner, and Signal Schema
 
 **Files:**
-- Create: `prompts/technical/research.txt`
-- Create: `scripts/data/run_technical_research.sh`
+- Create: `src/prompts/technical/research.txt`
+- Create: `src/scripts/data/run_technical_research.sh`
 - Create: `tests/test_technical_signal_schema.py`
 
 - [ ] **Step 1: Write failing schema and prompt wiring tests**
@@ -573,7 +573,7 @@ class TechnicalPromptWiringTests(unittest.TestCase):
         prompt = (REPO_ROOT / "prompts" / "technical_research.txt").read_text(encoding="utf-8")
         self.assertIn(".agents/skills/chan-structure-trading", prompt)
         self.assertIn(".agents/skills/brooks-trading-range-price-action", prompt)
-        self.assertIn("state/runs/<date>/signals/technical_signals.json", prompt)
+        self.assertIn("runtime/state/runs/<date>/signals/technical_signals.json", prompt)
 
     def test_sample_schema_contains_dual_execution_scenarios(self) -> None:
         payload = {
@@ -594,11 +594,11 @@ class TechnicalPromptWiringTests(unittest.TestCase):
 
 Run: `python3 -m unittest tests/test_technical_signal_schema.py -v`
 
-Expected: FAIL because `prompts/technical/research.txt` is missing.
+Expected: FAIL because `src/prompts/technical/research.txt` is missing.
 
 - [ ] **Step 3: Write the technical research prompt**
 
-Create `prompts/technical/research.txt` with:
+Create `src/prompts/technical/research.txt` with:
 
 ```text
 You are my dedicated premarket technical research agent.
@@ -606,15 +606,15 @@ You are my dedicated premarket technical research agent.
 This run is research-only. Do not call `review_equity_order`, `place_equity_order`, `cancel_equity_order`, option tools, or any tool that changes account state.
 
 Read these local files first:
-- `config/universe.txt`
-- `config/risk.md`
-- `config/strategy.md`
-- `config/runtime.env`
-- `state/runs/<date>/signals/dsa_signals.json` if it exists
-- `state/market_feed/<today>/manifest.json`
-- `state/market_feed/<today>/charts/...`
-- `state/market_feed/<today>/ohlcv/...`
-- `state/market_feed/<today>/news/...`
+- `src/config/universe.txt`
+- `src/config/risk.md`
+- `src/config/strategy.md`
+- `src/config/runtime.env`
+- `runtime/state/runs/<date>/signals/dsa_signals.json` if it exists
+- `runtime/state/market_feed/<today>/manifest.json`
+- `runtime/state/market_feed/<today>/charts/...`
+- `runtime/state/market_feed/<today>/ohlcv/...`
+- `runtime/state/market_feed/<today>/news/...`
 
 Before analysis, read these repo-owned skills as the authoritative framework:
 - `.agents/skills/chan-structure-trading/SKILL.md`
@@ -640,13 +640,13 @@ Rules:
 - If price is in a noisy range, populate `no_trade_zone`.
 - Always provide concrete price levels for triggers, invalidation, and targets when data quality allows.
 
-Write `state/runs/<date>/signals/technical_signals.json` using the exact schema in the repo design spec.
+Write `runtime/state/runs/<date>/signals/technical_signals.json` using the exact schema in the repo design spec.
 Print a short stdout summary.
 ```
 
 - [ ] **Step 4: Add the technical research runner**
 
-Create `scripts/data/run_technical_research.sh` with:
+Create `src/scripts/data/run_technical_research.sh` with:
 
 ```bash
 #!/usr/bin/env bash
@@ -667,7 +667,7 @@ if [[ ! -f "$MARKET_FEED_DIR/manifest.json" ]]; then
   exit 1
 fi
 
-run_codex_prompt "technical_research" "$AGENT_ROOT/prompts/technical/research.txt"
+run_codex_prompt "technical_research" "$SRC_ROOT/prompts/technical/research.txt"
 ```
 
 - [ ] **Step 5: Re-run the schema and wiring tests**
@@ -679,18 +679,18 @@ Expected: PASS for prompt existence and dual-scenario schema checks.
 - [ ] **Step 6: Commit the technical-analysis layer**
 
 ```bash
-git add prompts/technical/research.txt scripts/data/run_technical_research.sh tests/test_technical_signal_schema.py
+git add src/prompts/technical/research.txt src/scripts/data/run_technical_research.sh tests/test_technical_signal_schema.py
 git commit -m "feat: add technical research layer"
 ```
 
 ### Task 5: Integrate Premarket, Intraday, and Safety Checks
 
 **Files:**
-- Modify: `scripts/entrypoints/run_premarket.sh`
-- Modify: `scripts/entrypoints/run_intraday.sh`
-- Modify: `scripts/safety/check_safety.sh`
-- Modify: `prompts/premarket/final_research.txt`
-- Modify: `prompts/intraday/check.txt`
+- Modify: `src/scripts/entrypoints/run_premarket.sh`
+- Modify: `src/scripts/entrypoints/run_intraday.sh`
+- Modify: `src/scripts/safety/check_safety.sh`
+- Modify: `src/prompts/premarket/final_research.txt`
+- Modify: `src/prompts/intraday/check.txt`
 - Modify: `tests/test_technical_signal_schema.py`
 
 - [ ] **Step 1: Add failing wiring tests for premarket and intraday prompt consumption**
@@ -700,12 +700,12 @@ Extend `tests/test_technical_signal_schema.py` with:
 ```python
     def test_premarket_prompt_reads_technical_signals(self) -> None:
         prompt = (REPO_ROOT / "prompts" / "premarket_research.txt").read_text(encoding="utf-8")
-        self.assertIn("state/runs/<date>/signals/technical_signals.json", prompt)
+        self.assertIn("runtime/state/runs/<date>/signals/technical_signals.json", prompt)
         self.assertIn("technical_action", prompt)
 
     def test_intraday_prompt_reads_key_levels(self) -> None:
         prompt = (REPO_ROOT / "prompts" / "intraday_check.txt").read_text(encoding="utf-8")
-        self.assertIn("state/runs/<date>/signals/technical_signals.json", prompt)
+        self.assertIn("runtime/state/runs/<date>/signals/technical_signals.json", prompt)
         self.assertIn("long_setup", prompt)
         self.assertIn("short_setup", prompt)
         self.assertIn("no_trade_zone", prompt)
@@ -717,13 +717,13 @@ Run: `python3 -m unittest tests/test_technical_signal_schema.py -v`
 
 Expected: FAIL because the current prompts do not reference the new technical signal file.
 
-- [ ] **Step 3: Update `scripts/entrypoints/run_premarket.sh` to insert the new steps**
+- [ ] **Step 3: Update `src/scripts/entrypoints/run_premarket.sh` to insert the new steps**
 
 Replace the current body with:
 
 ```bash
 if [[ "${ENABLE_DSA_SIGNAL_LAYER:-1}" == "1" ]]; then
-  if ! run_codex_prompt "dsa_premarket_scan" "$AGENT_ROOT/prompts/signals/dsa_scan.txt"; then
+  if ! run_codex_prompt "dsa_premarket_scan" "$SRC_ROOT/prompts/signals/dsa_scan.txt"; then
     log_line "dsa_premarket_scan failed; continuing with main premarket research."
   fi
 fi
@@ -735,40 +735,40 @@ if [[ "${ENABLE_KRONOS_SIGNAL_LAYER:-1}" == "1" ]]; then
 fi
 
 if [[ "${ENABLE_MARKET_FEED_LAYER:-1}" == "1" ]]; then
-  "$AGENT_ROOT/scripts/data/run_market_feed_collection.sh"
+  "$SRC_ROOT/scripts/data/run_market_feed_collection.sh"
 fi
 
 if [[ "${ENABLE_TECHNICAL_SIGNAL_LAYER:-1}" == "1" ]]; then
-  "$AGENT_ROOT/scripts/data/run_technical_research.sh"
+  "$SRC_ROOT/scripts/data/run_technical_research.sh"
 fi
 
-run_codex_prompt "premarket" "$AGENT_ROOT/prompts/premarket/final_research.txt"
+run_codex_prompt "premarket" "$SRC_ROOT/prompts/premarket/final_research.txt"
 ```
 
 - [ ] **Step 4: Update the premarket prompt to consume technical signals**
 
-Add to `prompts/premarket/final_research.txt` under the read list:
+Add to `src/prompts/premarket/final_research.txt` under the read list:
 
 ```text
-- `state/runs/<date>/signals/technical_signals.json` if it exists and is for today
+- `runtime/state/runs/<date>/signals/technical_signals.json` if it exists and is for today
 ```
 
 Add a new task rule:
 
 ```text
-Treat `state/runs/<date>/signals/technical_signals.json` as a non-binding but execution-aware research layer:
+Treat `runtime/state/runs/<date>/signals/technical_signals.json` as a non-binding but execution-aware research layer:
 - `buy_bias` may promote a symbol in ranking but cannot bypass risk, account, or tradability checks.
 - `sell_bias` may reduce priority, block adds, or bias an existing long toward trim logic.
 - `hold`, `observe`, and `avoid` should suppress executable candidate selection unless current verified evidence is stronger.
-- Use `long_setup`, `short_setup`, and `no_trade_zone` to refine the written symbol trade rules in `state/daily_plan.json`.
+- Use `long_setup`, `short_setup`, and `no_trade_zone` to refine the written symbol trade rules in `runtime/state/daily_plan.json`.
 ```
 
 - [ ] **Step 5: Update the intraday prompt to consume key price levels**
 
-Add to the read list in `prompts/intraday/check.txt`:
+Add to the read list in `src/prompts/intraday/check.txt`:
 
 ```text
-- `state/runs/<date>/signals/technical_signals.json` if it exists and is for today
+- `runtime/state/runs/<date>/signals/technical_signals.json` if it exists and is for today
 ```
 
 Add to decision logic:
@@ -784,12 +784,12 @@ Add to decision logic:
 
 - [ ] **Step 6: Update the safety checker**
 
-Add to `scripts/safety/check_safety.sh`:
+Add to `src/scripts/safety/check_safety.sh`:
 
 ```bash
-if [[ -f "$AGENT_ROOT/prompts/technical/research.txt" ]] \
-  && rg -q 'state/runs/<date>/signals/technical_signals.json' "$AGENT_ROOT/prompts/premarket/final_research.txt" \
-  && rg -q 'state/runs/<date>/signals/technical_signals.json' "$AGENT_ROOT/prompts/intraday/check.txt"; then
+if [[ -f "$SRC_ROOT/prompts/technical/research.txt" ]] \
+  && rg -q 'runtime/state/runs/<date>/signals/technical_signals.json' "$SRC_ROOT/prompts/premarket/final_research.txt" \
+  && rg -q 'runtime/state/runs/<date>/signals/technical_signals.json' "$SRC_ROOT/prompts/intraday/check.txt"; then
   echo "  - Technical signal layer is configured and wired into premarket/intraday: ok"
 else
   echo "  - WARNING: technical signal layer is incomplete or not wired into prompts."
@@ -805,14 +805,14 @@ Expected: PASS for premarket and intraday prompt wiring tests.
 - [ ] **Step 8: Commit the workflow integration**
 
 ```bash
-git add scripts/entrypoints/run_premarket.sh scripts/safety/check_safety.sh prompts/premarket/final_research.txt prompts/intraday/check.txt tests/test_technical_signal_schema.py
+git add src/scripts/entrypoints/run_premarket.sh src/scripts/safety/check_safety.sh src/prompts/premarket/final_research.txt src/prompts/intraday/check.txt tests/test_technical_signal_schema.py
 git commit -m "feat: wire technical signals into trading workflow"
 ```
 
 ### Task 6: Add the Manual Symbol Research Entry Point
 
 **Files:**
-- Create: `scripts/data/run_symbol_research.sh`
+- Create: `src/scripts/data/run_symbol_research.sh`
 - Modify: `tests/test_collect_market_feed.py`
 
 - [ ] **Step 1: Add a failing runner-contract test**
@@ -828,11 +828,11 @@ Extend `tests/test_collect_market_feed.py` with:
 
 Run: `python3 -m unittest tests/test_collect_market_feed.py -v`
 
-Expected: FAIL on missing `scripts/data/run_symbol_research.sh`.
+Expected: FAIL on missing `src/scripts/data/run_symbol_research.sh`.
 
 - [ ] **Step 3: Create the manual symbol runner**
 
-Create `scripts/data/run_symbol_research.sh` with:
+Create `src/scripts/data/run_symbol_research.sh` with:
 
 ```bash
 #!/usr/bin/env bash
@@ -847,17 +847,17 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/common.sh"
 
 symbol="$(printf '%s' "$1" | tr '[:lower:]' '[:upper:]')"
-manual_dir="$AGENT_ROOT/state/market_feed/$(pt_date)-manual-$symbol"
+manual_dir="$AGENT_ROOT/runtime/state/market_feed/$(pt_date)-manual-$symbol"
 universe_file="$(mktemp "${TMPDIR:-/tmp}/symbol-universe.XXXXXX")"
 trap 'rm -f "$universe_file"' EXIT
 printf '%s\n' "$symbol" > "$universe_file"
 
-"$MARKET_FEED_PYTHON_BIN" "$AGENT_ROOT/scripts/data/collect_market_feed.py" \
+"$MARKET_FEED_PYTHON_BIN" "$SRC_ROOT/scripts/data/collect_market_feed.py" \
   --universe-file "$universe_file" \
   --output-dir "$manual_dir" \
   --date "$(pt_date)"
 
-MARKET_FEED_DIR="$manual_dir" run_codex_prompt "technical_research" "$AGENT_ROOT/prompts/technical/research.txt"
+MARKET_FEED_DIR="$manual_dir" run_codex_prompt "technical_research" "$SRC_ROOT/prompts/technical/research.txt"
 ```
 
 - [ ] **Step 4: Re-run the collector tests**
@@ -869,7 +869,7 @@ Expected: PASS for the new script-exists check.
 - [ ] **Step 5: Commit the manual research runner**
 
 ```bash
-git add scripts/data/run_symbol_research.sh tests/test_collect_market_feed.py
+git add src/scripts/data/run_symbol_research.sh tests/test_collect_market_feed.py
 git commit -m "feat: add manual symbol research runner"
 ```
 
@@ -890,8 +890,8 @@ Create `docs/setup/repo-skills.md` with:
 ## Install
 
 ```bash
-./scripts/skills/install_repo_skills.sh
-./scripts/skills/verify_repo_skills.sh
+./src/scripts/skills/install_repo_skills.sh
+./src/scripts/skills/verify_repo_skills.sh
 ```
 
 ## Source of Truth
@@ -918,26 +918,26 @@ Create `docs/setup/market-feed.md` with:
 ## Scheduled flow
 
 ```bash
-./scripts/data/run_market_feed_collection.sh
-./scripts/data/run_technical_research.sh
+./src/scripts/data/run_market_feed_collection.sh
+./src/scripts/data/run_technical_research.sh
 ```
 
 ## Manual flow
 
 ```bash
-./scripts/data/run_symbol_research.sh NVDA
+./src/scripts/data/run_symbol_research.sh NVDA
 ```
 
 ## Key outputs
 
-- `state/runs/<date>/market_feed/manifest.json`
-- `state/runs/<date>/signals/technical_signals.json`
+- `runtime/state/runs/<date>/market_feed/manifest.json`
+- `runtime/state/runs/<date>/signals/technical_signals.json`
 
 ## Testing
 
 ```bash
 python3 -m unittest tests/test_install_repo_skills.py tests/test_collect_market_feed.py tests/test_technical_signal_schema.py -v
-CODEX_EXEC_DRY_RUN=1 ./scripts/entrypoints/run_premarket.sh
+CODEX_EXEC_DRY_RUN=1 ./src/scripts/entrypoints/run_premarket.sh
 ```
 ````
 
@@ -950,10 +950,10 @@ Add a new section to `README.md`:
 
 This repo now ships its own trading skill pack under `.agents/skills/`.
 
-- install: `./scripts/skills/install_repo_skills.sh`
-- verify: `./scripts/skills/verify_repo_skills.sh`
-- scheduled collector: `./scripts/data/run_market_feed_collection.sh`
-- manual symbol research: `./scripts/data/run_symbol_research.sh NVDA`
+- install: `./src/scripts/skills/install_repo_skills.sh`
+- verify: `./src/scripts/skills/verify_repo_skills.sh`
+- scheduled collector: `./src/scripts/data/run_market_feed_collection.sh`
+- manual symbol research: `./src/scripts/data/run_symbol_research.sh NVDA`
 
 The premarket workflow now includes:
 
@@ -974,7 +974,7 @@ Expected: PASS for all tests.
 
 - [ ] **Step 5: Run dry-run safety verification**
 
-Run: `./scripts/safety/check_safety.sh`
+Run: `./src/scripts/safety/check_safety.sh`
 
 Expected: includes:
 - `Technical signal layer is configured and wired into premarket/intraday: ok`
@@ -982,9 +982,9 @@ Expected: includes:
 
 - [ ] **Step 6: Run the premarket dry-run smoke path**
 
-Run: `CODEX_EXEC_DRY_RUN=1 ./scripts/entrypoints/run_premarket.sh`
+Run: `CODEX_EXEC_DRY_RUN=1 ./src/scripts/entrypoints/run_premarket.sh`
 
-Expected: PASS without calling Codex, and `logs/codex_runs.log` records the scheduled `premarket` path after the collector and technical-research runners complete or log safe skips.
+Expected: PASS without calling Codex, and `runtime/logs/codex_runs.log` records the scheduled `premarket` path after the collector and technical-research runners complete or log safe skips.
 
 - [ ] **Step 7: Commit the docs and verification updates**
 
@@ -1007,5 +1007,5 @@ git commit -m "docs: add skill feed setup and usage"
   - no `TODO`, `TBD`, or “implement later” steps remain
   - each test, command, and target file is explicit
 - Type consistency:
-  - `state/runs/<date>/signals/technical_signals.json` uses `long_setup`, `short_setup`, and `no_trade_zone` consistently
+  - `runtime/state/runs/<date>/signals/technical_signals.json` uses `long_setup`, `short_setup`, and `no_trade_zone` consistently
   - `short_setup` remains limited to existing long-position management throughout

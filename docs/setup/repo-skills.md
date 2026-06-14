@@ -14,8 +14,8 @@ authorize trades.
 ## Install
 
 ```bash
-./scripts/skills/install_repo_skills.sh
-./scripts/skills/verify_repo_skills.sh
+./src/scripts/skills/install_repo_skills.sh
+./src/scripts/skills/verify_repo_skills.sh
 ```
 
 By default the installer copies skills into both:
@@ -28,7 +28,7 @@ $HOME/.codex/skills
 Override targets with a colon-separated list:
 
 ```bash
-REPO_SKILL_TARGETS="$HOME/.codex/skills" ./scripts/skills/install_repo_skills.sh
+REPO_SKILL_TARGETS="$HOME/.codex/skills" ./src/scripts/skills/install_repo_skills.sh
 ```
 
 ## Source Of Truth
@@ -42,7 +42,7 @@ Installed skills are real copies, not symlinks. Re-run the installer after editi
 ## Validation
 
 ```bash
-./scripts/skills/verify_repo_skills.sh
+./src/scripts/skills/verify_repo_skills.sh
 python3 -m unittest tests.test_install_repo_skills tests.test_technical_signal_schema -v
 ```
 

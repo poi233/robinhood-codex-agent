@@ -12,9 +12,9 @@ The package already has:
 
 - `trading_agent` package entrypoints for `premarket`, `intraday`, and `postmarket`.
 - Premarket orchestration for market context, DSA, Kronos, technical research, planner, and archive.
-- Prompt-based intraday decision logic in `prompts/intraday/check.txt`.
-- Safety defaults in `config/runtime.env`, `config/risk.md`, `config/risk_tiers.json`, and `KILL_SWITCH`.
-- Advisory files such as `state/runs/<date>/signals/dsa_signals.json`, `state/runs/<date>/signals/kronos_signals.json`, and `state/runs/<date>/signals/technical_signals.json`.
+- Prompt-based intraday decision logic in `src/prompts/intraday/check.txt`.
+- Safety defaults in `src/config/runtime.env`, `src/config/risk.md`, `src/config/risk_tiers.json`, and `KILL_SWITCH`.
+- Advisory files such as `runtime/state/runs/<date>/signals/dsa_signals.json`, `runtime/state/runs/<date>/signals/kronos_signals.json`, and `runtime/state/runs/<date>/signals/technical_signals.json`.
 
 The current gap is that final intraday trading logic is still prompt-owned. That makes the strategy difficult to reproduce, unit test, and audit.
 
@@ -93,17 +93,17 @@ Owns typed dataclasses:
 
 Reads local state into `PolicyInputs`:
 
-- `config/universe.txt`
-- `config/risk_tiers.json`
-- `config/runtime.env`-derived mode and tier values
-- `state/daily_plan.json`
-- `state/dynamic_allowlist.json`
-- `state/today_allowlist.txt`
-- `state/daily_usage.json`
-- `state/runs/<date>/signals/dsa_signals.json` when present
-- `state/runs/<date>/signals/kronos_signals.json` when present
-- `state/runs/<date>/signals/technical_signals.json` when present
-- `state/research_reports/YYYY-MM-DD/*.json` when present
+- `src/config/universe.txt`
+- `src/config/risk_tiers.json`
+- `src/config/runtime.env`-derived mode and tier values
+- `runtime/state/daily_plan.json`
+- `runtime/state/dynamic_allowlist.json`
+- `runtime/state/today_allowlist.txt`
+- `runtime/state/daily_usage.json`
+- `runtime/state/runs/<date>/signals/dsa_signals.json` when present
+- `runtime/state/runs/<date>/signals/kronos_signals.json` when present
+- `runtime/state/runs/<date>/signals/technical_signals.json` when present
+- `runtime/state/research_runtime/reports/YYYY-MM-DD/*.json` when present
 
 The first slice may use empty quotes, positions, and open orders when no broker/account adapter exists. Missing market/account data should fail closed unless a test fixture supplies it.
 
@@ -114,8 +114,8 @@ Owns hard no-trade gates:
 - `KILL_SWITCH` exists.
 - Today is missing from `daily_plan.json` or `today_allowlist.txt`.
 - `market_regime` is `risk_off` or `no_trade` for buy intent.
-- Symbol is outside `config/universe.txt`.
-- Symbol is outside `state/today_allowlist.txt`.
+- Symbol is outside `src/config/universe.txt`.
+- Symbol is outside `runtime/state/today_allowlist.txt`.
 - Symbol is outside `daily_plan.today_watchlist`.
 - Missing or stale quote data.
 - Existing open order for same symbol.
@@ -221,8 +221,8 @@ The repository may use `Kenneth2378/multi-market-stock-analysis-report-skill` as
 Target artifact paths:
 
 ```text
-reports/research/YYYY-MM-DD/<SYMBOL>.pdf
-state/research_reports/YYYY-MM-DD/<SYMBOL>.json
+runtime/reports/research/YYYY-MM-DD/<SYMBOL>.pdf
+runtime/state/research_runtime/reports/YYYY-MM-DD/<SYMBOL>.json
 ```
 
 The structured JSON summary should contain only policy-safe fields:
@@ -239,7 +239,7 @@ The structured JSON summary should contain only policy-safe fields:
   "invalidation_condition": "short text",
   "risk_flags": ["earnings_risk"],
   "confidence": 0.0,
-  "source_report": "reports/research/YYYY-MM-DD/NVDA.pdf"
+  "source_report": "runtime/reports/research/YYYY-MM-DD/NVDA.pdf"
 }
 ```
 

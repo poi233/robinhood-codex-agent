@@ -37,9 +37,9 @@
 - Create: `trading_agent/data/providers/__init__.py`
 - Create: `trading_agent/data/providers/base.py`
 - Create: `trading_agent/data/providers/yfinance_provider.py`
-- Create: `trading_agent/prompts/__init__.py`
-- Create: `trading_agent/prompts/runtime_block.py`
-- Create: `trading_agent/prompts/codex.py`
+- Create: `trading_agent/src/prompts/__init__.py`
+- Create: `trading_agent/src/prompts/runtime_block.py`
+- Create: `trading_agent/src/prompts/codex.py`
 - Create: `trading_agent/signals/__init__.py`
 - Create: `trading_agent/signals/kronos.py`
 - Create: `trading_agent/signals/technical_levels.py`
@@ -64,14 +64,14 @@
 - Create: `tests/test_premarket_orchestration.py`
 - Modify: `.gitignore`
 - Modify: `README.md`
-- Modify: `scripts/data/collect_market_feed.py`
-- Modify: `scripts/kronos/kronos_generate_signals.py`
-- Modify: `scripts/lib/common.sh`
-- Modify: `scripts/data/run_market_feed_collection.sh`
-- Modify: `scripts/kronos/run_kronos_premarket_scan.sh`
-- Modify: `scripts/entrypoints/run_premarket.sh`
-- Modify: `scripts/entrypoints/run_intraday.sh`
-- Modify: `scripts/entrypoints/run_postmarket.sh`
+- Modify: `src/scripts/data/collect_market_feed.py`
+- Modify: `src/scripts/kronos/kronos_generate_signals.py`
+- Modify: `src/scripts/lib/common.sh`
+- Modify: `src/scripts/data/run_market_feed_collection.sh`
+- Modify: `src/scripts/kronos/run_kronos_premarket_scan.sh`
+- Modify: `src/scripts/entrypoints/run_premarket.sh`
+- Modify: `src/scripts/entrypoints/run_intraday.sh`
+- Modify: `src/scripts/entrypoints/run_postmarket.sh`
 - Modify: `docs/setup/market-feed.md`
 - Modify: `docs/setup/kronos-portable-setup.md`
 
@@ -88,8 +88,8 @@
 - `trading_agent.reporting.*`: machine-readable and markdown archive writers.
 - `trading_agent.safety.*`: risk caps, allowlist intersection, and no-trade gates.
 - `tests/*.py`: package API tests plus wrapper compatibility tests.
-- `scripts/*.sh`: thin wrappers around package commands after migration.
-- `scripts/data/collect_market_feed.py` and `scripts/kronos/kronos_generate_signals.py`: compatibility entrypoints that delegate to package APIs.
+- `src/scripts/*.sh`: thin wrappers around package commands after migration.
+- `src/scripts/data/collect_market_feed.py` and `src/scripts/kronos/kronos_generate_signals.py`: compatibility entrypoints that delegate to package APIs.
 
 ## Implementation Notes
 
@@ -98,7 +98,7 @@
 - Keep current prompt files unchanged until package runtime block wiring is ready.
 - Keep all analyzers advisory-only. Final trading authority remains in planner plus intraday safety gates.
 - Preserve current shell UX for cron and launchd; only the implementation path underneath should change.
-- Reports under `reports/` should be git-ignored by default unless the user later asks for selected archive commits.
+- Reports under `runtime/reports/` should be git-ignored by default unless the user later asks for selected archive commits.
 
 ### Task 1: Bootstrap the Python Package and CLI
 
@@ -234,7 +234,7 @@ git commit -m "feat: bootstrap trading agent package"
 - Create: `trading_agent/core/logging.py`
 - Create: `trading_agent/core/locks.py`
 - Create: `tests/test_core_runtime.py`
-- Modify: `scripts/lib/common.sh`
+- Modify: `src/scripts/lib/common.sh`
 
 - [ ] **Step 1: Write failing tests for PT date, report path roots, and env layering**
 
@@ -401,9 +401,9 @@ def directory_lock(lock_dir: Path):
 Run: `python3 -m unittest tests/test_core_runtime.py -v`
 Expected: PASS for all core runtime tests.
 
-- [ ] **Step 6: Keep `scripts/lib/common.sh` as the source of shell env loading, but document the handoff**
+- [ ] **Step 6: Keep `src/scripts/lib/common.sh` as the source of shell env loading, but document the handoff**
 
-Add this comment block near the top of `scripts/lib/common.sh`:
+Add this comment block near the top of `src/scripts/lib/common.sh`:
 
 ```bash
 # Shell wrappers still source runtime.env and runtime.env.local directly.
@@ -413,7 +413,7 @@ Add this comment block near the top of `scripts/lib/common.sh`:
 - [ ] **Step 7: Commit the core package**
 
 ```bash
-git add trading_agent/core tests/test_core_runtime.py scripts/lib/common.sh
+git add trading_agent/core tests/test_core_runtime.py src/scripts/lib/common.sh
 git commit -m "feat: add shared package runtime core"
 ```
 
@@ -447,7 +447,7 @@ class ContractTests(unittest.TestCase):
             "generated_at": "2026-06-14T05:30:00-07:00",
             "timeframe": "30m",
             "horizon_bars": 8,
-            "source_universe": "config/universe.txt",
+            "source_universe": "src/config/universe.txt",
             "model": {"name": "NeoQuasar/Kronos-small", "tokenizer": "base", "mode": "inference_only"},
             "data_status": "ok",
             "symbols": {},
@@ -542,7 +542,7 @@ git commit -m "feat: add shared artifact contract validators"
 - Create: `trading_agent/data/providers/base.py`
 - Create: `trading_agent/data/providers/yfinance_provider.py`
 - Create: `tests/test_market_context.py`
-- Modify: `scripts/data/collect_market_feed.py`
+- Modify: `src/scripts/data/collect_market_feed.py`
 
 - [ ] **Step 1: Write failing tests for package-owned market-context collection**
 
@@ -663,7 +663,7 @@ def collect_market_context(
     return manifest
 ```
 
-- [ ] **Step 5: Convert `scripts/data/collect_market_feed.py` into a compatibility wrapper**
+- [ ] **Step 5: Convert `src/scripts/data/collect_market_feed.py` into a compatibility wrapper**
 
 Replace the script body with:
 
@@ -715,7 +715,7 @@ Expected: PASS for mock-mode market context and existing collector wrapper tests
 - [ ] **Step 7: Commit the package-owned market feed**
 
 ```bash
-git add trading_agent/data scripts/data/collect_market_feed.py tests/test_market_context.py tests/test_collect_market_feed.py
+git add trading_agent/data src/scripts/data/collect_market_feed.py tests/test_market_context.py tests/test_collect_market_feed.py
 git commit -m "feat: move market feed collection into package data layer"
 ```
 
@@ -724,7 +724,7 @@ git commit -m "feat: move market feed collection into package data layer"
 **Files:**
 - Create: `trading_agent/signals/__init__.py`
 - Create: `trading_agent/signals/kronos.py`
-- Modify: `scripts/kronos/kronos_generate_signals.py`
+- Modify: `src/scripts/kronos/kronos_generate_signals.py`
 - Modify: `tests/test_kronos_generate_signals.py`
 
 - [ ] **Step 1: Write a failing package API test for mock Kronos generation**
@@ -737,7 +737,7 @@ from trading_agent.signals.kronos import build_mock_kronos_payload
 
 class KronosPackageApiTests(unittest.TestCase):
     def test_build_mock_kronos_payload_returns_expected_symbols(self) -> None:
-        payload = build_mock_kronos_payload(["NVDA", "PLTR"], "2026-06-14", "config/universe.txt")
+        payload = build_mock_kronos_payload(["NVDA", "PLTR"], "2026-06-14", "src/config/universe.txt")
         self.assertEqual(payload["date"], "2026-06-14")
         self.assertEqual(sorted(payload["symbols"].keys()), ["NVDA", "PLTR"])
 ```
@@ -789,7 +789,7 @@ def build_mock_kronos_payload(symbols: list[str], run_date: str, source_universe
 
 - [ ] **Step 4: Convert the script to a package wrapper without changing output paths**
 
-Update `scripts/kronos/kronos_generate_signals.py` so the mock path imports and uses:
+Update `src/scripts/kronos/kronos_generate_signals.py` so the mock path imports and uses:
 
 ```python
 from trading_agent.signals.kronos import build_mock_kronos_payload
@@ -811,7 +811,7 @@ Expected: PASS for the new package API test and the existing script tests.
 - [ ] **Step 6: Commit the Kronos package adapter**
 
 ```bash
-git add trading_agent/signals/kronos.py scripts/kronos/kronos_generate_signals.py tests/test_kronos_generate_signals.py
+git add trading_agent/signals/kronos.py src/scripts/kronos/kronos_generate_signals.py tests/test_kronos_generate_signals.py
 git commit -m "feat: add package-owned kronos signal api"
 ```
 
@@ -929,20 +929,20 @@ def write_premarket_archive_json(reports_root: Path, run_date: str, payload: dic
     return output
 ```
 
-- [ ] **Step 5: Add `reports/` to `.gitignore` and document the new archive outputs**
+- [ ] **Step 5: Add `runtime/reports/` to `.gitignore` and document the new archive outputs**
 
 Add to `.gitignore`:
 
 ```gitignore
-reports/*
-!reports/.gitkeep
+runtime/reports/*
+!runtime/reports/.gitkeep
 ```
 
 Add to `README.md` generated outputs:
 
 ```text
-reports/premarket/YYYY-MM-DD.json
-reports/premarket/YYYY-MM-DD.md
+runtime/reports/premarket/YYYY-MM-DD.json
+runtime/reports/premarket/YYYY-MM-DD.md
 ```
 
 - [ ] **Step 6: Re-run the archive tests and verify they pass**
@@ -960,17 +960,17 @@ git commit -m "feat: add trader watch level extraction and report archive"
 ### Task 7: Implement Package-Owned Premarket Orchestration with Parallel Advisory Tasks
 
 **Files:**
-- Create: `trading_agent/prompts/__init__.py`
-- Create: `trading_agent/prompts/runtime_block.py`
-- Create: `trading_agent/prompts/codex.py`
+- Create: `trading_agent/src/prompts/__init__.py`
+- Create: `trading_agent/src/prompts/runtime_block.py`
+- Create: `trading_agent/src/prompts/codex.py`
 - Create: `trading_agent/orchestration/__init__.py`
 - Create: `trading_agent/orchestration/tasks.py`
 - Create: `trading_agent/orchestration/premarket.py`
 - Create: `tests/test_premarket_orchestration.py`
 - Modify: `trading_agent/cli.py`
-- Modify: `scripts/entrypoints/run_premarket.sh`
-- Modify: `scripts/data/run_market_feed_collection.sh`
-- Modify: `scripts/kronos/run_kronos_premarket_scan.sh`
+- Modify: `src/scripts/entrypoints/run_premarket.sh`
+- Modify: `src/scripts/data/run_market_feed_collection.sh`
+- Modify: `src/scripts/kronos/run_kronos_premarket_scan.sh`
 
 - [ ] **Step 1: Write failing orchestration-order and degradation tests**
 
@@ -1031,7 +1031,7 @@ Expected: FAIL on import error.
 Create:
 
 ```python
-# trading_agent/prompts/runtime_block.py
+# trading_agent/src/prompts/runtime_block.py
 from __future__ import annotations
 
 
@@ -1046,7 +1046,7 @@ def build_runtime_block(run_kind: str, run_date: str, trading_mode: str) -> str:
 ```
 
 ```python
-# trading_agent/prompts/codex.py
+# trading_agent/src/prompts/codex.py
 from __future__ import annotations
 
 import subprocess
@@ -1117,14 +1117,14 @@ Update `trading_agent/cli.py` so the `premarket` subcommand delegates to:
 from trading_agent.orchestration.premarket import PremarketPipeline
 ```
 
-and update `scripts/entrypoints/run_premarket.sh` to:
+and update `src/scripts/entrypoints/run_premarket.sh` to:
 
 ```bash
 #!/usr/bin/env bash
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# shellcheck source=scripts/lib/common.sh
+# shellcheck source=src/scripts/lib/common.sh
 source "$SCRIPT_DIR/common.sh"
 
 python3 -m trading_agent premarket "${@:-}"
@@ -1137,13 +1137,13 @@ Keep `run_market_feed_collection.sh` and `run_kronos_premarket_scan.sh` in place
 Run: `python3 -m unittest tests/test_premarket_orchestration.py tests/test_package_cli.py -v`
 Expected: PASS for orchestration and CLI tests.
 
-Run: `ALLOW_WEEKEND_RUN=1 CODEX_EXEC_DRY_RUN=1 ./scripts/entrypoints/run_premarket.sh`
+Run: `ALLOW_WEEKEND_RUN=1 CODEX_EXEC_DRY_RUN=1 ./src/scripts/entrypoints/run_premarket.sh`
 Expected: exit `0`, no live-trading action, and package-owned premarket path executes without shell-level failures.
 
 - [ ] **Step 8: Commit the package-owned premarket orchestrator**
 
 ```bash
-git add trading_agent/prompts trading_agent/orchestration trading_agent/cli.py scripts/entrypoints/run_premarket.sh scripts/data/run_market_feed_collection.sh scripts/kronos/run_kronos_premarket_scan.sh tests/test_premarket_orchestration.py tests/test_package_cli.py
+git add trading_agent/prompts trading_agent/orchestration trading_agent/cli.py src/scripts/entrypoints/run_premarket.sh src/scripts/data/run_market_feed_collection.sh src/scripts/kronos/run_kronos_premarket_scan.sh tests/test_premarket_orchestration.py tests/test_package_cli.py
 git commit -m "feat: add package-owned premarket orchestration"
 ```
 
@@ -1154,8 +1154,8 @@ git commit -m "feat: add package-owned premarket orchestration"
 - Create: `trading_agent/orchestration/postmarket.py`
 - Create: `trading_agent/reporting/postmarket.py`
 - Modify: `trading_agent/cli.py`
-- Modify: `scripts/entrypoints/run_intraday.sh`
-- Modify: `scripts/entrypoints/run_postmarket.sh`
+- Modify: `src/scripts/entrypoints/run_intraday.sh`
+- Modify: `src/scripts/entrypoints/run_postmarket.sh`
 - Modify: `README.md`
 - Modify: `docs/setup/market-feed.md`
 - Modify: `docs/setup/kronos-portable-setup.md`
@@ -1197,14 +1197,14 @@ if args.command == "postmarket":
 
 - [ ] **Step 3: Convert the shell wrappers to package entrypoints**
 
-Replace `scripts/entrypoints/run_intraday.sh` and `scripts/entrypoints/run_postmarket.sh` bodies with:
+Replace `src/scripts/entrypoints/run_intraday.sh` and `src/scripts/entrypoints/run_postmarket.sh` bodies with:
 
 ```bash
 #!/usr/bin/env bash
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# shellcheck source=scripts/lib/common.sh
+# shellcheck source=src/scripts/lib/common.sh
 source "$SCRIPT_DIR/common.sh"
 
 python3 -m trading_agent intraday "${@:-}"
@@ -1217,7 +1217,7 @@ and:
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# shellcheck source=scripts/lib/common.sh
+# shellcheck source=src/scripts/lib/common.sh
 source "$SCRIPT_DIR/common.sh"
 
 python3 -m trading_agent postmarket "${@:-}"
@@ -1259,10 +1259,10 @@ Expected: PASS for all package and compatibility tests.
 Run:
 
 ```bash
-./scripts/safety/check_safety.sh
-ALLOW_WEEKEND_RUN=1 KRONOS_USE_MOCK=1 CODEX_EXEC_DRY_RUN=1 ./scripts/entrypoints/run_premarket.sh
-CODEX_EXEC_DRY_RUN=1 ./scripts/entrypoints/run_intraday.sh
-CODEX_EXEC_DRY_RUN=1 ./scripts/entrypoints/run_postmarket.sh
+./src/scripts/safety/check_safety.sh
+ALLOW_WEEKEND_RUN=1 KRONOS_USE_MOCK=1 CODEX_EXEC_DRY_RUN=1 ./src/scripts/entrypoints/run_premarket.sh
+CODEX_EXEC_DRY_RUN=1 ./src/scripts/entrypoints/run_intraday.sh
+CODEX_EXEC_DRY_RUN=1 ./src/scripts/entrypoints/run_postmarket.sh
 ```
 
 Expected:
@@ -1273,7 +1273,7 @@ Expected:
 - [ ] **Step 7: Commit the runtime-entrypoint switch and docs**
 
 ```bash
-git add trading_agent/orchestration/intraday.py trading_agent/orchestration/postmarket.py trading_agent/reporting/postmarket.py trading_agent/cli.py scripts/entrypoints/run_intraday.sh scripts/entrypoints/run_postmarket.sh README.md docs/setup/market-feed.md docs/setup/kronos-portable-setup.md
+git add trading_agent/orchestration/intraday.py trading_agent/orchestration/postmarket.py trading_agent/reporting/postmarket.py trading_agent/cli.py src/scripts/entrypoints/run_intraday.sh src/scripts/entrypoints/run_postmarket.sh README.md docs/setup/market-feed.md docs/setup/kronos-portable-setup.md
 git commit -m "feat: switch runtime entrypoints to package commands"
 ```
 

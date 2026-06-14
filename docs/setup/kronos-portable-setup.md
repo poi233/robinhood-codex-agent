@@ -1,7 +1,7 @@
 # Kronos Portable Setup
 
 Kronos is an advisory premarket signal layer. It writes
-`state/runs/<date>/signals/kronos_signals.json` and cannot authorize a trade by itself.
+`runtime/state/runs/<date>/signals/kronos_signals.json` and cannot authorize a trade by itself.
 
 ## Requirements
 
@@ -15,19 +15,19 @@ The setup script creates:
 
 - `.vendor/kronos/`
 - `.venv-kronos/`
-- `config/runtime.env.local` entries for `KRONOS_PYTHON_BIN` and `KRONOS_PROJECT_ROOT`
+- `src/config/runtime.env.local` entries for `KRONOS_PYTHON_BIN` and `KRONOS_PROJECT_ROOT`
 
 ## Install
 
 ```bash
-./scripts/kronos/setup_kronos_env.sh
-./scripts/kronos/verify_kronos_env.sh
+./src/scripts/kronos/setup_kronos_env.sh
+./src/scripts/kronos/verify_kronos_env.sh
 ```
 
 If your default `python3` is unsupported, point setup at a compatible interpreter:
 
 ```bash
-KRONOS_BOOTSTRAP_PYTHON=$(command -v python3.12) ./scripts/kronos/setup_kronos_env.sh
+KRONOS_BOOTSTRAP_PYTHON=$(command -v python3.12) ./src/scripts/kronos/setup_kronos_env.sh
 ```
 
 The script prefers `python3.12`, then `python3.11`, and only falls back to `python3` if it is a
@@ -37,8 +37,8 @@ supported version.
 
 ```bash
 rm -rf .venv-kronos .vendor/kronos
-./scripts/kronos/setup_kronos_env.sh
-./scripts/kronos/verify_kronos_env.sh
+./src/scripts/kronos/setup_kronos_env.sh
+./src/scripts/kronos/verify_kronos_env.sh
 ```
 
 ## Run Manually
@@ -46,19 +46,19 @@ rm -rf .venv-kronos .vendor/kronos
 Mock signal generation:
 
 ```bash
-ALLOW_WEEKEND_RUN=1 KRONOS_USE_MOCK=1 ./scripts/kronos/run_kronos_premarket_scan.sh
+ALLOW_WEEKEND_RUN=1 KRONOS_USE_MOCK=1 ./src/scripts/kronos/run_kronos_premarket_scan.sh
 ```
 
 Live signal generation:
 
 ```bash
-ALLOW_WEEKEND_RUN=1 ./scripts/kronos/run_kronos_premarket_scan.sh
+ALLOW_WEEKEND_RUN=1 ./src/scripts/kronos/run_kronos_premarket_scan.sh
 ```
 
 Expected output:
 
 ```text
-state/runs/<date>/signals/kronos_signals.json
+runtime/state/runs/<date>/signals/kronos_signals.json
 ```
 
 ## Premarket Integration
@@ -69,20 +69,20 @@ Premarket runs Kronos through `trading_agent/orchestration/premarket.py` when
 Disable it for a run:
 
 ```bash
-ENABLE_KRONOS_SIGNAL_LAYER=0 ./scripts/entrypoints/run_premarket.sh
+ENABLE_KRONOS_SIGNAL_LAYER=0 ./src/scripts/entrypoints/run_premarket.sh
 ```
 
 Dry-run the full premarket pipeline without invoking Codex prompts:
 
 ```bash
-ALLOW_WEEKEND_RUN=1 KRONOS_USE_MOCK=1 CODEX_EXEC_DRY_RUN=1 ./scripts/entrypoints/run_premarket.sh
+ALLOW_WEEKEND_RUN=1 KRONOS_USE_MOCK=1 CODEX_EXEC_DRY_RUN=1 ./src/scripts/entrypoints/run_premarket.sh
 ```
 
 ## Validation
 
 ```bash
-./scripts/kronos/verify_kronos_env.sh
-./scripts/safety/check_safety.sh
+./src/scripts/kronos/verify_kronos_env.sh
+./src/scripts/safety/check_safety.sh
 python3 -m unittest tests.test_kronos_generate_signals -v
 ```
 

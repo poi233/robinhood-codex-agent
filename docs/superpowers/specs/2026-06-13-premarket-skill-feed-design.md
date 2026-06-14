@@ -104,7 +104,7 @@ Recommended new layout:
     equity-fundamentals-analysis/
     trading-research-casebook-maintenance/
 
-scripts/
+src/scripts/
   install_repo_skills.sh
   verify_repo_skills.sh
   collect_market_feed.py
@@ -112,10 +112,10 @@ scripts/
   run_technical_research.sh
   run_symbol_research.sh
 
-prompts/
+src/prompts/
   technical_research.txt
 
-state/
+runtime/state/
   market_feed/
     YYYY-MM-DD/
       charts/
@@ -165,7 +165,7 @@ The installed copies are for portability and convenience across threads or repos
 The scheduled premarket flow becomes:
 
 ```text
-config/universe.txt
+src/config/universe.txt
   -> DSA signal scan
   -> market-feed collection
   -> technical research using repo skills
@@ -188,11 +188,11 @@ Responsibilities:
 - fetch OHLCV data for multiple timeframes
 - render multi-timeframe chart images
 - gather news, earnings, and filing summaries
-- write a normalized artifact bundle under `state/runs/<date>/market_feed/`
+- write a normalized artifact bundle under `runtime/state/runs/<date>/market_feed/`
 
 Inputs:
 
-- `config/universe.txt`
+- `src/config/universe.txt`
 - run date
 - optional manual symbol override
 - optional timeframe override
@@ -207,7 +207,7 @@ Default timeframes:
 Default artifact layout:
 
 ```text
-state/market_feed/<YYYY-MM-DD>/
+runtime/state/market_feed/<YYYY-MM-DD>/
   charts/
     NVDA/
       weekly.png
@@ -242,7 +242,7 @@ Collector behavior rules:
 
 ### Stage 2: Technical Analysis Step
 
-This is a dedicated, separate step. It must not be folded back into `prompts/premarket/final_research.txt`.
+This is a dedicated, separate step. It must not be folded back into `src/prompts/premarket/final_research.txt`.
 
 Responsibilities:
 
@@ -250,15 +250,15 @@ Responsibilities:
 - explicitly use the repo-owned skills
 - classify the technical state of each symbol
 - generate execution-aware levels for intraday use
-- write `state/runs/<date>/signals/technical_signals.json`
+- write `runtime/state/runs/<date>/signals/technical_signals.json`
 
 Inputs:
 
-- `state/runs/<date>/market_feed/charts/...`
-- `state/runs/<date>/market_feed/ohlcv/...`
-- `state/runs/<date>/market_feed/news/...`
+- `runtime/state/runs/<date>/market_feed/charts/...`
+- `runtime/state/runs/<date>/market_feed/ohlcv/...`
+- `runtime/state/runs/<date>/market_feed/news/...`
 - `.agents/skills/...`
-- optional `state/runs/<date>/signals/dsa_signals.json`
+- optional `runtime/state/runs/<date>/signals/dsa_signals.json`
 
 Skill usage split:
 
@@ -284,7 +284,7 @@ It continues to own:
 
 New input:
 
-- `state/runs/<date>/signals/technical_signals.json`
+- `runtime/state/runs/<date>/signals/technical_signals.json`
 
 Consumption rules:
 
@@ -315,7 +315,7 @@ The system must also support manual single-symbol use.
 
 Recommended behavior:
 
-- operator runs `scripts/data/run_symbol_research.sh SYMBOL`
+- operator runs `src/scripts/data/run_symbol_research.sh SYMBOL`
 - collector builds a feed bundle for that symbol
 - technical research runs on that symbol
 - outputs are reviewable without a full scheduled premarket run
@@ -326,10 +326,10 @@ This path is for discretionary research and debugging. It should share the same 
 
 Two files define the key boundary between collection, analysis, and planning:
 
-1. `state/runs/<date>/market_feed/manifest.json`
-2. `state/runs/<date>/signals/technical_signals.json`
+1. `runtime/state/runs/<date>/market_feed/manifest.json`
+2. `runtime/state/runs/<date>/signals/technical_signals.json`
 
-### `state/runs/<date>/market_feed/manifest.json`
+### `runtime/state/runs/<date>/market_feed/manifest.json`
 
 Suggested schema:
 
@@ -338,7 +338,7 @@ Suggested schema:
   "date": "YYYY-MM-DD",
   "generated_at": "ISO-8601",
   "run_mode": "scheduled|manual",
-  "source_universe": "config/universe.txt",
+  "source_universe": "src/config/universe.txt",
   "requested_symbols": ["NVDA", "SPY"],
   "completed_symbols": ["NVDA"],
   "failed_symbols": ["SPY"],
@@ -351,9 +351,9 @@ Suggested schema:
   },
   "data_status": "ok|partial|failed",
   "artifacts": {
-    "charts_root": "state/market_feed/YYYY-MM-DD/charts",
-    "ohlcv_root": "state/market_feed/YYYY-MM-DD/ohlcv",
-    "news_root": "state/market_feed/YYYY-MM-DD/news"
+    "charts_root": "runtime/state/market_feed/YYYY-MM-DD/charts",
+    "ohlcv_root": "runtime/state/market_feed/YYYY-MM-DD/ohlcv",
+    "news_root": "runtime/state/market_feed/YYYY-MM-DD/news"
   },
   "symbol_status": {
     "NVDA": {
@@ -375,7 +375,7 @@ Purpose:
 - define status per symbol and per artifact class
 - allow downstream steps to degrade safely
 
-### `state/runs/<date>/signals/technical_signals.json`
+### `runtime/state/runs/<date>/signals/technical_signals.json`
 
 This file must include both directional judgment and execution-aware price levels.
 
@@ -392,7 +392,7 @@ Suggested schema:
 {
   "date": "YYYY-MM-DD",
   "generated_at": "ISO-8601",
-  "source_feed_manifest": "state/market_feed/YYYY-MM-DD/manifest.json",
+  "source_feed_manifest": "runtime/state/market_feed/YYYY-MM-DD/manifest.json",
   "analysis_status": "ok|partial|failed",
   "symbols": {
     "NVDA": {

@@ -24,7 +24,7 @@ DSA signal scan
   -> postmarket review
 ```
 
-The problem is that responsibilities are spread across `scripts/`, `prompts/`, `config/`, and JSON files under `state/`. Schemas are mostly embedded in prompt text, path/runtime logic lives in shell, and each layer owns parts of data access or output contracts independently.
+The problem is that responsibilities are spread across `src/scripts/`, `src/prompts/`, `src/config/`, and JSON files under `runtime/state/`. Schemas are mostly embedded in prompt text, path/runtime logic lives in shell, and each layer owns parts of data access or output contracts independently.
 
 The current tests and safety checks pass, so this is a structural rearchitecture rather than a bug fix.
 
@@ -83,7 +83,7 @@ trading_agent/
     dsa.py
     kronos.py
     technical.py
-  prompts/
+  src/prompts/
     codex.py
     runtime_block.py
   orchestration/
@@ -100,7 +100,7 @@ trading_agent/
     risk.py
     allowlist.py
 
-scripts/
+src/scripts/
   run_premarket.sh
   run_intraday.sh
   run_postmarket.sh
@@ -204,7 +204,7 @@ Input:
 
 Output:
 
-- `state/runs/<date>/signals/dsa_signals.json`
+- `runtime/state/runs/<date>/signals/dsa_signals.json`
 - advisory `promote`, `neutral`, `demote`, or `block` guidance
 - no account-state changes and no trade authorization
 
@@ -224,7 +224,7 @@ Input:
 
 Output:
 
-- `state/runs/<date>/signals/kronos_signals.json`
+- `runtime/state/runs/<date>/signals/kronos_signals.json`
 - advisory forecast context only
 - no trade authorization
 
@@ -248,7 +248,7 @@ Input:
 
 Output:
 
-- `state/runs/<date>/signals/technical_signals.json`
+- `runtime/state/runs/<date>/signals/technical_signals.json`
 - `trader_watch_levels` extracted into final daily plan and reports
 - no direct trade authorization
 
@@ -272,13 +272,13 @@ Input:
 
 Output:
 
-- `state/today_allowlist.txt`
-- `state/dynamic_allowlist.json`
-- `state/daily_plan.json`
-- `state/daily_plan.md`
-- `reports/premarket/YYYY-MM-DD.json`
-- `reports/premarket/YYYY-MM-DD.md`
-- one decision record in `logs/decisions.jsonl`
+- `runtime/state/today_allowlist.txt`
+- `runtime/state/dynamic_allowlist.json`
+- `runtime/state/daily_plan.json`
+- `runtime/state/daily_plan.md`
+- `runtime/reports/premarket/YYYY-MM-DD.json`
+- `runtime/reports/premarket/YYYY-MM-DD.md`
+- one decision record in `runtime/logs/decisions.jsonl`
 
 ## Scoring and Weights
 
@@ -286,7 +286,7 @@ Final scoring belongs to the premarket planner, not to individual analyzers.
 
 Hard gates run before scoring:
 
-- symbol outside `config/universe.txt`
+- symbol outside `src/config/universe.txt`
 - missing or stale required data
 - Robinhood tradability failure when checked
 - account ambiguity
@@ -330,9 +330,9 @@ Kronos should influence ranking and risk context but should not dominate executi
 
 ## Technical Price Levels in Final Outputs
 
-Technical price levels must be carried into final outputs for the intraday trader. They must not remain only inside `state/runs/<date>/signals/technical_signals.json`.
+Technical price levels must be carried into final outputs for the intraday trader. They must not remain only inside `runtime/state/runs/<date>/signals/technical_signals.json`.
 
-`state/daily_plan.json`, `reports/premarket/YYYY-MM-DD.json`, and the human-readable premarket report should include:
+`runtime/state/daily_plan.json`, `runtime/reports/premarket/YYYY-MM-DD.json`, and the human-readable premarket report should include:
 
 ```json
 {
@@ -402,7 +402,7 @@ NVDA
 Each premarket run should archive what was known and decided:
 
 ```text
-reports/
+runtime/reports/
   premarket/
     YYYY-MM-DD.md
     YYYY-MM-DD.json
@@ -433,7 +433,7 @@ Detailed implementation should be handled in a separate implementation plan, but
 1. Create package skeleton and CLI while keeping shell entrypoints compatible.
 2. Move runtime context, paths, PT date/time, env loading, locks, and JSON helpers into `trading_agent.core`.
 3. Add contract validators for market feed, DSA, Kronos, technical signals, daily plan, and reports.
-4. Move market-feed collection code into `trading_agent.data` and keep `scripts/data/collect_market_feed.py` as a wrapper.
+4. Move market-feed collection code into `trading_agent.data` and keep `src/scripts/data/collect_market_feed.py` as a wrapper.
 5. Move Kronos generation code into `trading_agent.signals.kronos` and keep the existing runner compatible.
 6. Add `trading_agent.orchestration.premarket` with task dependency handling and safe failure degradation.
 7. Add report archiving and wire technical price levels into daily plan and premarket reports.
@@ -459,8 +459,8 @@ Dry-run validation should include:
 
 ```bash
 python3 -m unittest discover -s tests -p 'test_*.py' -v
-./scripts/safety/check_safety.sh
-ALLOW_WEEKEND_RUN=1 KRONOS_USE_MOCK=1 CODEX_EXEC_DRY_RUN=1 ./scripts/entrypoints/run_premarket.sh
+./src/scripts/safety/check_safety.sh
+ALLOW_WEEKEND_RUN=1 KRONOS_USE_MOCK=1 CODEX_EXEC_DRY_RUN=1 ./src/scripts/entrypoints/run_premarket.sh
 ```
 
 ## Open Implementation Decisions

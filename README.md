@@ -30,19 +30,19 @@ paper/review mode until the logs are boring and correct.
 
 ```mermaid
 flowchart TD
-    Scheduler["cron / launchd / manual CLI"] --> Entrypoints["scripts/entrypoints/*.sh"]
+    Scheduler["cron / launchd / manual CLI"] --> Entrypoints["src/scripts/entrypoints/*.sh"]
     Entrypoints --> CLI["python3 -m trading_agent"]
 
     CLI --> Premarket["premarket pipeline"]
     CLI --> Intraday["intraday policy engine"]
     CLI --> Postmarket["postmarket summary prompt"]
 
-    Premarket --> Snapshots["local run snapshots<br/>state/runs/YYYY-MM-DD/"]
-    Premarket --> Logs["run logs<br/>logs/runs/YYYY-MM-DD/"]
+    Premarket --> Snapshots["local run snapshots<br/>runtime/state/runs/YYYY-MM-DD/"]
+    Premarket --> Logs["run logs<br/>runtime/logs/runs/YYYY-MM-DD/"]
 
     Snapshots --> Intraday
     Intraday --> Policy["policy buy/sell gates"]
-    Policy --> Paper["paper broker<br/>state/runs/YYYY-MM-DD/paper/"]
+    Policy --> Paper["paper broker<br/>runtime/state/runs/YYYY-MM-DD/paper/"]
     Paper --> Usage["daily_usage.json"]
     Policy --> Decisions["decisions.jsonl"]
 
@@ -90,31 +90,32 @@ for `daily_plan.json`, `today_allowlist.txt`, `dynamic_allowlist.json`, and the 
 ## Package Architecture
 
 ```text
-trading_agent/
-  cli.py                     argparse entrypoint for premarket/intraday/postmarket
-  core/                      runtime config, paths, time, JSON helpers, run logs
-  orchestration/             lifecycle pipelines
-    premarket.py             staged DAG with Codex prompts, local data, and archive
-    intraday.py              Python policy engine runner; no direct Robinhood MCP calls
-    postmarket.py            Codex summary runner
-  prompts/                   Codex subprocess runner and runtime variable block
-  policy/                    deterministic intraday buy/sell/risk/scoring logic
-  paper/                     local paper broker and ledger updates
-  planner/                   deterministic candidate snapshot builder
-  data/                      yfinance-backed market context and chart collection
-  signals/                   Kronos and technical fallback payload helpers
-  reporting/                 premarket archive and postmarket report helpers
-  contracts/                 schema validators for generated payloads
+src/
+  trading_agent/
+    cli.py                   argparse entrypoint for premarket/intraday/postmarket
+    core/                    runtime config, paths, time, JSON helpers, run logs
+    orchestration/           lifecycle pipelines
+      premarket.py           staged DAG with Codex prompts, local data, and archive
+      intraday.py            Python policy engine runner; no direct Robinhood MCP calls
+      postmarket.py          Codex summary runner
+    prompts/                 Codex subprocess runner and runtime variable block
+    policy/                  deterministic intraday buy/sell/risk/scoring logic
+    paper/                   local paper broker and ledger updates
+    planner/                 deterministic candidate snapshot builder
+    data/                    yfinance-backed market context and chart collection
+    signals/                 Kronos and technical fallback payload helpers
+    reporting/               premarket archive and postmarket report helpers
+    contracts/               schema validators for generated payloads
 ```
 
-Shell wrappers live in `scripts/`. They source `scripts/lib/common.sh`, load
-`config/runtime.env` plus optional `config/runtime.env.local`, create the dated runtime folders, and
+Shell wrappers live in `src/scripts/`. They source `src/scripts/lib/common.sh`, load
+`src/config/runtime.env` plus optional `src/config/runtime.env.local`, create the dated runtime folders, and
 then call the Python package.
 
 ## Repository Layout
 
 ```text
-config/
+src/config/
   allowlist.txt                  emergency fallback symbols
   risk.md                        human-readable hard risk rules
   risk_tiers.json                machine-readable notional caps by tier
@@ -125,7 +126,7 @@ config/
   universe.txt                   maximum candidate universe
   dsa_strategy_weights.json      DSA-inspired signal weights
 
-prompts/
+src/prompts/
   signals/dsa_scan.txt
   technical/research.txt
   premarket/account_snapshot.txt
@@ -138,7 +139,7 @@ prompts/
   intraday/check.txt             legacy prompt/spec reference; Python policy is active path
   postmarket/summary.txt
 
-scripts/
+src/scripts/
   lib/common.sh                  shared shell runtime
   entrypoints/                   scheduled lifecycle wrappers
   data/                          market feed and manual research helpers
@@ -151,10 +152,10 @@ docs/
   superpowers/specs/             design specs
   superpowers/plans/             implementation plans
 
-state/
+runtime/state/
   runs/YYYY-MM-DD/               generated runtime state, ignored by git
 
-logs/
+runtime/logs/
   runs/YYYY-MM-DD/               generated runtime logs, ignored by git
 
 launchd/
@@ -170,7 +171,7 @@ KILL_SWITCH                      default safety stop file
 Each run date uses the same folder shape:
 
 ```text
-state/runs/YYYY-MM-DD/
+runtime/state/runs/YYYY-MM-DD/
   market_feed/
     manifest.json
     charts/
@@ -205,7 +206,7 @@ state/runs/YYYY-MM-DD/
 ```
 
 ```text
-logs/runs/YYYY-MM-DD/
+runtime/logs/runs/YYYY-MM-DD/
   pipeline.jsonl
   codex_runs.log
   errors.log
@@ -236,7 +237,7 @@ Run:
 
 ```bash
 python3 -m trading_agent premarket
-./scripts/entrypoints/run_premarket.sh
+./src/scripts/entrypoints/run_premarket.sh
 ```
 
 Premarket does the following:
@@ -254,7 +255,7 @@ Premarket does the following:
 5. Runs candidate quote, tradability, and catalyst enrichment prompts in parallel.
 6. Runs the final premarket planner prompt.
 7. Archives `archive/premarket_report.json`.
-8. Logs stage status to `logs/runs/YYYY-MM-DD/pipeline.jsonl`.
+8. Logs stage status to `runtime/logs/runs/YYYY-MM-DD/pipeline.jsonl`.
 
 The final planner writes:
 
@@ -268,20 +269,20 @@ The final planner writes:
 Layer flags:
 
 ```bash
-ENABLE_DSA_SIGNAL_LAYER=0 ./scripts/entrypoints/run_premarket.sh
-ENABLE_KRONOS_SIGNAL_LAYER=0 ./scripts/entrypoints/run_premarket.sh
-ENABLE_MARKET_FEED_LAYER=0 ./scripts/entrypoints/run_premarket.sh
-ENABLE_TECHNICAL_SIGNAL_LAYER=0 ./scripts/entrypoints/run_premarket.sh
+ENABLE_DSA_SIGNAL_LAYER=0 ./src/scripts/entrypoints/run_premarket.sh
+ENABLE_KRONOS_SIGNAL_LAYER=0 ./src/scripts/entrypoints/run_premarket.sh
+ENABLE_MARKET_FEED_LAYER=0 ./src/scripts/entrypoints/run_premarket.sh
+ENABLE_TECHNICAL_SIGNAL_LAYER=0 ./src/scripts/entrypoints/run_premarket.sh
 ```
 
 Useful manual runs:
 
 ```bash
-./scripts/entrypoints/run_dsa_premarket_scan.sh
-./scripts/data/run_market_feed_collection.sh
-./scripts/data/run_technical_research.sh
-./scripts/data/run_symbol_research.sh NVDA
-./scripts/kronos/run_kronos_premarket_scan.sh
+./src/scripts/entrypoints/run_dsa_premarket_scan.sh
+./src/scripts/data/run_market_feed_collection.sh
+./src/scripts/data/run_technical_research.sh
+./src/scripts/data/run_symbol_research.sh NVDA
+./src/scripts/kronos/run_kronos_premarket_scan.sh
 ```
 
 ### Intraday
@@ -290,7 +291,7 @@ Run:
 
 ```bash
 python3 -m trading_agent intraday
-./scripts/entrypoints/run_intraday.sh
+./src/scripts/entrypoints/run_intraday.sh
 ```
 
 Intraday is a Python policy-engine path:
@@ -301,9 +302,9 @@ Intraday is a Python policy-engine path:
 4. Loads runtime mode and risk tier from config.
 5. Loads local policy inputs from config, planner files, signals, account snapshot, and quote
    snapshots.
-6. In paper mode, overlays local paper cash/positions from `state/runs/YYYY-MM-DD/paper/`.
+6. In paper mode, overlays local paper cash/positions from `runtime/state/runs/YYYY-MM-DD/paper/`.
 7. Runs deterministic sell-first then buy policy.
-8. Appends exactly one decision to `logs/runs/YYYY-MM-DD/decisions.jsonl`.
+8. Appends exactly one decision to `runtime/logs/runs/YYYY-MM-DD/decisions.jsonl`.
 
 Intraday does not call Robinhood MCP directly. If premarket snapshots are missing, the policy engine
 fails closed with blocked reasons such as `missing_daily_plan`, `missing_account`, or
@@ -364,14 +365,14 @@ Run:
 
 ```bash
 python3 -m trading_agent postmarket
-./scripts/entrypoints/run_postmarket.sh
+./src/scripts/entrypoints/run_postmarket.sh
 ```
 
-Postmarket still runs the Codex prompt at `prompts/postmarket/summary.txt`. It is review-only and
-should read local state/logs plus Robinhood data to reconcile the day, identify rule violations or
+Postmarket still runs the Codex prompt at `src/prompts/postmarket/summary.txt`. It is review-only and
+should read local runtime/state/logs plus Robinhood data to reconcile the day, identify rule violations or
 data failures, and write:
 
-- `logs/runs/YYYY-MM-DD/postmarket_summary.md`
+- `runtime/logs/runs/YYYY-MM-DD/postmarket_summary.md`
 - one `postmarket_summary` record in `decisions.jsonl`
 
 ## Safety Model
@@ -404,7 +405,7 @@ Project MCP approval policy:
 Run the safety check:
 
 ```bash
-./scripts/safety/check_safety.sh
+./src/scripts/safety/check_safety.sh
 ```
 
 ## Repo-Owned Trading Skills
@@ -414,8 +415,8 @@ This repo ships trading skill packs under `.agents/skills/`.
 Install or refresh them into local agent skill directories:
 
 ```bash
-./scripts/skills/install_repo_skills.sh
-./scripts/skills/verify_repo_skills.sh
+./src/scripts/skills/install_repo_skills.sh
+./src/scripts/skills/verify_repo_skills.sh
 ```
 
 Current repo-owned skills:
@@ -444,24 +445,24 @@ Complete Robinhood Agentic Account authentication on desktop.
 Install repo-owned skills:
 
 ```bash
-./scripts/skills/install_repo_skills.sh
-./scripts/skills/verify_repo_skills.sh
+./src/scripts/skills/install_repo_skills.sh
+./src/scripts/skills/verify_repo_skills.sh
 ```
 
 Portable Kronos setup requires `git` and Python `3.11` or `3.12`. The setup script prefers
 `python3.12`, then `python3.11`, then a supported `python3`.
 
 ```bash
-KRONOS_BOOTSTRAP_PYTHON=$(command -v python3.12) ./scripts/kronos/setup_kronos_env.sh
-./scripts/kronos/verify_kronos_env.sh
+KRONOS_BOOTSTRAP_PYTHON=$(command -v python3.12) ./src/scripts/kronos/setup_kronos_env.sh
+./src/scripts/kronos/verify_kronos_env.sh
 ```
 
 For a clean Kronos rebuild:
 
 ```bash
 rm -rf .venv-kronos .vendor/kronos
-./scripts/kronos/setup_kronos_env.sh
-./scripts/kronos/verify_kronos_env.sh
+./src/scripts/kronos/setup_kronos_env.sh
+./src/scripts/kronos/verify_kronos_env.sh
 ```
 
 Portable rebuild and validation flow:
@@ -470,11 +471,11 @@ Portable rebuild and validation flow:
 git clone <repo-url>
 cd trading
 find scripts -name '*.sh' -exec chmod +x {} +
-./scripts/kronos/setup_kronos_env.sh
-./scripts/kronos/verify_kronos_env.sh
-./scripts/safety/check_safety.sh
-ALLOW_WEEKEND_RUN=1 KRONOS_USE_MOCK=1 ./scripts/kronos/run_kronos_premarket_scan.sh
-ALLOW_WEEKEND_RUN=1 CODEX_EXEC_DRY_RUN=1 ./scripts/entrypoints/run_premarket.sh
+./src/scripts/kronos/setup_kronos_env.sh
+./src/scripts/kronos/verify_kronos_env.sh
+./src/scripts/safety/check_safety.sh
+ALLOW_WEEKEND_RUN=1 KRONOS_USE_MOCK=1 ./src/scripts/kronos/run_kronos_premarket_scan.sh
+ALLOW_WEEKEND_RUN=1 CODEX_EXEC_DRY_RUN=1 ./src/scripts/entrypoints/run_premarket.sh
 ```
 
 ## Dry Run And Local Tests
@@ -482,15 +483,15 @@ ALLOW_WEEKEND_RUN=1 CODEX_EXEC_DRY_RUN=1 ./scripts/entrypoints/run_premarket.sh
 Dry-run scheduled shell wrappers without invoking Codex:
 
 ```bash
-CODEX_EXEC_DRY_RUN=1 ./scripts/entrypoints/run_premarket.sh
-CODEX_EXEC_DRY_RUN=1 ./scripts/entrypoints/run_intraday.sh
-CODEX_EXEC_DRY_RUN=1 ./scripts/entrypoints/run_postmarket.sh
+CODEX_EXEC_DRY_RUN=1 ./src/scripts/entrypoints/run_premarket.sh
+CODEX_EXEC_DRY_RUN=1 ./src/scripts/entrypoints/run_intraday.sh
+CODEX_EXEC_DRY_RUN=1 ./src/scripts/entrypoints/run_postmarket.sh
 ```
 
 Run a full paper lifecycle locally:
 
 ```bash
-ALLOW_OUTSIDE_MARKET_TEST=1 ./scripts/entrypoints/run_all_paper_once.sh
+ALLOW_OUTSIDE_MARKET_TEST=1 ./src/scripts/entrypoints/run_all_paper_once.sh
 ```
 
 `run_all_paper_once.sh` requires `TRADING_MODE=paper`, temporarily moves `KILL_SWITCH` aside, runs
@@ -538,15 +539,15 @@ changes it.
 
 These are intentionally ignored by git:
 
-- `state/runs/YYYY-MM-DD/market_feed/`
-- `state/runs/YYYY-MM-DD/signals/`
-- `state/runs/YYYY-MM-DD/planner/`
-- `state/runs/YYYY-MM-DD/paper/`
-- `state/runs/YYYY-MM-DD/archive/`
-- `logs/runs/YYYY-MM-DD/`
+- `runtime/state/runs/YYYY-MM-DD/market_feed/`
+- `runtime/state/runs/YYYY-MM-DD/signals/`
+- `runtime/state/runs/YYYY-MM-DD/planner/`
+- `runtime/state/runs/YYYY-MM-DD/paper/`
+- `runtime/state/runs/YYYY-MM-DD/archive/`
+- `runtime/logs/runs/YYYY-MM-DD/`
 
 Keep generated state and logs local because they can contain account size, decisions, symbols,
 timestamps, and operational details.
 
 Project documentation under `docs/` is tracked when it describes setup, specs, or implementation
-plans. Machine-specific values belong in `config/runtime.env.local`, which is ignored by git.
+plans. Machine-specific values belong in `src/config/runtime.env.local`, which is ignored by git.

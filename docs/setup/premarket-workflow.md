@@ -17,7 +17,7 @@ account_snapshot
 ## Main Command
 
 ```bash
-ALLOW_WEEKEND_RUN=1 CODEX_EXEC_DRY_RUN=1 ./scripts/entrypoints/run_premarket.sh
+ALLOW_WEEKEND_RUN=1 CODEX_EXEC_DRY_RUN=1 ./src/scripts/entrypoints/run_premarket.sh
 ```
 
 Use `ALLOW_WEEKEND_RUN=1` only for testing outside market weekdays.
@@ -25,7 +25,7 @@ Use `ALLOW_WEEKEND_RUN=1` only for testing outside market weekdays.
 ## Prompt Layout
 
 ```text
-prompts/
+src/prompts/
   premarket/
     account_snapshot.txt
     market_calendar.txt
@@ -47,7 +47,7 @@ prompts/
 ## Script Layout
 
 ```text
-scripts/
+src/scripts/
   entrypoints/
   data/
   kronos/
@@ -61,7 +61,7 @@ There are no top-level script wrappers. Use the subdirectory paths directly.
 ## Daily Output Layout
 
 ```text
-state/runs/<date>/
+runtime/state/runs/<date>/
   market_feed/
   signals/
     dsa_signals.json
@@ -86,7 +86,7 @@ state/runs/<date>/
     orders.jsonl
   archive/
 
-logs/runs/<date>/
+runtime/logs/runs/<date>/
   pipeline.jsonl
   codex_runs.log
   errors.log
@@ -98,5 +98,5 @@ logs/runs/<date>/
 ```bash
 python3 -m unittest tests.test_premarket_orchestration -v
 python3 -m unittest tests.test_collect_market_feed tests.test_kronos_generate_signals tests.test_technical_signal_schema -v
-./scripts/safety/check_safety.sh
+./src/scripts/safety/check_safety.sh
 ```

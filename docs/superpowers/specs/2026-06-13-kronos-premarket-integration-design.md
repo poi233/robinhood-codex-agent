@@ -58,7 +58,7 @@ Why:
 The premarket flow will become:
 
 ```text
-config/universe.txt
+src/config/universe.txt
   -> DSA signal scan
   -> Kronos signal scan
   -> main premarket research
@@ -67,33 +67,33 @@ config/universe.txt
 
 Execution boundary remains unchanged:
 
-- `scripts/entrypoints/run_premarket.sh` orchestrates the research pipeline
-- `scripts/entrypoints/run_intraday.sh` and downstream order logic do not invoke Kronos
+- `src/scripts/entrypoints/run_premarket.sh` orchestrates the research pipeline
+- `src/scripts/entrypoints/run_intraday.sh` and downstream order logic do not invoke Kronos
 - Kronos is advisory only, similar to the DSA layer, but focused on forecast path and setup bias
 
 Portable environment boundary:
 
 - repository-owned Kronos checkout lives under `.vendor/kronos`
 - repository-owned Python environment lives under `.venv-kronos`
-- machine-local overrides live in `config/runtime.env.local`
-- repository defaults remain in `config/runtime.env`
+- machine-local overrides live in `src/config/runtime.env.local`
+- repository defaults remain in `src/config/runtime.env`
 
 ## New Components
 
-### 1. `scripts/kronos/run_kronos_premarket_scan.sh`
+### 1. `src/scripts/kronos/run_kronos_premarket_scan.sh`
 
 Shell entrypoint for the Kronos signal layer.
 
 Responsibilities:
 
-- load shared runtime from `scripts/lib/common.sh`
-- read feature flags from `config/runtime.env` and `config/runtime.env.local`
-- prepare the candidate list from `config/universe.txt`
+- load shared runtime from `src/scripts/lib/common.sh`
+- read feature flags from `src/config/runtime.env` and `src/config/runtime.env.local`
+- prepare the candidate list from `src/config/universe.txt`
 - invoke local Python inference
-- write `state/runs/<date>/signals/kronos_signals.json`
+- write `runtime/state/runs/<date>/signals/kronos_signals.json`
 - log failures without aborting the whole premarket run
 
-### 2. `scripts/kronos/kronos_generate_signals.py`
+### 2. `src/scripts/kronos/kronos_generate_signals.py`
 
 Local Python inference wrapper.
 
@@ -107,7 +107,7 @@ Responsibilities:
 
 This script is inference-only in the first iteration.
 
-### 3. `state/runs/<date>/signals/kronos_signals.json`
+### 3. `runtime/state/runs/<date>/signals/kronos_signals.json`
 
 Daily advisory output from Kronos for premarket consumption.
 
@@ -119,7 +119,7 @@ Suggested schema:
   "generated_at": "ISO-8601 timestamp with timezone",
   "timeframe": "30m|1h|1d",
   "horizon_bars": 8,
-  "source_universe": "config/universe.txt",
+  "source_universe": "src/config/universe.txt",
   "model": {
     "name": "NeoQuasar/Kronos-small",
     "mode": "inference_only"
@@ -141,18 +141,18 @@ Suggested schema:
 }
 ```
 
-### 4. `prompts/premarket/final_research.txt`
+### 4. `src/prompts/premarket/final_research.txt`
 
 The existing premarket prompt will be extended to:
 
-- read `state/runs/<date>/signals/kronos_signals.json` if present and current
+- read `runtime/state/runs/<date>/signals/kronos_signals.json` if present and current
 - treat Kronos as an advisory forecast layer
 - use Kronos only for candidate ranking, setup bias, and watch or block context
 - record Kronos availability inside plan data status
 
 No separate Codex prompt is required for the first Kronos implementation if the Python script emits normalized JSON directly.
 
-### 5. `scripts/kronos/setup_kronos_env.sh`
+### 5. `src/scripts/kronos/setup_kronos_env.sh`
 
 Portable environment bootstrap script.
 
@@ -163,11 +163,11 @@ Responsibilities:
 - clone Kronos into `.vendor/kronos`
 - checkout a fixed commit
 - install upstream Kronos requirements plus repository-specific extras
-- create `config/runtime.env.local` from `config/runtime.env.local.example` when missing
+- create `src/config/runtime.env.local` from `src/config/runtime.env.local.example` when missing
 - populate local machine paths for `KRONOS_PYTHON_BIN` and `KRONOS_PROJECT_ROOT`
 - fail fast on install errors
 
-### 6. `scripts/kronos/verify_kronos_env.sh`
+### 6. `src/scripts/kronos/verify_kronos_env.sh`
 
 Portable environment verification script.
 
@@ -179,7 +179,7 @@ Responsibilities:
 - verify that the generator can run in mock mode
 - print a clear pass/fail summary for operators
 
-### 7. `config/runtime.env.local.example`
+### 7. `src/config/runtime.env.local.example`
 
 Local override template for machine-specific values.
 
@@ -218,7 +218,7 @@ Expected repository-local layout after setup:
 
 .venv-kronos/            repository-owned Python environment
 
-config/
+src/config/
   runtime.env            committed repository defaults
   runtime.env.local      machine-local overrides, gitignored
   runtime.env.local.example
@@ -228,7 +228,7 @@ config/
 
 ## Runtime Configuration
 
-Committed defaults belong in `config/runtime.env`, for example:
+Committed defaults belong in `src/config/runtime.env`, for example:
 
 ```bash
 ENABLE_KRONOS_SIGNAL_LAYER=1
@@ -239,7 +239,7 @@ KRONOS_HORIZON_BARS=8
 KRONOS_MIN_CONFIDENCE=0.60
 ```
 
-Machine-local values belong in `config/runtime.env.local`, for example:
+Machine-local values belong in `src/config/runtime.env.local`, for example:
 
 ```bash
 KRONOS_PYTHON_BIN=/abs/path/to/repo/.venv-kronos/bin/python
@@ -271,8 +271,8 @@ The setup script must check out the fixed Kronos commit rather than tracking a f
 
 Kronos must obey the following constraints:
 
-- it cannot introduce symbols outside `config/universe.txt`
-- it cannot override `config/risk.md` or `config/risk_tiers.json`
+- it cannot introduce symbols outside `src/config/universe.txt`
+- it cannot override `src/config/risk.md` or `src/config/risk_tiers.json`
 - it cannot bypass Robinhood tradability, buying power, open-order, or account identification checks
 - it cannot widen `max_daily_notional` or `max_single_order_notional`
 - it cannot directly select order actions
@@ -303,8 +303,8 @@ The Kronos layer is non-blocking.
 
 Expected behavior:
 
-- if `run_kronos_premarket_scan.sh` fails, `scripts/entrypoints/run_premarket.sh` logs the failure and continues
-- if `state/runs/<date>/signals/kronos_signals.json` is missing, stale, partial, or invalid, main premarket research still runs
+- if `run_kronos_premarket_scan.sh` fails, `src/scripts/entrypoints/run_premarket.sh` logs the failure and continues
+- if `runtime/state/runs/<date>/signals/kronos_signals.json` is missing, stale, partial, or invalid, main premarket research still runs
 - if Kronos data is unusable, the final daily plan records that status explicitly
 - no Kronos failure may relax any safety gate
 
@@ -313,19 +313,19 @@ This mirrors the existing DSA signal layer behavior and keeps research degradati
 ## Data Flow
 
 1. Operator clones the repository.
-2. `scripts/kronos/setup_kronos_env.sh` creates `.venv-kronos`, clones `.vendor/kronos`, installs dependencies, and writes local env overrides.
-3. `scripts/kronos/verify_kronos_env.sh` validates the environment.
+2. `src/scripts/kronos/setup_kronos_env.sh` creates `.venv-kronos`, clones `.vendor/kronos`, installs dependencies, and writes local env overrides.
+3. `src/scripts/kronos/verify_kronos_env.sh` validates the environment.
 4. Operator manually completes Codex login, Robinhood MCP setup, and Robinhood desktop authentication.
-5. `scripts/entrypoints/run_premarket.sh` starts.
+5. `src/scripts/entrypoints/run_premarket.sh` starts.
 6. `dsa_premarket_scan` runs if enabled.
 7. `kronos_premarket_scan` runs if enabled.
-8. `scripts/kronos/kronos_generate_signals.py` writes `state/runs/<date>/signals/kronos_signals.json`.
-9. `prompts/premarket/final_research.txt` reads DSA and Kronos signal files when available.
+8. `src/scripts/kronos/kronos_generate_signals.py` writes `runtime/state/runs/<date>/signals/kronos_signals.json`.
+9. `src/prompts/premarket/final_research.txt` reads DSA and Kronos signal files when available.
 10. Main premarket research produces:
-   - `state/today_allowlist.txt`
-   - `state/dynamic_allowlist.json`
-   - `state/daily_plan.json`
-   - `state/daily_plan.md`
+   - `runtime/state/today_allowlist.txt`
+   - `runtime/state/dynamic_allowlist.json`
+   - `runtime/state/daily_plan.json`
+   - `runtime/state/daily_plan.md`
 
 ## Machine-Rebuild Workflow
 
@@ -334,9 +334,9 @@ The documented rebuild flow for a new machine should be:
 ```bash
 git clone <repo-url>
 cd trading
-chmod +x scripts/*.sh
-./scripts/kronos/setup_kronos_env.sh
-./scripts/kronos/verify_kronos_env.sh
+chmod +x src/scripts/*.sh
+./src/scripts/kronos/setup_kronos_env.sh
+./src/scripts/kronos/verify_kronos_env.sh
 ```
 
 Then the required manual steps:
@@ -351,9 +351,9 @@ codex
 Then validation:
 
 ```bash
-./scripts/safety/check_safety.sh
-ALLOW_WEEKEND_RUN=1 KRONOS_USE_MOCK=1 ./scripts/kronos/run_kronos_premarket_scan.sh
-ALLOW_WEEKEND_RUN=1 KRONOS_USE_MOCK=1 CODEX_EXEC_DRY_RUN=1 ./scripts/entrypoints/run_premarket.sh
+./src/scripts/safety/check_safety.sh
+ALLOW_WEEKEND_RUN=1 KRONOS_USE_MOCK=1 ./src/scripts/kronos/run_kronos_premarket_scan.sh
+ALLOW_WEEKEND_RUN=1 KRONOS_USE_MOCK=1 CODEX_EXEC_DRY_RUN=1 ./src/scripts/entrypoints/run_premarket.sh
 ```
 
 ## Testing Strategy
@@ -362,7 +362,7 @@ Testing should be staged to isolate integration risk.
 
 ### Phase 1: Contract validation
 
-- verify `state/runs/<date>/signals/kronos_signals.json` is always valid JSON
+- verify `runtime/state/runs/<date>/signals/kronos_signals.json` is always valid JSON
 - verify required top-level fields exist
 - verify symbols not in the universe are rejected
 
@@ -390,11 +390,11 @@ Testing should be staged to isolate integration risk.
 1. Add local config layering support to shared shell runtime.
 2. Add portable setup files and `.gitignore` updates.
 3. Add `setup_kronos_env.sh` and `verify_kronos_env.sh`.
-4. Add `scripts/kronos/kronos_generate_signals.py` with mock output first.
-5. Add `scripts/kronos/run_kronos_premarket_scan.sh`.
-6. Update `scripts/entrypoints/run_premarket.sh` to call the Kronos layer after DSA and before main premarket research.
-7. Update `prompts/premarket/final_research.txt` to read and constrain Kronos signals.
-8. Update `README.md`, setup docs, and `scripts/safety/check_safety.sh`.
+4. Add `src/scripts/kronos/kronos_generate_signals.py` with mock output first.
+5. Add `src/scripts/kronos/run_kronos_premarket_scan.sh`.
+6. Update `src/scripts/entrypoints/run_premarket.sh` to call the Kronos layer after DSA and before main premarket research.
+7. Update `src/prompts/premarket/final_research.txt` to read and constrain Kronos signals.
+8. Update `README.md`, setup docs, and `src/scripts/safety/check_safety.sh`.
 9. Validate bootstrap, mock flow, and dry-run behavior.
 10. Replace mock-only inference with real Kronos model loading once the integration contract is stable.
 

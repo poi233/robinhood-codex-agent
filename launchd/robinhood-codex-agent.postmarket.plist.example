@@ -9,7 +9,7 @@
   <key>ProgramArguments</key>
   <array>
     <string>/bin/bash</string>
-    <string>__REPO_ROOT__/scripts/entrypoints/run_postmarket.sh</string>
+    <string>__REPO_ROOT__/src/scripts/entrypoints/run_postmarket.sh</string>
   </array>
   <key>StartCalendarInterval</key>
   <dict>
@@ -19,8 +19,8 @@
     <integer>10</integer>
   </dict>
   <key>StandardOutPath</key>
-  <string>__REPO_ROOT__/logs/launchd.postmarket.out</string>
+  <string>__REPO_ROOT__/runtime/logs/launchd.postmarket.out</string>
   <key>StandardErrorPath</key>
-  <string>__REPO_ROOT__/logs/launchd.postmarket.err</string>
+  <string>__REPO_ROOT__/runtime/logs/launchd.postmarket.err</string>
 </dict>
 </plist>

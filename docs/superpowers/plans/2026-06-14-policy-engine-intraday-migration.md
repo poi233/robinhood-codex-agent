@@ -116,7 +116,7 @@ Expected: PASS.
 
 - [ ] **Step 1: Write failing loader tests**
 
-Create `tests/test_policy_loaders.py` with a temporary repo containing config/state files. Verify `load_policy_inputs()` reads universe, daily plan, dynamic allowlist, today allowlist, risk tier caps, daily usage, and research report JSON.
+Create `tests/test_policy_loaders.py` with a temporary repo containing src/config/state files. Verify `load_policy_inputs()` reads universe, daily plan, dynamic allowlist, today allowlist, risk tier caps, daily usage, and research report JSON.
 
 - [ ] **Step 2: Run loader tests and verify import failure**
 
@@ -149,7 +149,7 @@ Expected: FAIL because intraday still calls Codex prompt.
 
 - [ ] **Step 3: Update intraday orchestration**
 
-Modify `run_intraday_pipeline()` to load runtime config, load policy inputs, call `generate_order_intent()`, and append `decision.to_json_dict()` to `logs/decisions.jsonl`.
+Modify `run_intraday_pipeline()` to load runtime config, load policy inputs, call `generate_order_intent()`, and append `decision.to_json_dict()` to `runtime/logs/decisions.jsonl`.
 
 - [ ] **Step 4: Re-run intraday tests**
 
@@ -180,4 +180,4 @@ Expected: All exit zero.
 - [ ] **Step 3: Inspect git diff**
 
 Run: `git diff --stat` and `git diff -- trading_agent tests docs/superpowers/plans/2026-06-14-policy-engine-intraday-migration.md`.
-Expected: Only policy, intraday, CLI, tests, and this plan changed. Existing unrelated edits in `config/runtime.env` and `trading_agent/prompts/codex.py` remain untouched.
+Expected: Only policy, intraday, CLI, tests, and this plan changed. Existing unrelated edits in `src/config/runtime.env` and `trading_agent/src/prompts/codex.py` remain untouched.

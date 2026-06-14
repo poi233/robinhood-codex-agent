@@ -1,0 +1,50 @@
+{
+  "source": {
+    "name": "daily_stock_analysis",
+    "repository": "https://github.com/ZhuLinsen/daily_stock_analysis",
+    "license": "MIT",
+    "integration_mode": "strategy_signal_layer_only"
+  },
+  "purpose": "Use daily_stock_analysis-style research lenses as non-binding premarket signals. These signals must never bypass Robinhood MCP account checks, local risk rules, tax rules, review gates, or trading mode.",
+  "score_scale": {
+    "min": 0,
+    "max": 100,
+    "candidate_threshold": 75,
+    "strong_candidate_threshold": 85,
+    "block_threshold": 45
+  },
+  "strategy_weights": {
+    "hot_theme": 18,
+    "event_driven": 18,
+    "bull_trend": 16,
+    "shrink_pullback": 14,
+    "volume_breakout": 14,
+    "growth_quality": 12,
+    "dragon_head": 8
+  },
+  "hard_blocks": [
+    "missing_or_stale_quote_data",
+    "unverified_catalyst_after_large_price_move",
+    "major_negative_news",
+    "earnings_today_or_next_trading_day",
+    "abnormal_spread_or_poor_liquidity",
+    "known_financing_or_dilution_risk",
+    "regulatory_or_lawsuit_risk",
+    "meme_only_or_hype_only_move",
+    "wash_sale_block_if_tax_layer_is_available"
+  ],
+  "preferred_themes": [
+    "ai_semiconductors",
+    "ai_data_center_infrastructure",
+    "cpo_photonics_interconnect",
+    "space_defense_autonomy",
+    "nuclear_power_grid",
+    "broad_beta_when_single_name_quality_is_weak"
+  ],
+  "output_contract": {
+    "file": "runtime/state/dsa_signals.json",
+    "max_selected_candidates": 10,
+    "max_strategy_matches_per_symbol": 4,
+    "expires_same_day": true
+  }
+}

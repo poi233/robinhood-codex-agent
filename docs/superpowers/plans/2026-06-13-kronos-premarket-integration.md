@@ -4,7 +4,7 @@
 
 **Goal:** Add a portable Kronos premarket signal layer that can be rebuilt on a new machine from this repository, while keeping Kronos advisory-only and non-blocking inside the trading pipeline.
 
-**Architecture:** Extend the existing shell-plus-state-file workflow with repository-owned setup and verification scripts. The repo will create `.venv-kronos`, clone a fixed Kronos commit into `.vendor/kronos`, write machine-local overrides into `config/runtime.env.local`, and run a Python generator that emits `state/runs/<date>/signals/kronos_signals.json` for the main premarket prompt to consume.
+**Architecture:** Extend the existing shell-plus-state-file workflow with repository-owned setup and verification scripts. The repo will create `.venv-kronos`, clone a fixed Kronos commit into `.vendor/kronos`, write machine-local overrides into `src/config/runtime.env.local`, and run a Python generator that emits `runtime/state/runs/<date>/signals/kronos_signals.json` for the main premarket prompt to consume.
 
 **Tech Stack:** Bash, Python 3.11, `unittest`, `venv`, upstream Kronos source checkout, `torch`, `pandas`, `yfinance`, Codex prompts, local JSON state files
 
@@ -12,35 +12,35 @@
 
 ## File Map
 
-- Create: `config/runtime.env.local.example`
+- Create: `src/config/runtime.env.local.example`
 - Create: `requirements-kronos-extra.txt`
 - Create: `docs/setup/kronos-portable-setup.md`
-- Create: `scripts/kronos/setup_kronos_env.sh`
-- Create: `scripts/kronos/verify_kronos_env.sh`
-- Create: `scripts/kronos/kronos_generate_signals.py`
-- Create: `scripts/kronos/run_kronos_premarket_scan.sh`
+- Create: `src/scripts/kronos/setup_kronos_env.sh`
+- Create: `src/scripts/kronos/verify_kronos_env.sh`
+- Create: `src/scripts/kronos/kronos_generate_signals.py`
+- Create: `src/scripts/kronos/run_kronos_premarket_scan.sh`
 - Create: `tests/test_kronos_generate_signals.py`
 - Modify: `.gitignore`
-- Modify: `config/runtime.env`
+- Modify: `src/config/runtime.env`
 - Modify: `README.md`
-- Modify: `scripts/lib/common.sh`
-- Modify: `scripts/safety/check_safety.sh`
-- Modify: `scripts/entrypoints/run_premarket.sh`
-- Modify: `prompts/premarket/final_research.txt`
+- Modify: `src/scripts/lib/common.sh`
+- Modify: `src/scripts/safety/check_safety.sh`
+- Modify: `src/scripts/entrypoints/run_premarket.sh`
+- Modify: `src/prompts/premarket/final_research.txt`
 
 ### Responsibility Split
 
 - `.gitignore`: ignore repo-local runtime artifacts and machine-local env overrides.
-- `config/runtime.env`: committed defaults for all machines.
-- `config/runtime.env.local.example`: local override template for machine paths.
+- `src/config/runtime.env`: committed defaults for all machines.
+- `src/config/runtime.env.local.example`: local override template for machine paths.
 - `requirements-kronos-extra.txt`: repo-specific Python additions on top of upstream Kronos requirements.
-- `scripts/kronos/setup_kronos_env.sh`: clone Kronos at a fixed commit, create `.venv-kronos`, install dependencies, and generate `config/runtime.env.local`.
-- `scripts/kronos/verify_kronos_env.sh`: verify that the portable environment is usable.
-- `scripts/lib/common.sh`: layered env loading and defaults shared across shell scripts.
-- `scripts/kronos/kronos_generate_signals.py`: universe parsing, mock/live signal generation, and JSON output.
-- `scripts/kronos/run_kronos_premarket_scan.sh`: shell runner for the Kronos signal layer.
-- `prompts/premarket/final_research.txt`: describe how the main premarket agent consumes Kronos safely.
-- `scripts/safety/check_safety.sh`: report whether portable setup and wiring are complete.
+- `src/scripts/kronos/setup_kronos_env.sh`: clone Kronos at a fixed commit, create `.venv-kronos`, install dependencies, and generate `src/config/runtime.env.local`.
+- `src/scripts/kronos/verify_kronos_env.sh`: verify that the portable environment is usable.
+- `src/scripts/lib/common.sh`: layered env loading and defaults shared across shell scripts.
+- `src/scripts/kronos/kronos_generate_signals.py`: universe parsing, mock/live signal generation, and JSON output.
+- `src/scripts/kronos/run_kronos_premarket_scan.sh`: shell runner for the Kronos signal layer.
+- `src/prompts/premarket/final_research.txt`: describe how the main premarket agent consumes Kronos safely.
+- `src/scripts/safety/check_safety.sh`: report whether portable setup and wiring are complete.
 - `README.md` and `docs/setup/kronos-portable-setup.md`: operator installation and rebuild instructions.
 - `tests/test_kronos_generate_signals.py`: contract and runner regression tests without needing Robinhood or Codex auth.
 
@@ -52,7 +52,7 @@
 - Fixed upstream version:
   - repo: `https://github.com/shiyu-coder/Kronos.git`
   - commit: `67b630e67f6a18c9e9be918d9b4337c960db1e9a`
-- Machine-local overrides live in `config/runtime.env.local` and must never be committed.
+- Machine-local overrides live in `src/config/runtime.env.local` and must never be committed.
 - Setup must fail fast; runtime must degrade safely.
 - Mock mode must work before Codex login or Robinhood authentication is complete.
 
@@ -60,8 +60,8 @@
 
 **Files:**
 - Modify: `.gitignore`
-- Modify: `config/runtime.env`
-- Modify: `scripts/lib/common.sh`
+- Modify: `src/config/runtime.env`
+- Modify: `src/scripts/lib/common.sh`
 
 - [ ] **Step 1: Add failing coverage for local env loading behavior**
 
@@ -90,7 +90,7 @@ class CommonRuntimeTests(unittest.TestCase):
             (scripts_dir / "common.sh").write_text((REPO_ROOT / "scripts" / "common.sh").read_text(encoding="utf-8"), encoding="utf-8")
 
             result = subprocess.run(
-                ["bash", "-lc", f"cd {tmp} && source scripts/lib/common.sh && printf '%s' \"$TRADING_MODE\""],
+                ["bash", "-lc", f"cd {tmp} && source src/scripts/lib/common.sh && printf '%s' \"$TRADING_MODE\""],
                 capture_output=True,
                 text=True,
                 check=False,
@@ -100,7 +100,7 @@ class CommonRuntimeTests(unittest.TestCase):
             self.assertEqual(result.stdout, "review")
 ```
 
-- [ ] **Step 2: Run the test and verify it fails because `scripts/lib/common.sh` does not read `runtime.env.local` yet**
+- [ ] **Step 2: Run the test and verify it fails because `src/scripts/lib/common.sh` does not read `runtime.env.local` yet**
 
 Run: `python3 -m unittest tests/test_kronos_generate_signals.py -v`
 
@@ -111,12 +111,12 @@ Expected: FAIL in `test_common_sh_prefers_runtime_env_local` with `paper` or uns
 Add these lines:
 
 ```gitignore
-config/runtime.env.local
+src/config/runtime.env.local
 .vendor/
 .venv-kronos/
 ```
 
-- [ ] **Step 4: Add committed portable defaults to `config/runtime.env`**
+- [ ] **Step 4: Add committed portable defaults to `src/config/runtime.env`**
 
 Append these lines:
 
@@ -134,12 +134,12 @@ KRONOS_SAMPLE_COUNT=1
 KRONOS_MIN_CONFIDENCE=0.60
 ```
 
-- [ ] **Step 5: Modify `scripts/lib/common.sh` to load `runtime.env.local` after `runtime.env`**
+- [ ] **Step 5: Modify `src/scripts/lib/common.sh` to load `runtime.env.local` after `runtime.env`**
 
 Add these variables near the top:
 
 ```bash
-CONFIG_ENV_LOCAL="$AGENT_ROOT/config/runtime.env.local"
+CONFIG_ENV_LOCAL="$SRC_ROOT/config/runtime.env.local"
 ```
 
 Load both files:
@@ -216,17 +216,17 @@ Expected: PASS for `test_common_sh_prefers_runtime_env_local`.
 - [ ] **Step 7: Commit the config-layering changes**
 
 ```bash
-git add .gitignore config/runtime.env scripts/lib/common.sh tests/test_kronos_generate_signals.py
+git add .gitignore src/config/runtime.env src/scripts/lib/common.sh tests/test_kronos_generate_signals.py
 git commit -m "feat: add portable runtime env layering"
 ```
 
 ### Task 2: Add Portable Setup and Verification Scripts
 
 **Files:**
-- Create: `config/runtime.env.local.example`
+- Create: `src/config/runtime.env.local.example`
 - Create: `requirements-kronos-extra.txt`
-- Create: `scripts/kronos/setup_kronos_env.sh`
-- Create: `scripts/kronos/verify_kronos_env.sh`
+- Create: `src/scripts/kronos/setup_kronos_env.sh`
+- Create: `src/scripts/kronos/verify_kronos_env.sh`
 - Create: `docs/setup/kronos-portable-setup.md`
 
 - [ ] **Step 1: Add failing tests for setup artifacts that should exist after bootstrap**
@@ -252,7 +252,7 @@ Run: `python3 -m unittest tests/test_kronos_generate_signals.py -v`
 
 Expected: FAIL for the new artifact existence tests.
 
-- [ ] **Step 3: Create `config/runtime.env.local.example`**
+- [ ] **Step 3: Create `src/config/runtime.env.local.example`**
 
 Use exactly:
 
@@ -270,7 +270,7 @@ Use exactly:
 yfinance
 ```
 
-- [ ] **Step 5: Create `scripts/kronos/setup_kronos_env.sh`**
+- [ ] **Step 5: Create `src/scripts/kronos/setup_kronos_env.sh`**
 
 Use this script body:
 
@@ -286,8 +286,8 @@ KRONOS_COMMIT_SHA="67b630e67f6a18c9e9be918d9b4337c960db1e9a"
 VENV_DIR="$REPO_ROOT/.venv-kronos"
 VENDOR_DIR="$REPO_ROOT/.vendor"
 KRONOS_DIR="$VENDOR_DIR/kronos"
-LOCAL_ENV_EXAMPLE="$REPO_ROOT/config/runtime.env.local.example"
-LOCAL_ENV_FILE="$REPO_ROOT/config/runtime.env.local"
+LOCAL_ENV_EXAMPLE="$REPO_ROOT/src/config/runtime.env.local.example"
+LOCAL_ENV_FILE="$REPO_ROOT/src/config/runtime.env.local"
 
 command -v git >/dev/null 2>&1 || { echo "missing git"; exit 1; }
 command -v python3 >/dev/null 2>&1 || { echo "missing python3"; exit 1; }
@@ -328,10 +328,10 @@ path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 PY
 
 echo "Kronos portable environment ready."
-echo "Next: ./scripts/kronos/verify_kronos_env.sh"
+echo "Next: ./src/scripts/kronos/verify_kronos_env.sh"
 ```
 
-- [ ] **Step 6: Create `scripts/kronos/verify_kronos_env.sh`**
+- [ ] **Step 6: Create `src/scripts/kronos/verify_kronos_env.sh`**
 
 Use this script body:
 
@@ -341,7 +341,7 @@ Use this script body:
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# shellcheck source=scripts/lib/common.sh
+# shellcheck source=src/scripts/lib/common.sh
 source "$SCRIPT_DIR/common.sh"
 
 [[ -x "$KRONOS_PYTHON_BIN" ]] || { echo "missing executable KRONOS_PYTHON_BIN: $KRONOS_PYTHON_BIN"; exit 1; }
@@ -358,9 +358,9 @@ from model import Kronos, KronosPredictor, KronosTokenizer  # noqa: F401
 print("python imports ok")
 PY
 
-"$KRONOS_PYTHON_BIN" "$AGENT_ROOT/scripts/kronos/kronos_generate_signals.py" \
-  --universe-file "$AGENT_ROOT/config/universe.txt" \
-  --output-file "$AGENT_ROOT/state/runs/<date>/signals/kronos_signals.json" \
+"$KRONOS_PYTHON_BIN" "$SRC_ROOT/scripts/kronos/kronos_generate_signals.py" \
+  --universe-file "$SRC_ROOT/config/universe.txt" \
+  --output-file "$AGENT_ROOT/runtime/state/runs/<date>/signals/kronos_signals.json" \
   --date "$(pt_date)" \
   --mock
 
@@ -386,9 +386,9 @@ Use this outline:
 ```bash
 git clone <repo-url>
 cd trading
-chmod +x scripts/*.sh
-./scripts/kronos/setup_kronos_env.sh
-./scripts/kronos/verify_kronos_env.sh
+chmod +x src/scripts/*.sh
+./src/scripts/kronos/setup_kronos_env.sh
+./src/scripts/kronos/verify_kronos_env.sh
 ```
 
 ## Manual Authentication Steps
@@ -405,9 +405,9 @@ Complete Robinhood Agentic Account authentication on desktop.
 ## Validation
 
 ```bash
-./scripts/safety/check_safety.sh
-ALLOW_WEEKEND_RUN=1 KRONOS_USE_MOCK=1 ./scripts/kronos/run_kronos_premarket_scan.sh
-ALLOW_WEEKEND_RUN=1 KRONOS_USE_MOCK=1 CODEX_EXEC_DRY_RUN=1 ./scripts/entrypoints/run_premarket.sh
+./src/scripts/safety/check_safety.sh
+ALLOW_WEEKEND_RUN=1 KRONOS_USE_MOCK=1 ./src/scripts/kronos/run_kronos_premarket_scan.sh
+ALLOW_WEEKEND_RUN=1 KRONOS_USE_MOCK=1 CODEX_EXEC_DRY_RUN=1 ./src/scripts/entrypoints/run_premarket.sh
 ```
 ```
 
@@ -420,15 +420,15 @@ Expected: PASS for the artifact existence tests.
 - [ ] **Step 9: Commit setup and verification assets**
 
 ```bash
-git add config/runtime.env.local.example requirements-kronos-extra.txt scripts/kronos/setup_kronos_env.sh scripts/kronos/verify_kronos_env.sh docs/setup/kronos-portable-setup.md tests/test_kronos_generate_signals.py
+git add src/config/runtime.env.local.example requirements-kronos-extra.txt src/scripts/kronos/setup_kronos_env.sh src/scripts/kronos/verify_kronos_env.sh docs/setup/kronos-portable-setup.md tests/test_kronos_generate_signals.py
 git commit -m "feat: add portable Kronos setup scripts"
 ```
 
 ### Task 3: Implement the Kronos Signal Generator and Runner
 
 **Files:**
-- Create: `scripts/kronos/kronos_generate_signals.py`
-- Create: `scripts/kronos/run_kronos_premarket_scan.sh`
+- Create: `src/scripts/kronos/kronos_generate_signals.py`
+- Create: `src/scripts/kronos/run_kronos_premarket_scan.sh`
 - Modify: `tests/test_kronos_generate_signals.py`
 
 - [ ] **Step 1: Add failing tests for mock signal generation and shell runner output**
@@ -503,7 +503,7 @@ Run: `python3 -m unittest tests/test_kronos_generate_signals.py -v`
 
 Expected: FAIL with missing file or import errors for the generator and runner tests.
 
-- [ ] **Step 3: Create `scripts/kronos/kronos_generate_signals.py` with mock and live modes**
+- [ ] **Step 3: Create `src/scripts/kronos/kronos_generate_signals.py` with mock and live modes**
 
 Use this file body:
 
@@ -700,7 +700,7 @@ if __name__ == "__main__":
     raise SystemExit(main())
 ```
 
-- [ ] **Step 4: Create `scripts/kronos/run_kronos_premarket_scan.sh`**
+- [ ] **Step 4: Create `src/scripts/kronos/run_kronos_premarket_scan.sh`**
 
 Use this file body:
 
@@ -710,7 +710,7 @@ Use this file body:
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# shellcheck source=scripts/lib/common.sh
+# shellcheck source=src/scripts/lib/common.sh
 source "$SCRIPT_DIR/common.sh"
 
 acquire_lock "kronos_premarket_scan"
@@ -720,13 +720,13 @@ if ! is_weekday_pt && [[ "${ALLOW_WEEKEND_RUN:-0}" != "1" ]]; then
   exit 0
 fi
 
-OUTPUT_FILE="$AGENT_ROOT/state/runs/<date>/signals/kronos_signals.json"
+OUTPUT_FILE="$AGENT_ROOT/runtime/state/runs/<date>/signals/kronos_signals.json"
 RUN_DATE="$(pt_date)"
 
 cmd=(
   "$KRONOS_PYTHON_BIN"
-  "$AGENT_ROOT/scripts/kronos/kronos_generate_signals.py"
-  "--universe-file" "$AGENT_ROOT/config/universe.txt"
+  "$SRC_ROOT/scripts/kronos/kronos_generate_signals.py"
+  "--universe-file" "$SRC_ROOT/config/universe.txt"
   "--output-file" "$OUTPUT_FILE"
   "--date" "$RUN_DATE"
 )
@@ -749,16 +749,16 @@ Expected: PASS for the mock generation, symbol validation, and runner output tes
 - [ ] **Step 6: Commit generator and runner**
 
 ```bash
-git add scripts/kronos/kronos_generate_signals.py scripts/kronos/run_kronos_premarket_scan.sh tests/test_kronos_generate_signals.py
+git add src/scripts/kronos/kronos_generate_signals.py src/scripts/kronos/run_kronos_premarket_scan.sh tests/test_kronos_generate_signals.py
 git commit -m "feat: add Kronos signal generator and runner"
 ```
 
 ### Task 4: Wire Kronos into Premarket and Safety Checks
 
 **Files:**
-- Modify: `scripts/entrypoints/run_premarket.sh`
-- Modify: `prompts/premarket/final_research.txt`
-- Modify: `scripts/safety/check_safety.sh`
+- Modify: `src/scripts/entrypoints/run_premarket.sh`
+- Modify: `src/prompts/premarket/final_research.txt`
+- Modify: `src/scripts/safety/check_safety.sh`
 
 - [ ] **Step 1: Add a failing assertion for premarket prompt wiring**
 
@@ -768,7 +768,7 @@ Append:
 class PromptWiringTests(unittest.TestCase):
     def test_premarket_prompt_mentions_kronos_signal_file(self) -> None:
         prompt = (REPO_ROOT / "prompts" / "premarket_research.txt").read_text(encoding="utf-8")
-        self.assertIn("state/runs/<date>/signals/kronos_signals.json", prompt)
+        self.assertIn("runtime/state/runs/<date>/signals/kronos_signals.json", prompt)
         self.assertIn("kronos_signal_status", prompt)
 ```
 
@@ -778,7 +778,7 @@ Run: `python3 -m unittest tests/test_kronos_generate_signals.py -v`
 
 Expected: FAIL in `test_premarket_prompt_mentions_kronos_signal_file`.
 
-- [ ] **Step 3: Update `scripts/entrypoints/run_premarket.sh` to execute Kronos after DSA**
+- [ ] **Step 3: Update `src/scripts/entrypoints/run_premarket.sh` to execute Kronos after DSA**
 
 Insert:
 
@@ -793,23 +793,23 @@ fi
 directly before:
 
 ```bash
-run_codex_prompt "premarket" "$AGENT_ROOT/prompts/premarket/final_research.txt"
+run_codex_prompt "premarket" "$SRC_ROOT/prompts/premarket/final_research.txt"
 ```
 
-- [ ] **Step 4: Update `prompts/premarket/final_research.txt` to read and constrain Kronos**
+- [ ] **Step 4: Update `src/prompts/premarket/final_research.txt` to read and constrain Kronos**
 
 Add to the file-reading section:
 
 ```text
-- `state/runs/<date>/signals/kronos_signals.json` if it exists and is for today
+- `runtime/state/runs/<date>/signals/kronos_signals.json` if it exists and is for today
 ```
 
 Insert this task block after the DSA block:
 
 ```text
-6. Read `state/runs/<date>/signals/kronos_signals.json` if present. Treat it as a non-binding forecast layer only:
+6. Read `runtime/state/runs/<date>/signals/kronos_signals.json` if present. Treat it as a non-binding forecast layer only:
    - It may improve candidate ranking, setup bias selection, and watch/block context.
-   - It must never override `config/risk.md`, `config/risk_tiers.json`, Robinhood MCP account checks, tradability checks, daily caps, or the daily plan schema.
+   - It must never override `src/config/risk.md`, `src/config/risk_tiers.json`, Robinhood MCP account checks, tradability checks, daily caps, or the daily plan schema.
    - If it is missing, stale, invalid, or partial, continue the main scan and record `kronos_signal_status` accordingly.
 ```
 
@@ -834,21 +834,21 @@ And add these fields under each `symbol_scores` entry:
 "kronos_setup_bias": "breakout|pullback|chop|avoid|missing",
 ```
 
-- [ ] **Step 5: Update `scripts/safety/check_safety.sh` for portable setup visibility**
+- [ ] **Step 5: Update `src/scripts/safety/check_safety.sh` for portable setup visibility**
 
 Add:
 
 ```bash
-if [[ -f "$AGENT_ROOT/scripts/kronos/kronos_generate_signals.py" ]] \
-  && [[ -f "$AGENT_ROOT/scripts/kronos/run_kronos_premarket_scan.sh" ]] \
-  && rg -q 'state/runs/<date>/signals/kronos_signals.json' "$AGENT_ROOT/prompts/premarket/final_research.txt"; then
+if [[ -f "$SRC_ROOT/scripts/kronos/kronos_generate_signals.py" ]] \
+  && [[ -f "$SRC_ROOT/scripts/kronos/run_kronos_premarket_scan.sh" ]] \
+  && rg -q 'runtime/state/runs/<date>/signals/kronos_signals.json' "$SRC_ROOT/prompts/premarket/final_research.txt"; then
   echo "  - Kronos signal layer is configured and wired into premarket: ok"
 else
   echo "  - WARNING: Kronos signal layer is incomplete or not wired into premarket."
 fi
 
-if [[ -f "$AGENT_ROOT/config/runtime.env.local.example" ]] \
-  && rg -q '^ENABLE_KRONOS_SIGNAL_LAYER=' "$AGENT_ROOT/config/runtime.env"; then
+if [[ -f "$SRC_ROOT/config/runtime.env.local.example" ]] \
+  && rg -q '^ENABLE_KRONOS_SIGNAL_LAYER=' "$SRC_ROOT/config/runtime.env"; then
   echo "  - Portable Kronos setup files found: ok"
 else
   echo "  - WARNING: portable Kronos setup files missing."
@@ -864,7 +864,7 @@ Expected: PASS for `test_premarket_prompt_mentions_kronos_signal_file`.
 - [ ] **Step 7: Commit wiring and safety checks**
 
 ```bash
-git add scripts/entrypoints/run_premarket.sh prompts/premarket/final_research.txt scripts/safety/check_safety.sh tests/test_kronos_generate_signals.py
+git add src/scripts/entrypoints/run_premarket.sh src/prompts/premarket/final_research.txt src/scripts/safety/check_safety.sh tests/test_kronos_generate_signals.py
 git commit -m "feat: wire Kronos into premarket planning"
 ```
 
@@ -882,8 +882,8 @@ Append:
 class DocumentationTests(unittest.TestCase):
     def test_readme_mentions_portable_kronos_setup(self) -> None:
         readme = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
-        self.assertIn("./scripts/kronos/setup_kronos_env.sh", readme)
-        self.assertIn("./scripts/kronos/verify_kronos_env.sh", readme)
+        self.assertIn("./src/scripts/kronos/setup_kronos_env.sh", readme)
+        self.assertIn("./src/scripts/kronos/verify_kronos_env.sh", readme)
 ```
 
 - [ ] **Step 2: Run the tests and verify the README check fails before the README edit**
@@ -904,9 +904,9 @@ To rebuild the Kronos environment on a new machine:
 ```bash
 git clone <repo-url>
 cd trading
-chmod +x scripts/*.sh
-./scripts/kronos/setup_kronos_env.sh
-./scripts/kronos/verify_kronos_env.sh
+chmod +x src/scripts/*.sh
+./src/scripts/kronos/setup_kronos_env.sh
+./src/scripts/kronos/verify_kronos_env.sh
 ```
 
 Manual authentication still required:
@@ -921,9 +921,9 @@ codex
 Then validate:
 
 ```bash
-./scripts/safety/check_safety.sh
-ALLOW_WEEKEND_RUN=1 KRONOS_USE_MOCK=1 ./scripts/kronos/run_kronos_premarket_scan.sh
-ALLOW_WEEKEND_RUN=1 KRONOS_USE_MOCK=1 CODEX_EXEC_DRY_RUN=1 ./scripts/entrypoints/run_premarket.sh
+./src/scripts/safety/check_safety.sh
+ALLOW_WEEKEND_RUN=1 KRONOS_USE_MOCK=1 ./src/scripts/kronos/run_kronos_premarket_scan.sh
+ALLOW_WEEKEND_RUN=1 KRONOS_USE_MOCK=1 CODEX_EXEC_DRY_RUN=1 ./src/scripts/entrypoints/run_premarket.sh
 ```
 ```
 
@@ -935,21 +935,21 @@ Expected: PASS for the README test.
 
 - [ ] **Step 5: Run the setup script on the current machine**
 
-Run: `./scripts/kronos/setup_kronos_env.sh`
+Run: `./src/scripts/kronos/setup_kronos_env.sh`
 
 Expected:
 - `.venv-kronos` exists
 - `.vendor/kronos` exists
-- `config/runtime.env.local` exists
+- `src/config/runtime.env.local` exists
 - script prints `Kronos portable environment ready.`
 
 - [ ] **Step 6: Run the verification script**
 
-Run: `./scripts/kronos/verify_kronos_env.sh`
+Run: `./src/scripts/kronos/verify_kronos_env.sh`
 
 Expected:
 - prints `python imports ok`
-- writes `state/runs/<date>/signals/kronos_signals.json` in mock mode
+- writes `runtime/state/runs/<date>/signals/kronos_signals.json` in mock mode
 - prints `Kronos portable verification passed.`
 
 - [ ] **Step 7: Run safety and dry-run checks**
@@ -957,15 +957,15 @@ Expected:
 Run:
 
 ```bash
-./scripts/safety/check_safety.sh
-ALLOW_WEEKEND_RUN=1 KRONOS_USE_MOCK=1 ./scripts/kronos/run_kronos_premarket_scan.sh
-ALLOW_WEEKEND_RUN=1 KRONOS_USE_MOCK=1 CODEX_EXEC_DRY_RUN=1 ./scripts/entrypoints/run_premarket.sh
+./src/scripts/safety/check_safety.sh
+ALLOW_WEEKEND_RUN=1 KRONOS_USE_MOCK=1 ./src/scripts/kronos/run_kronos_premarket_scan.sh
+ALLOW_WEEKEND_RUN=1 KRONOS_USE_MOCK=1 CODEX_EXEC_DRY_RUN=1 ./src/scripts/entrypoints/run_premarket.sh
 ```
 
 Expected:
 - `check_safety.sh` reports portable Kronos setup files and premarket wiring as ok
-- `state/runs/<date>/signals/kronos_signals.json` is produced
-- `logs/codex_runs.log` shows DSA, then Kronos, then premarket
+- `runtime/state/runs/<date>/signals/kronos_signals.json` is produced
+- `runtime/logs/codex_runs.log` shows DSA, then Kronos, then premarket
 
 - [ ] **Step 8: Run the full focused test suite one final time**
 

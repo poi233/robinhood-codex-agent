@@ -9,4 +9,5 @@ description = "Package-owned trading automation runtime"
 requires-python = ">=3.11"
 
 [tool.setuptools.packages.find]
+where = ["src"]
 include = ["trading_agent*"]
