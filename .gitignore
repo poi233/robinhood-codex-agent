@@ -14,6 +14,7 @@
 config/runtime.env.local
 .vendor/
 .venv-kronos/
+.worktrees/
 
 # Codex / automation runtime artifacts
 .codex/session*
