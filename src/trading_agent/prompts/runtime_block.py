@@ -34,6 +34,7 @@ def build_runtime_block(run_kind: str, agent_root: Path) -> str:
         "ALLOW_OUTSIDE_MARKET_TEST": env.get("ALLOW_OUTSIDE_MARKET_TEST", "0"),
         "MAX_SINGLE_ORDER_NOTIONAL": env.get("MAX_SINGLE_ORDER_NOTIONAL", "10"),
         "MAX_DAILY_NOTIONAL": env.get("MAX_DAILY_NOTIONAL", "25"),
+        "PAPER_STARTING_CASH": env.get("PAPER_STARTING_CASH", "400000"),
         "CODEX_EXEC_DRY_RUN": env.get("CODEX_EXEC_DRY_RUN", "0"),
         "ENABLE_DSA_SIGNAL_LAYER": env.get("ENABLE_DSA_SIGNAL_LAYER", "1"),
         "ENABLE_MARKET_FEED_LAYER": env.get("ENABLE_MARKET_FEED_LAYER", "1"),

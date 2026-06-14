@@ -22,8 +22,8 @@
   },
   "3": {
     "name": "aggressive_small_account",
-    "max_single_order_notional": 100,
-    "max_daily_notional": 300,
+    "max_single_order_notional": 5000,
+    "max_daily_notional": 20000,
     "max_live_orders_per_day": 4,
     "promotion_requirement": "Only for a small dedicated Agentic Account after stable live operation."
   }

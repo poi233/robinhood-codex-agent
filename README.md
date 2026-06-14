@@ -17,7 +17,8 @@ python3 -m trading_agent postmarket
 Default state is deliberately safe:
 
 - `TRADING_MODE=paper`
-- `RISK_TIER=0`
+- `RISK_TIER=3`
+- `PAPER_STARTING_CASH=400000`
 - `KILL_SWITCH` exists
 - generated state and logs are ignored by git
 - intraday live/review execution is not wired yet and fails closed with `execution_not_wired`
@@ -226,6 +227,7 @@ Important state contracts:
   visualization-friendly daily paper snapshots and equity curve.
 - `paper/account.json`, `paper/positions.json`, and `paper/orders.jsonl` are the current simulated
   account ledger used only in `TRADING_MODE=paper`.
+- Paper mode starts from `PAPER_STARTING_CASH` when the local ledger does not yet exist.
 - In paper mode, policy loading first reads real snapshots and then overlays the paper ledger cash
   and positions.
 

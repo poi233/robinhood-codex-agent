@@ -64,6 +64,7 @@ def run_intraday_pipeline(*, dry_run: bool) -> int:
         return 0
     runtime = load_runtime_config(agent_root)
     run_date = pt_date_string()
+    paper_starting_cash = float(os.environ.get("PAPER_STARTING_CASH", "400000"))
     inputs = load_policy_inputs(
         agent_root,
         run_date=run_date,
@@ -75,7 +76,7 @@ def run_intraday_pipeline(*, dry_run: bool) -> int:
         record_paper_day_start(
             agent_root,
             run_date=run_date,
-            starting_cash=float(inputs.account.get("buying_power", 0) or 0),
+            starting_cash=paper_starting_cash,
             positions=inputs.positions,
         )
     decision = generate_order_intent(inputs)
@@ -84,7 +85,7 @@ def run_intraday_pipeline(*, dry_run: bool) -> int:
             agent_root,
             run_date=run_date,
             decision=decision,
-            starting_cash=float(inputs.account.get("buying_power", 0) or 0),
+            starting_cash=paper_starting_cash,
         )
         if paper_result.applied:
             decision = replace(decision, action_taken="paper_fill")

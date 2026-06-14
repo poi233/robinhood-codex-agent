@@ -12,7 +12,7 @@ Risk tiers:
 - `RISK_TIER=0`: max single order `$10`, max daily notional `$25`, max 1 live order/day. This is the initial micro-test tier.
 - `RISK_TIER=1`: max single order `$25`, max daily notional `$75`, max 2 live orders/day. Use only after at least 5 clean paper/review sessions.
 - `RISK_TIER=2`: max single order `$50`, max daily notional `$150`, max 3 live orders/day. Use only after live tier 1 logs show no rule violations.
-- `RISK_TIER=3`: max single order `$100`, max daily notional `$300`, max 4 live orders/day. Aggressive tier for a small dedicated Agentic Account only.
+- `RISK_TIER=3`: max single order `$5,000`, max daily notional `$20,000`, max 4 live orders/day. Aggressive paper or small dedicated Agentic Account only.
 - The premarket plan may set a lower daily cap than the tier cap, but must never exceed the tier cap.
 - Any tier increase must be made manually in `src/config/runtime.env`; Codex must not raise `RISK_TIER` by itself.
 
