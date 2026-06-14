@@ -42,6 +42,18 @@ def _append_order(path: Path, payload: dict[str, Any]) -> None:
         handle.write(json.dumps(payload, sort_keys=True) + "\n")
 
 
+def _update_daily_usage(path: Path, *, run_date: str, notional: float, timestamp: str) -> None:
+    usage = _read_json_or(path, {})
+    if not isinstance(usage, dict):
+        usage = {}
+    usage.setdefault("date", run_date)
+    usage["used_notional"] = round(float(usage.get("used_notional", 0) or 0) + notional, 2)
+    usage["paper_filled_notional"] = round(float(usage.get("paper_filled_notional", 0) or 0) + notional, 2)
+    usage["paper_order_count"] = int(usage.get("paper_order_count", 0) or 0) + 1
+    usage["updated_at"] = timestamp
+    write_json(path, usage)
+
+
 def _apply_buy(account: dict[str, Any], positions: dict[str, Any], intent: OrderIntent) -> PaperFillResult:
     cash = float(account.get("cash", 0) or 0)
     notional = round(intent.quantity * intent.limit_price, 2)
@@ -119,4 +131,5 @@ def apply_paper_intent(
     write_json(paths.paper_account_path, account)
     write_json(paths.paper_positions_path, positions)
     _append_order(paths.paper_orders_log_path, order)
+    _update_daily_usage(paths.daily_usage_path, run_date=run_date, notional=order["notional"], timestamp=now)
     return result
