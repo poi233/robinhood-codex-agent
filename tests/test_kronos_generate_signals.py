@@ -468,6 +468,8 @@ class KronosPredictor:
         self.max_context = max_context
 
     def predict(self, df, x_timestamp, y_timestamp, pred_len, T, top_p, sample_count):
+        if not hasattr(x_timestamp, "dt") or not hasattr(y_timestamp, "dt"):
+            raise TypeError("timestamps must be pandas Series with .dt accessors")
         return pd.DataFrame({"close": [110.0 + index for index in range(pred_len)]})
 """.strip(),
                 encoding="utf-8",

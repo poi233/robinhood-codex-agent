@@ -131,10 +131,14 @@ def build_live_payload(symbols: list[str], run_date: str, source_universe: str) 
             if "amount" not in history.columns:
                 history["amount"] = 0
 
-            x_df = history.tail(lookback)[["open", "high", "low", "close", "volume", "amount"]]
-            x_timestamp = history.tail(lookback)["timestamps"]
+            window = history.tail(lookback).reset_index(drop=True)
+            x_df = window[["open", "high", "low", "close", "volume", "amount"]]
+            x_timestamp = pd.Series(pd.to_datetime(window["timestamps"]), name="timestamps")
             last_ts = pd.to_datetime(x_timestamp.iloc[-1])
-            y_timestamp = pd.date_range(last_ts, periods=pred_len + 1, freq=future_freq)[1:]
+            y_timestamp = pd.Series(
+                pd.date_range(last_ts, periods=pred_len + 1, freq=future_freq)[1:],
+                name="timestamps",
+            )
             pred_df = predictor.predict(
                 df=x_df,
                 x_timestamp=x_timestamp,
