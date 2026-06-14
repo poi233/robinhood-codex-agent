@@ -8,7 +8,7 @@ import unittest
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-COLLECTOR = REPO_ROOT / "scripts" / "collect_market_feed.py"
+COLLECTOR = REPO_ROOT / "scripts" / "data" / "collect_market_feed.py"
 
 
 class MarketFeedCollectorTests(unittest.TestCase):
@@ -46,33 +46,34 @@ class MarketFeedCollectorTests(unittest.TestCase):
             self.assertTrue((output_dir / "news" / "market_summary.json").exists())
 
     def test_run_symbol_research_script_exists(self) -> None:
-        self.assertTrue((REPO_ROOT / "scripts" / "run_symbol_research.sh").exists())
+        self.assertTrue((REPO_ROOT / "scripts" / "data" / "run_symbol_research.sh").exists())
 
     def test_runner_uses_mock_collection_in_dry_run_mode(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             tmp = Path(tmpdir)
             (tmp / "config").mkdir()
-            (tmp / "scripts").mkdir()
+            (tmp / "scripts" / "data").mkdir(parents=True)
+            (tmp / "scripts" / "lib").mkdir()
             (tmp / "state").mkdir()
             (tmp / "logs").mkdir()
             (tmp / "config" / "runtime.env").write_text("TRADING_MODE=paper\n", encoding="utf-8")
             (tmp / "config" / "universe.txt").write_text("NVDA\n", encoding="utf-8")
-            (tmp / "scripts" / "common.sh").write_text(
-                (REPO_ROOT / "scripts" / "common.sh").read_text(encoding="utf-8"),
+            (tmp / "scripts" / "lib" / "common.sh").write_text(
+                (REPO_ROOT / "scripts" / "lib" / "common.sh").read_text(encoding="utf-8"),
                 encoding="utf-8",
             )
-            (tmp / "scripts" / "run_market_feed_collection.sh").write_text(
-                (REPO_ROOT / "scripts" / "run_market_feed_collection.sh").read_text(encoding="utf-8"),
+            (tmp / "scripts" / "data" / "run_market_feed_collection.sh").write_text(
+                (REPO_ROOT / "scripts" / "data" / "run_market_feed_collection.sh").read_text(encoding="utf-8"),
                 encoding="utf-8",
             )
-            (tmp / "scripts" / "collect_market_feed.py").write_text(
+            (tmp / "scripts" / "data" / "collect_market_feed.py").write_text(
                 COLLECTOR.read_text(encoding="utf-8"),
                 encoding="utf-8",
             )
             shutil.copytree(REPO_ROOT / "trading_agent", tmp / "trading_agent")
 
             result = subprocess.run(
-                ["bash", "scripts/run_market_feed_collection.sh"],
+                ["bash", "scripts/data/run_market_feed_collection.sh"],
                 cwd=tmp,
                 env={**os.environ, "CODEX_EXEC_DRY_RUN": "1"},
                 capture_output=True,
@@ -81,7 +82,7 @@ class MarketFeedCollectorTests(unittest.TestCase):
             )
 
             self.assertEqual(result.returncode, 0, msg=result.stderr)
-            manifests = list((tmp / "state" / "market_feed").glob("*/manifest.json"))
+            manifests = list((tmp / "state" / "runs").glob("*/market_feed/manifest.json"))
             self.assertEqual(len(manifests), 1)
 
     @unittest.skipUnless(os.environ.get("RUN_LIVE_MARKET_FEED_TEST") == "1", "set RUN_LIVE_MARKET_FEED_TEST=1 to hit live market data")

@@ -3,8 +3,8 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# shellcheck source=scripts/common.sh
-source "$SCRIPT_DIR/common.sh"
+# shellcheck source=scripts/lib/common.sh
+source "$SCRIPT_DIR/../lib/common.sh"
 
 acquire_lock "market_feed"
 
@@ -31,5 +31,5 @@ resolved_python="$(resolve_market_feed_python_bin)" || {
   exit 1
 }
 
-"$resolved_python" "$AGENT_ROOT/scripts/collect_market_feed.py" \
+"$resolved_python" "$AGENT_ROOT/scripts/data/collect_market_feed.py" \
   "${collector_args[@]}"

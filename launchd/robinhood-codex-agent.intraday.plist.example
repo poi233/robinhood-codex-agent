@@ -9,7 +9,7 @@
   <key>ProgramArguments</key>
   <array>
     <string>/bin/bash</string>
-    <string>__REPO_ROOT__/scripts/run_intraday.sh</string>
+    <string>__REPO_ROOT__/scripts/entrypoints/run_intraday.sh</string>
   </array>
   <key>StartCalendarInterval</key>
   <array>

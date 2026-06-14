@@ -6,7 +6,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 
 class TechnicalPromptWiringTests(unittest.TestCase):
     def test_technical_prompt_exists_and_references_repo_skills(self) -> None:
-        prompt = (REPO_ROOT / "prompts" / "technical_research.txt").read_text(encoding="utf-8")
+        prompt = (REPO_ROOT / "prompts" / "technical" / "research.txt").read_text(encoding="utf-8")
         self.assertIn(".agents/skills/chan-structure-trading", prompt)
         self.assertIn(".agents/skills/brooks-trading-range-price-action", prompt)
         self.assertIn("TECHNICAL_SIGNALS_PATH", prompt)
@@ -27,12 +27,12 @@ class TechnicalPromptWiringTests(unittest.TestCase):
         self.assertIn("no_trade_zone", payload["symbols"]["NVDA"])
 
     def test_premarket_prompt_reads_technical_signals(self) -> None:
-        prompt = (REPO_ROOT / "prompts" / "premarket_research.txt").read_text(encoding="utf-8")
+        prompt = (REPO_ROOT / "prompts" / "premarket" / "final_research.txt").read_text(encoding="utf-8")
         self.assertIn("TECHNICAL_SIGNALS_PATH", prompt)
         self.assertIn("technical_action", prompt)
 
     def test_intraday_prompt_reads_key_levels(self) -> None:
-        prompt = (REPO_ROOT / "prompts" / "intraday_check.txt").read_text(encoding="utf-8")
+        prompt = (REPO_ROOT / "prompts" / "intraday" / "check.txt").read_text(encoding="utf-8")
         self.assertIn("TECHNICAL_SIGNALS_PATH", prompt)
         self.assertIn("long_setup", prompt)
         self.assertIn("short_setup", prompt)

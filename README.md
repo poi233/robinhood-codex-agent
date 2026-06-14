@@ -30,12 +30,14 @@ This is automation infrastructure, not financial advice. Live trading can lose m
 
 ```text
 cron / launchd
-  -> scripts/run_*.sh
-  -> codex exec
-  -> Codex as MCP client
-  -> Robinhood Trading MCP
-  -> Robinhood Agentic Account
-  -> local state + logs
+  -> scripts/entrypoints/run_*.sh
+  -> trading_agent orchestration
+  -> account snapshot
+  -> market context
+  -> parallel advisory scans
+  -> candidate snapshots
+  -> final planner
+  -> archived daily report + logs
 ```
 
 ## Layout
@@ -52,32 +54,38 @@ config/
                          Daily Stock Analysis-inspired signal weights
 
 prompts/
-  dsa_premarket_scan.txt research-only strategy signal generator
-  premarket_research.txt research-only daily plan generator
-  intraday_check.txt     scheduled intraday decision agent
-  postmarket_summary.txt review-only daily reconciliation
+  signals/dsa_scan.txt research-only strategy signal generator
+  premarket/account_snapshot.txt
+                         account, positions, and open-order snapshot
+  premarket/market_calendar.txt
+                         session calendar and market-status snapshot
+  premarket/quote_snapshot_core.txt
+                         core market and current-position quotes
+  premarket/quote_snapshot_candidates.txt
+                         candidate quote snapshot
+  premarket/tradability_candidates.txt
+                         candidate tradability snapshot
+  premarket/catalyst_enrichment.txt
+                         candidate news/catalyst enrichment
+  premarket/final_research.txt final research-only daily plan generator
+  intraday/check.txt     scheduled intraday decision agent
+  postmarket/summary.txt review-only daily reconciliation
 
 scripts/
-  common.sh              shared runtime helpers
-  run_dsa_premarket_scan.sh
-                         optional standalone DSA signal scan
-  run_market_feed_collection.sh
-                         deterministic market/news artifact collector
-  run_technical_research.sh
-                         repo-skill-based technical analysis layer
-  run_symbol_research.sh manual single-symbol research entrypoint
-  run_premarket.sh       premarket entrypoint
-  run_intraday.sh        intraday entrypoint
-  run_postmarket.sh      postmarket entrypoint
-  run_all_paper_once.sh  manual full paper test
-  check_safety.sh        local safety sanity check
+  lib/                   shared shell helpers
+  entrypoints/           scheduled lifecycle entrypoints and DSA scan
+  data/                  market-feed, technical, and symbol-research runners
+  kronos/                Kronos setup, verification, and signal generation
+  skills/                repo-owned skill install/verify helpers
+  safety/                local safety sanity checks
 
 state/
   .gitkeep               generated runtime state lives here locally
   runs/YYYY-MM-DD/       one folder per trading day
     market_feed/         collected charts, ohlcv, news, manifest
     signals/             dsa, kronos, technical outputs
-    planner/             allowlist, plan, usage snapshot
+    planner/             snapshots, allowlist, plan, usage snapshot
+    paper/               local paper account, positions, and simulated orders
     archive/             archived premarket report payload
 
 logs/
@@ -104,9 +112,21 @@ KILL_SWITCH              default safety stop file
 
 ### Premarket
 
-The premarket flow now has four research-only layers before any intraday execution logic. None of them reviews, places, or cancels orders.
+The premarket flow is decomposed so account state is captured once, independent advisory scans run in parallel, and the final planner only synthesizes reviewed snapshots. None of these premarket stages reviews, places, or cancels orders.
 
-First, the optional Daily Stock Analysis-inspired signal layer runs through Codex subscription via `codex exec`.
+First, the account snapshot stage writes `state/runs/<date>/planner/account_snapshot.json`. This is the source of truth for buying power, current positions, and open orders used by later quote, tradability, and final-planner stages.
+
+Then the deterministic market context collector writes `state/runs/<date>/market_feed/` with `charts/`, `ohlcv/`, `news/`, and `manifest.json`.
+
+After that, the first parallel group runs:
+
+- DSA signal scan
+- Kronos forecast scan
+- repo-owned technical research
+- market calendar snapshot
+- core quote snapshot for market ETFs and current positions
+
+The optional Daily Stock Analysis-inspired signal layer runs through Codex subscription via `codex exec`.
 It does not run the third-party project's own LLM API stack by default.
 
 It:
@@ -118,25 +138,28 @@ It:
 
 This layer is advisory only. It can promote, demote, or block research candidates, but it cannot authorize a trade.
 
-Second, the optional Kronos forecast layer runs locally and writes `state/runs/<date>/signals/kronos_signals.json`.
+The optional Kronos forecast layer runs locally and writes `state/runs/<date>/signals/kronos_signals.json`.
 It is advisory only and cannot bypass account, tradability, or risk gates.
 
-Third, the market-feed collector and repo-owned technical research layer run:
+The repo-owned technical research layer:
 
-- collector writes `state/runs/<date>/market_feed/` with `charts/`, `ohlcv/`, `news/`, and `manifest.json`
-- technical research reads the repo-owned skills under `.agents/skills/`
-- technical research writes `state/runs/<date>/signals/technical_signals.json`
+- reads the repo-owned skills under `.agents/skills/`
+- writes `state/runs/<date>/signals/technical_signals.json`
+- preserves execution-aware price levels, no-trade zones, and long/short-management scenarios for intraday trading
 
-This layer is also advisory only. It adds execution-aware price levels, no-trade zones, and long/short-management scenarios for the main planner and intraday checker.
+The deterministic candidate merge writes `state/runs/<date>/planner/candidate_snapshot.json` from account holdings/open orders plus advisory outputs.
 
-Then the main premarket agent creates the official daily plan.
+Then the second parallel group runs only on merged candidates:
+
+- candidate quote snapshot
+- candidate tradability snapshot
+- catalyst enrichment
+
+Finally, the main premarket agent creates the official daily plan from snapshots instead of re-collecting everything itself.
 
 It:
 
-- reads `config/universe.txt`, `risk.md`, `risk_tiers.json`, `strategy.md`, `runtime.env`, and same-day `state/runs/<date>/signals/*.json` outputs when present
-- identifies the dedicated Robinhood Agentic Account
-- checks buying power, positions, and open equity orders
-- scans market regime and priority sectors
+- reads `config/universe.txt`, `risk.md`, `risk_tiers.json`, `strategy.md`, `runtime.env`, same-day signals, and same-day planner snapshots
 - builds a dynamic daily allowlist
 - writes `state/runs/<date>/planner/today_allowlist.txt`
 - writes `state/runs/<date>/planner/dynamic_allowlist.json`
@@ -158,21 +181,21 @@ The screen prioritizes:
 Run only the DSA signal layer manually:
 
 ```bash
-./scripts/run_dsa_premarket_scan.sh
+./scripts/entrypoints/run_dsa_premarket_scan.sh
 ```
 
 Disable the DSA signal layer for scheduled premarket runs:
 
 ```bash
-ENABLE_DSA_SIGNAL_LAYER=0 ./scripts/run_premarket.sh
+ENABLE_DSA_SIGNAL_LAYER=0 ./scripts/entrypoints/run_premarket.sh
 ```
 
 Run the market-feed and technical-research layers manually:
 
 ```bash
-./scripts/run_market_feed_collection.sh
-./scripts/run_technical_research.sh
-./scripts/run_symbol_research.sh NVDA
+./scripts/data/run_market_feed_collection.sh
+./scripts/data/run_technical_research.sh
+./scripts/data/run_symbol_research.sh NVDA
 ```
 
 ### Intraday
@@ -184,6 +207,7 @@ It:
 - reads the premarket plan and dynamic allowlist
 - reads same-day DSA signals when present
 - reads same-day `state/runs/<date>/signals/technical_signals.json` when present
+- reads same-day planner snapshots such as `account_snapshot.json` and quote snapshots; intraday does not call Robinhood MCP directly
 - checks `KILL_SWITCH`
 - checks local time window
 - checks trading mode
@@ -193,7 +217,7 @@ It:
 
 Mode behavior:
 
-- `paper`: never calls `review_equity_order` or `place_equity_order`; logs `no_action` or `would_trade`
+- `paper`: never calls `review_equity_order` or `place_equity_order`; uses premarket quote snapshots plus local `state/runs/<date>/paper/` ledger to simulate fills
 - `review`: may call `review_equity_order`; never places orders
 - `live`: may place only after local gates and a clean review pass
 
@@ -240,10 +264,10 @@ Project MCP approval policy:
 
 This repo now ships its own trading skill pack under `.agents/skills/`.
 
-- install: `./scripts/install_repo_skills.sh`
-- verify: `./scripts/verify_repo_skills.sh`
-- scheduled collector: `./scripts/run_market_feed_collection.sh`
-- manual symbol research: `./scripts/run_symbol_research.sh NVDA`
+- install: `./scripts/skills/install_repo_skills.sh`
+- verify: `./scripts/skills/verify_repo_skills.sh`
+- scheduled collector: `./scripts/data/run_market_feed_collection.sh`
+- manual symbol research: `./scripts/data/run_symbol_research.sh NVDA`
 
 The scheduled research workflow now includes:
 
@@ -263,7 +287,7 @@ The setup script prefers `python3.12`, then `python3.11`, and only falls back to
 If your machine defaults to an unsupported interpreter such as Python `3.13`, point setup at a compatible one explicitly:
 
 ```bash
-KRONOS_BOOTSTRAP_PYTHON=$(command -v python3.12) ./scripts/setup_kronos_env.sh
+KRONOS_BOOTSTRAP_PYTHON=$(command -v python3.12) ./scripts/kronos/setup_kronos_env.sh
 ```
 
 Portable rebuild and validation flow:
@@ -272,19 +296,19 @@ Portable rebuild and validation flow:
 git clone <repo-url>
 cd trading
 chmod +x scripts/*.sh
-./scripts/setup_kronos_env.sh
-./scripts/verify_kronos_env.sh
-./scripts/check_safety.sh
-ALLOW_WEEKEND_RUN=1 KRONOS_USE_MOCK=1 ./scripts/run_kronos_premarket_scan.sh
-ALLOW_WEEKEND_RUN=1 CODEX_EXEC_DRY_RUN=1 ./scripts/run_premarket.sh
+./scripts/kronos/setup_kronos_env.sh
+./scripts/kronos/verify_kronos_env.sh
+./scripts/safety/check_safety.sh
+ALLOW_WEEKEND_RUN=1 KRONOS_USE_MOCK=1 ./scripts/kronos/run_kronos_premarket_scan.sh
+ALLOW_WEEKEND_RUN=1 CODEX_EXEC_DRY_RUN=1 ./scripts/entrypoints/run_premarket.sh
 ```
 
 For a clean rebuild of the portable Kronos environment:
 
 ```bash
 rm -rf .venv-kronos .vendor/kronos
-./scripts/setup_kronos_env.sh
-./scripts/verify_kronos_env.sh
+./scripts/kronos/setup_kronos_env.sh
+./scripts/kronos/verify_kronos_env.sh
 ```
 
 Install and authenticate Codex, then connect Robinhood Trading MCP:
@@ -303,9 +327,9 @@ Complete Robinhood Agentic Account authentication on desktop.
 Dry-run the shell layer without invoking Codex after setup and safety checks pass:
 
 ```bash
-CODEX_EXEC_DRY_RUN=1 ./scripts/run_premarket.sh
-CODEX_EXEC_DRY_RUN=1 ./scripts/run_intraday.sh
-CODEX_EXEC_DRY_RUN=1 ./scripts/run_postmarket.sh
+CODEX_EXEC_DRY_RUN=1 ./scripts/entrypoints/run_premarket.sh
+CODEX_EXEC_DRY_RUN=1 ./scripts/entrypoints/run_intraday.sh
+CODEX_EXEC_DRY_RUN=1 ./scripts/entrypoints/run_postmarket.sh
 ```
 
 Because `KILL_SWITCH` exists by default, intraday should skip safely.
@@ -313,7 +337,7 @@ Because `KILL_SWITCH` exists by default, intraday should skip safely.
 For a live-data premarket run without order placement, leave `CODEX_EXEC_DRY_RUN` unset:
 
 ```bash
-ALLOW_WEEKEND_RUN=1 ./scripts/run_premarket.sh
+ALLOW_WEEKEND_RUN=1 ./scripts/entrypoints/run_premarket.sh
 ```
 
 ## Paper Test
@@ -321,7 +345,7 @@ ALLOW_WEEKEND_RUN=1 ./scripts/run_premarket.sh
 Run a full local paper test:
 
 ```bash
-ALLOW_OUTSIDE_MARKET_TEST=1 ./scripts/run_all_paper_once.sh
+ALLOW_OUTSIDE_MARKET_TEST=1 ./scripts/entrypoints/run_all_paper_once.sh
 ```
 
 In paper mode the agent must not call order review or order placement tools.

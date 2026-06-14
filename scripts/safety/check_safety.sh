@@ -3,8 +3,8 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# shellcheck source=scripts/common.sh
-source "$SCRIPT_DIR/common.sh"
+# shellcheck source=scripts/lib/common.sh
+source "$SCRIPT_DIR/../lib/common.sh"
 
 file_has_pattern() {
   local pattern="$1"
@@ -34,7 +34,7 @@ echo
 echo "Safety checks:"
 
 PROJECT_CODEX_CONFIG="$AGENT_ROOT/.codex/config.toml"
-PREMARKET_SCRIPT="$AGENT_ROOT/scripts/run_premarket.sh"
+PREMARKET_SCRIPT="$AGENT_ROOT/scripts/entrypoints/run_premarket.sh"
 PREMARKET_PIPELINE="$AGENT_ROOT/trading_agent/orchestration/premarket.py"
 READ_APPROVED_TOOLS=(
   get_accounts
@@ -125,43 +125,43 @@ if [[ "$write_auto_approvals" -eq 0 ]]; then
   echo "  - Trading/write tools are not auto-approved: ok"
 fi
 
-if file_has_pattern 'Do not call .*place_equity_order' "$AGENT_ROOT/prompts/premarket_research.txt" \
-  && file_has_pattern 'Do not call .*place_equity_order' "$AGENT_ROOT/prompts/postmarket_summary.txt" \
-  && file_has_pattern 'never place, review, cancel, or modify orders' "$AGENT_ROOT/prompts/dsa_premarket_scan.txt"; then
+if file_has_pattern 'Do not call .*place_equity_order' "$AGENT_ROOT/prompts/premarket/final_research.txt" \
+  && file_has_pattern 'Do not call .*place_equity_order' "$AGENT_ROOT/prompts/postmarket/summary.txt" \
+  && file_has_pattern 'never place, review, cancel, or modify orders' "$AGENT_ROOT/prompts/signals/dsa_scan.txt"; then
   echo "  - Non-trading prompts explicitly forbid place_equity_order: ok"
 else
   echo "  - WARNING: non-trading prompts do not explicitly forbid place_equity_order."
 fi
 
 if [[ -f "$AGENT_ROOT/config/dsa_strategy_weights.json" ]] \
-  && [[ -f "$AGENT_ROOT/prompts/dsa_premarket_scan.txt" ]] \
-  && file_has_pattern 'DSA_SIGNALS_PATH' "$AGENT_ROOT/prompts/premarket_research.txt" \
-  && file_has_pattern 'DSA_SIGNALS_PATH' "$AGENT_ROOT/prompts/intraday_check.txt"; then
+  && [[ -f "$AGENT_ROOT/prompts/signals/dsa_scan.txt" ]] \
+  && file_has_pattern 'DSA_SIGNALS_PATH' "$AGENT_ROOT/prompts/premarket/final_research.txt" \
+  && file_has_pattern 'DSA_SIGNALS_PATH' "$AGENT_ROOT/prompts/intraday/check.txt"; then
   echo "  - DSA signal layer is configured and wired into premarket/intraday: ok"
 else
   echo "  - WARNING: DSA signal layer is incomplete or not wired into prompts."
 fi
 
-if [[ -f "$AGENT_ROOT/scripts/kronos_generate_signals.py" ]] \
+if [[ -f "$AGENT_ROOT/scripts/kronos/kronos_generate_signals.py" ]] \
   && [[ -f "$PREMARKET_PIPELINE" ]] \
   && [[ -f "$PREMARKET_SCRIPT" ]] \
   && file_has_pattern '-m trading_agent premarket' "$PREMARKET_SCRIPT" \
   && file_has_pattern 'ENABLE_KRONOS_SIGNAL_LAYER' "$PREMARKET_PIPELINE" \
   && file_has_pattern '_write_kronos_signals' "$PREMARKET_PIPELINE" \
-  && file_has_pattern 'KRONOS_SIGNALS_PATH' "$AGENT_ROOT/prompts/premarket_research.txt"; then
+  && file_has_pattern 'KRONOS_SIGNALS_PATH' "$AGENT_ROOT/prompts/premarket/final_research.txt"; then
   echo "  - Kronos signal layer is configured and wired into premarket: ok"
 else
   echo "  - WARNING: Kronos signal layer is incomplete or not wired into premarket."
 fi
 
-if [[ -f "$AGENT_ROOT/prompts/technical_research.txt" ]] \
+if [[ -f "$AGENT_ROOT/prompts/technical/research.txt" ]] \
   && [[ -f "$PREMARKET_PIPELINE" ]] \
   && [[ -f "$PREMARKET_SCRIPT" ]] \
   && file_has_pattern '-m trading_agent premarket' "$PREMARKET_SCRIPT" \
   && file_has_pattern 'collect_market_context' "$PREMARKET_PIPELINE" \
-  && file_has_pattern 'technical_research\.txt' "$PREMARKET_PIPELINE" \
-  && file_has_pattern 'TECHNICAL_SIGNALS_PATH' "$AGENT_ROOT/prompts/premarket_research.txt" \
-  && file_has_pattern 'TECHNICAL_SIGNALS_PATH' "$AGENT_ROOT/prompts/intraday_check.txt"; then
+  && file_has_pattern 'technical.*research\.txt' "$PREMARKET_PIPELINE" \
+  && file_has_pattern 'TECHNICAL_SIGNALS_PATH' "$AGENT_ROOT/prompts/premarket/final_research.txt" \
+  && file_has_pattern 'TECHNICAL_SIGNALS_PATH' "$AGENT_ROOT/prompts/intraday/check.txt"; then
   echo "  - Technical signal layer is configured and wired into premarket/intraday: ok"
 else
   echo "  - WARNING: technical signal layer is incomplete or not wired into prompts."
@@ -169,15 +169,15 @@ fi
 
 if [[ -f "$AGENT_ROOT/config/runtime.env.local.example" ]] \
   && [[ -f "$AGENT_ROOT/requirements-kronos-extra.txt" ]] \
-  && [[ -f "$AGENT_ROOT/scripts/setup_kronos_env.sh" ]] \
-  && [[ -f "$AGENT_ROOT/scripts/verify_kronos_env.sh" ]] \
+  && [[ -f "$AGENT_ROOT/scripts/kronos/setup_kronos_env.sh" ]] \
+  && [[ -f "$AGENT_ROOT/scripts/kronos/verify_kronos_env.sh" ]] \
   && file_has_pattern '^ENABLE_KRONOS_SIGNAL_LAYER=' "$AGENT_ROOT/config/runtime.env"; then
   echo "  - Portable Kronos setup files found: ok"
 else
   echo "  - WARNING: portable Kronos setup files missing."
 fi
 
-if file_has_pattern 'Runtime mode behavior' "$AGENT_ROOT/prompts/intraday_check.txt"; then
+if file_has_pattern 'Runtime mode behavior' "$AGENT_ROOT/prompts/intraday/check.txt"; then
   echo "  - Intraday prompt has runtime mode gate: ok"
 else
   echo "  - WARNING: intraday prompt missing runtime mode gate."

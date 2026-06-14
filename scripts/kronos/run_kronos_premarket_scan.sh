@@ -3,8 +3,8 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# shellcheck source=scripts/common.sh
-source "$SCRIPT_DIR/common.sh"
+# shellcheck source=scripts/lib/common.sh
+source "$SCRIPT_DIR/../lib/common.sh"
 
 acquire_lock "kronos_premarket_scan"
 
@@ -18,7 +18,7 @@ RUN_DATE="$RUN_DATE_PT"
 
 cmd=(
   "$KRONOS_PYTHON_BIN"
-  "$AGENT_ROOT/scripts/kronos_generate_signals.py"
+  "$AGENT_ROOT/scripts/kronos/kronos_generate_signals.py"
   "--universe-file" "$AGENT_ROOT/config/universe.txt"
   "--output-file" "$OUTPUT_FILE"
   "--date" "$RUN_DATE"

@@ -16,8 +16,8 @@ from trading_agent.core.time import pt_date_string
 from trading_agent.signals.kronos import build_mock_kronos_payload
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-SCRIPT_PATH = REPO_ROOT / "scripts" / "kronos_generate_signals.py"
-RUNNER_PATH = REPO_ROOT / "scripts" / "run_kronos_premarket_scan.sh"
+SCRIPT_PATH = REPO_ROOT / "scripts" / "kronos" / "kronos_generate_signals.py"
+RUNNER_PATH = REPO_ROOT / "scripts" / "kronos" / "run_kronos_premarket_scan.sh"
 
 
 def kronos_run_output(root: Path, run_date: str | None = None) -> Path:
@@ -32,14 +32,14 @@ class CommonRuntimeTests(unittest.TestCase):
             config_dir = tmp / "config"
             scripts_dir = tmp / "scripts"
             config_dir.mkdir()
-            scripts_dir.mkdir()
+            (scripts_dir / "lib").mkdir(parents=True)
 
             (config_dir / "runtime.env").write_text("TRADING_MODE=paper\n", encoding="utf-8")
             (config_dir / "runtime.env.local").write_text("TRADING_MODE=review\n", encoding="utf-8")
-            (scripts_dir / "common.sh").write_text((REPO_ROOT / "scripts" / "common.sh").read_text(encoding="utf-8"), encoding="utf-8")
+            (scripts_dir / "lib" / "common.sh").write_text((REPO_ROOT / "scripts" / "lib" / "common.sh").read_text(encoding="utf-8"), encoding="utf-8")
 
             result = subprocess.run(
-                ["bash", "-lc", f"cd {tmp} && source scripts/common.sh && printf '%s' \"$TRADING_MODE\""],
+                ["bash", "-lc", f"cd {tmp} && source scripts/lib/common.sh && printf '%s' \"$TRADING_MODE\""],
                 capture_output=True,
                 text=True,
                 check=False,
@@ -54,17 +54,17 @@ class CommonRuntimeTests(unittest.TestCase):
             config_dir = tmp / "config"
             scripts_dir = tmp / "scripts"
             config_dir.mkdir()
-            scripts_dir.mkdir()
+            (scripts_dir / "lib").mkdir(parents=True)
 
             (config_dir / "runtime.env").write_text("TRADING_MODE=paper\n", encoding="utf-8")
-            (scripts_dir / "common.sh").write_text((REPO_ROOT / "scripts" / "common.sh").read_text(encoding="utf-8"), encoding="utf-8")
+            (scripts_dir / "lib" / "common.sh").write_text((REPO_ROOT / "scripts" / "lib" / "common.sh").read_text(encoding="utf-8"), encoding="utf-8")
 
             result = subprocess.run(
                 [
                     "bash",
                     "-lc",
                     (
-                        f"cd {tmp} && source scripts/common.sh && "
+                        f"cd {tmp} && source scripts/lib/common.sh && "
                         "python3 -c 'import os; "
                         "print(os.environ[\"KRONOS_PYTHON_BIN\"]); "
                         "print(os.environ[\"KRONOS_PROJECT_ROOT\"])'"
@@ -87,15 +87,15 @@ class CommonRuntimeTests(unittest.TestCase):
             config_dir = tmp / "config"
             scripts_dir = tmp / "scripts"
             config_dir.mkdir()
-            scripts_dir.mkdir()
+            (scripts_dir / "lib").mkdir(parents=True)
 
             (config_dir / "runtime.env").write_text("TRADING_MODE=paper\n", encoding="utf-8")
             (config_dir / "runtime.env.local").write_text("TRADING_MODE=review\n", encoding="utf-8")
-            (scripts_dir / "common.sh").write_text((REPO_ROOT / "scripts" / "common.sh").read_text(encoding="utf-8"), encoding="utf-8")
+            (scripts_dir / "lib" / "common.sh").write_text((REPO_ROOT / "scripts" / "lib" / "common.sh").read_text(encoding="utf-8"), encoding="utf-8")
 
             env = dict(**os.environ, TRADING_MODE="live")
             result = subprocess.run(
-                ["bash", "-lc", f"cd {tmp} && source scripts/common.sh && printf '%s' \"$TRADING_MODE\""],
+                ["bash", "-lc", f"cd {tmp} && source scripts/lib/common.sh && printf '%s' \"$TRADING_MODE\""],
                 capture_output=True,
                 text=True,
                 check=False,
@@ -110,12 +110,12 @@ class PortableArtifactTests(unittest.TestCase):
     def test_readme_mentions_portable_kronos_rebuild_and_validation_commands(self) -> None:
         readme = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
 
-        self.assertIn("./scripts/setup_kronos_env.sh", readme)
-        self.assertIn("./scripts/verify_kronos_env.sh", readme)
-        self.assertIn("./scripts/check_safety.sh", readme)
-        self.assertIn("ALLOW_WEEKEND_RUN=1 KRONOS_USE_MOCK=1 ./scripts/run_kronos_premarket_scan.sh", readme)
+        self.assertIn("./scripts/kronos/setup_kronos_env.sh", readme)
+        self.assertIn("./scripts/kronos/verify_kronos_env.sh", readme)
+        self.assertIn("./scripts/safety/check_safety.sh", readme)
+        self.assertIn("ALLOW_WEEKEND_RUN=1 KRONOS_USE_MOCK=1 ./scripts/kronos/run_kronos_premarket_scan.sh", readme)
         self.assertIn(
-            "ALLOW_WEEKEND_RUN=1 CODEX_EXEC_DRY_RUN=1 ./scripts/run_premarket.sh",
+            "ALLOW_WEEKEND_RUN=1 CODEX_EXEC_DRY_RUN=1 ./scripts/entrypoints/run_premarket.sh",
             readme,
         )
         self.assertIn("KRONOS_BOOTSTRAP_PYTHON", readme)
@@ -128,17 +128,17 @@ class PortableArtifactTests(unittest.TestCase):
         self.assertTrue((REPO_ROOT / "requirements-kronos-extra.txt").exists())
 
     def test_setup_and_verify_scripts_exist(self) -> None:
-        self.assertTrue((REPO_ROOT / "scripts" / "setup_kronos_env.sh").exists())
-        self.assertTrue((REPO_ROOT / "scripts" / "verify_kronos_env.sh").exists())
+        self.assertTrue((REPO_ROOT / "scripts" / "kronos" / "setup_kronos_env.sh").exists())
+        self.assertTrue((REPO_ROOT / "scripts" / "kronos" / "verify_kronos_env.sh").exists())
 
-    def test_verify_script_skips_task3_generation_until_script_exists(self) -> None:
-        contents = (REPO_ROOT / "scripts" / "verify_kronos_env.sh").read_text(encoding="utf-8")
+    def test_verify_script_runs_signal_generation_verification(self) -> None:
+        contents = (REPO_ROOT / "scripts" / "kronos" / "verify_kronos_env.sh").read_text(encoding="utf-8")
 
-        self.assertIn('if [[ -f "$AGENT_ROOT/scripts/kronos_generate_signals.py" ]]; then', contents)
-        self.assertIn("pending Task 3", contents)
+        self.assertIn('"$AGENT_ROOT/scripts/kronos/kronos_generate_signals.py"', contents)
+        self.assertNotIn("pending Task 3", contents)
 
     def test_verify_script_uses_temp_output_and_cleans_it_up(self) -> None:
-        contents = (REPO_ROOT / "scripts" / "verify_kronos_env.sh").read_text(encoding="utf-8")
+        contents = (REPO_ROOT / "scripts" / "kronos" / "verify_kronos_env.sh").read_text(encoding="utf-8")
 
         self.assertIn("mktemp", contents)
         self.assertIn("trap", contents)
@@ -149,11 +149,11 @@ class PortableArtifactTests(unittest.TestCase):
         contents = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
 
         self.assertIn("Portable rebuild and validation flow", contents)
-        self.assertIn("./scripts/verify_kronos_env.sh", contents)
-        self.assertIn("./scripts/check_safety.sh", contents)
-        self.assertIn("ALLOW_WEEKEND_RUN=1 KRONOS_USE_MOCK=1 ./scripts/run_kronos_premarket_scan.sh", contents)
+        self.assertIn("./scripts/kronos/verify_kronos_env.sh", contents)
+        self.assertIn("./scripts/safety/check_safety.sh", contents)
+        self.assertIn("ALLOW_WEEKEND_RUN=1 KRONOS_USE_MOCK=1 ./scripts/kronos/run_kronos_premarket_scan.sh", contents)
         self.assertIn(
-            "ALLOW_WEEKEND_RUN=1 CODEX_EXEC_DRY_RUN=1 ./scripts/run_premarket.sh",
+            "ALLOW_WEEKEND_RUN=1 CODEX_EXEC_DRY_RUN=1 ./scripts/entrypoints/run_premarket.sh",
             contents,
         )
         self.assertIn("KRONOS_BOOTSTRAP_PYTHON", contents)
@@ -167,11 +167,11 @@ class PortableArtifactTests(unittest.TestCase):
             tmp = Path(tmpdir)
             repo = tmp / "repo"
             fake_bin = tmp / "bin"
-            (repo / "scripts").mkdir(parents=True)
+            (repo / "scripts" / "kronos").mkdir(parents=True)
             fake_bin.mkdir()
 
-            (repo / "scripts" / "setup_kronos_env.sh").write_text(
-                (REPO_ROOT / "scripts" / "setup_kronos_env.sh").read_text(encoding="utf-8"),
+            (repo / "scripts" / "kronos" / "setup_kronos_env.sh").write_text(
+                (REPO_ROOT / "scripts" / "kronos" / "setup_kronos_env.sh").read_text(encoding="utf-8"),
                 encoding="utf-8",
             )
             (fake_bin / "git").write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
@@ -188,7 +188,7 @@ class PortableArtifactTests(unittest.TestCase):
             os.chmod(fake_bin / "python3", 0o755)
 
             result = subprocess.run(
-                ["/bin/bash", str(repo / "scripts" / "setup_kronos_env.sh")],
+                ["/bin/bash", str(repo / "scripts" / "kronos" / "setup_kronos_env.sh")],
                 cwd=repo,
                 capture_output=True,
                 text=True,
@@ -211,12 +211,12 @@ class PortableArtifactTests(unittest.TestCase):
             pip_log = tmp / "pip.log"
             git_log = tmp / "git.log"
 
-            (repo / "scripts").mkdir(parents=True)
+            (repo / "scripts" / "kronos").mkdir(parents=True)
             (repo / "config").mkdir()
             fake_bin.mkdir()
 
-            (repo / "scripts" / "setup_kronos_env.sh").write_text(
-                (REPO_ROOT / "scripts" / "setup_kronos_env.sh").read_text(encoding="utf-8"),
+            (repo / "scripts" / "kronos" / "setup_kronos_env.sh").write_text(
+                (REPO_ROOT / "scripts" / "kronos" / "setup_kronos_env.sh").read_text(encoding="utf-8"),
                 encoding="utf-8",
             )
             (repo / "config" / "runtime.env.local.example").write_text("TRADING_MODE=paper\n", encoding="utf-8")
@@ -274,7 +274,7 @@ class PortableArtifactTests(unittest.TestCase):
                 os.chmod(path, 0o755)
 
             result = subprocess.run(
-                ["/bin/bash", str(repo / "scripts" / "setup_kronos_env.sh")],
+                ["/bin/bash", str(repo / "scripts" / "kronos" / "setup_kronos_env.sh")],
                 cwd=repo,
                 capture_output=True,
                 text=True,
@@ -301,7 +301,7 @@ class PortableArtifactTests(unittest.TestCase):
 
 class PromptWiringTests(unittest.TestCase):
     def test_premarket_prompt_mentions_kronos_signal_file(self) -> None:
-        prompt = (REPO_ROOT / "prompts" / "premarket_research.txt").read_text(encoding="utf-8")
+        prompt = (REPO_ROOT / "prompts" / "premarket" / "final_research.txt").read_text(encoding="utf-8")
         self.assertIn("KRONOS_SIGNALS_PATH", prompt)
         self.assertIn("kronos_signal_status", prompt)
         self.assertIn("kronos_direction_bias", prompt)
@@ -311,19 +311,19 @@ class PromptWiringTests(unittest.TestCase):
 
 class SafetyWiringTests(unittest.TestCase):
     def test_check_safety_verifies_run_premarket_kronos_gate(self) -> None:
-        contents = (REPO_ROOT / "scripts" / "check_safety.sh").read_text(encoding="utf-8")
+        contents = (REPO_ROOT / "scripts" / "safety" / "check_safety.sh").read_text(encoding="utf-8")
 
         self.assertIn('ENABLE_KRONOS_SIGNAL_LAYER', contents)
-        self.assertIn('scripts/run_premarket.sh', contents)
+        self.assertIn('scripts/entrypoints/run_premarket.sh', contents)
         self.assertIn('trading_agent/orchestration/premarket.py', contents)
 
     def test_check_safety_verifies_portable_kronos_artifacts(self) -> None:
-        contents = (REPO_ROOT / "scripts" / "check_safety.sh").read_text(encoding="utf-8")
+        contents = (REPO_ROOT / "scripts" / "safety" / "check_safety.sh").read_text(encoding="utf-8")
 
         self.assertIn('config/runtime.env.local.example', contents)
         self.assertIn('requirements-kronos-extra.txt', contents)
-        self.assertIn('scripts/setup_kronos_env.sh', contents)
-        self.assertIn('scripts/verify_kronos_env.sh', contents)
+        self.assertIn('scripts/kronos/setup_kronos_env.sh', contents)
+        self.assertIn('scripts/kronos/verify_kronos_env.sh', contents)
 
     def test_check_safety_runs_without_rg_binary(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -335,17 +335,26 @@ class SafetyWiringTests(unittest.TestCase):
             fake_bin = tmp / "bin"
 
             scripts_dir.mkdir()
+            (scripts_dir / "lib").mkdir()
+            (scripts_dir / "safety").mkdir()
+            (scripts_dir / "kronos").mkdir()
+            (scripts_dir / "entrypoints").mkdir()
             config_dir.mkdir()
             prompts_dir.mkdir()
+            (prompts_dir / "premarket").mkdir()
+            (prompts_dir / "postmarket").mkdir()
+            (prompts_dir / "signals").mkdir()
+            (prompts_dir / "technical").mkdir()
+            (prompts_dir / "intraday").mkdir()
             codex_dir.mkdir()
             fake_bin.mkdir()
 
-            (scripts_dir / "check_safety.sh").write_text(
-                (REPO_ROOT / "scripts" / "check_safety.sh").read_text(encoding="utf-8"),
+            (scripts_dir / "safety" / "check_safety.sh").write_text(
+                (REPO_ROOT / "scripts" / "safety" / "check_safety.sh").read_text(encoding="utf-8"),
                 encoding="utf-8",
             )
-            (scripts_dir / "common.sh").write_text(
-                (REPO_ROOT / "scripts" / "common.sh").read_text(encoding="utf-8"),
+            (scripts_dir / "lib" / "common.sh").write_text(
+                (REPO_ROOT / "scripts" / "lib" / "common.sh").read_text(encoding="utf-8"),
                 encoding="utf-8",
             )
 
@@ -359,32 +368,28 @@ class SafetyWiringTests(unittest.TestCase):
             (config_dir / "dsa_strategy_weights.json").write_text("{}\n", encoding="utf-8")
             (config_dir / "runtime.env.local.example").write_text("TRADING_MODE=paper\n", encoding="utf-8")
 
-            (prompts_dir / "premarket_research.txt").write_text(
+            (prompts_dir / "premarket/final_research.txt").write_text(
                 "Do not call place_equity_order\nDSA_SIGNALS_PATH\nKRONOS_SIGNALS_PATH\nTECHNICAL_SIGNALS_PATH\n",
                 encoding="utf-8",
             )
-            (prompts_dir / "postmarket_summary.txt").write_text(
+            (prompts_dir / "postmarket/summary.txt").write_text(
                 "Do not call place_equity_order\n",
                 encoding="utf-8",
             )
-            (prompts_dir / "dsa_premarket_scan.txt").write_text(
+            (prompts_dir / "signals/dsa_scan.txt").write_text(
                 "never place, review, cancel, or modify orders\n",
                 encoding="utf-8",
             )
-            (prompts_dir / "technical_research.txt").write_text("TECHNICAL_SIGNALS_PATH\n", encoding="utf-8")
-            (prompts_dir / "intraday_check.txt").write_text(
+            (prompts_dir / "technical/research.txt").write_text("TECHNICAL_SIGNALS_PATH\n", encoding="utf-8")
+            (prompts_dir / "intraday/check.txt").write_text(
                 "Runtime mode behavior\nDSA_SIGNALS_PATH\nTECHNICAL_SIGNALS_PATH\n",
                 encoding="utf-8",
             )
 
-            for filename in (
-                "kronos_generate_signals.py",
-                "setup_kronos_env.sh",
-                "verify_kronos_env.sh",
-                "run_premarket.sh",
-            ):
-                (scripts_dir / filename).write_text("", encoding="utf-8")
-            (scripts_dir / "run_premarket.sh").write_text(
+            for filename in ("setup_kronos_env.sh", "verify_kronos_env.sh"):
+                (scripts_dir / "kronos" / filename).write_text("", encoding="utf-8")
+            (scripts_dir / "kronos" / "kronos_generate_signals.py").write_text("", encoding="utf-8")
+            (scripts_dir / "entrypoints" / "run_premarket.sh").write_text(
                 'python3 -m trading_agent premarket\n',
                 encoding="utf-8",
             )
@@ -397,7 +402,7 @@ class SafetyWiringTests(unittest.TestCase):
                 "    pass\n"
                 "def collect_market_context():\n"
                 "    pass\n"
-                'TECHNICAL_PROMPT = "technical_research.txt"\n',
+                'TECHNICAL_PROMPT = "technical/research.txt"\n',
                 encoding="utf-8",
             )
 
@@ -407,7 +412,7 @@ class SafetyWiringTests(unittest.TestCase):
             os.chmod(fake_bin / "rg", 0o755)
 
             result = subprocess.run(
-                ["/bin/bash", str(scripts_dir / "check_safety.sh")],
+                ["/bin/bash", str(scripts_dir / "safety" / "check_safety.sh")],
                 cwd=tmp,
                 capture_output=True,
                 text=True,
@@ -424,7 +429,7 @@ class SafetyWiringTests(unittest.TestCase):
 class KronosGenerateSignalsTests(unittest.TestCase):
     @staticmethod
     def import_module():
-        scripts_path = str(REPO_ROOT / "scripts")
+        scripts_path = str(REPO_ROOT / "scripts" / "kronos")
         if scripts_path not in sys.path:
             sys.path.insert(0, scripts_path)
         if "kronos_generate_signals" in sys.modules:
@@ -568,17 +573,28 @@ class KronosPackageApiTests(unittest.TestCase):
 class KronosRunnerTests(unittest.TestCase):
     def build_temp_runtime_repo(self, tmp: Path) -> None:
         shutil.copytree(REPO_ROOT / "trading_agent", tmp / "trading_agent")
-        (tmp / "scripts").mkdir()
+        (tmp / "scripts" / "entrypoints").mkdir(parents=True)
+        (tmp / "scripts" / "lib").mkdir()
+        (tmp / "scripts" / "kronos").mkdir()
         (tmp / "config").mkdir()
-        (tmp / "prompts").mkdir()
+        (tmp / "prompts" / "premarket").mkdir(parents=True)
+        (tmp / "prompts" / "signals").mkdir()
+        (tmp / "prompts" / "technical").mkdir()
         (tmp / "state").mkdir()
         (tmp / "logs").mkdir()
 
-        for filename in ("run_premarket.sh", "common.sh"):
-            (tmp / "scripts" / filename).write_text(
-                (REPO_ROOT / "scripts" / filename).read_text(encoding="utf-8"),
-                encoding="utf-8",
-            )
+        (tmp / "scripts" / "entrypoints" / "run_premarket.sh").write_text(
+            (REPO_ROOT / "scripts" / "entrypoints" / "run_premarket.sh").read_text(encoding="utf-8"),
+            encoding="utf-8",
+        )
+        (tmp / "scripts" / "lib" / "common.sh").write_text(
+            (REPO_ROOT / "scripts" / "lib" / "common.sh").read_text(encoding="utf-8"),
+            encoding="utf-8",
+        )
+        (tmp / "scripts" / "kronos" / "kronos_generate_signals.py").write_text(
+            SCRIPT_PATH.read_text(encoding="utf-8"),
+            encoding="utf-8",
+        )
 
         (tmp / "config" / "runtime.env").write_text(
             "\n".join(
@@ -595,7 +611,18 @@ class KronosRunnerTests(unittest.TestCase):
             encoding="utf-8",
         )
         (tmp / "config" / "universe.txt").write_text("NVDA\nPLTR\n", encoding="utf-8")
-        (tmp / "prompts" / "premarket_research.txt").write_text("prompt\n", encoding="utf-8")
+        for prompt_name in (
+            "account_snapshot.txt",
+            "market_calendar.txt",
+            "quote_snapshot_core.txt",
+            "quote_snapshot_candidates.txt",
+            "tradability_candidates.txt",
+            "catalyst_enrichment.txt",
+            "final_research.txt",
+        ):
+            (tmp / "prompts" / "premarket" / prompt_name).write_text("prompt\n", encoding="utf-8")
+        (tmp / "prompts" / "signals" / "dsa_scan.txt").write_text("prompt\n", encoding="utf-8")
+        (tmp / "prompts" / "technical" / "research.txt").write_text("prompt\n", encoding="utf-8")
 
     def test_premarket_runner_invokes_kronos_when_enabled(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -609,7 +636,7 @@ class KronosRunnerTests(unittest.TestCase):
                 KRONOS_USE_MOCK="1",
             )
             result = subprocess.run(
-                ["bash", str(tmp / "scripts" / "run_premarket.sh")],
+                ["bash", str(tmp / "scripts" / "entrypoints" / "run_premarket.sh")],
                 capture_output=True,
                 text=True,
                 check=False,
@@ -646,7 +673,7 @@ class KronosRunnerTests(unittest.TestCase):
                 CODEX_EXEC_DRY_RUN="1",
             )
             result = subprocess.run(
-                ["bash", str(tmp / "scripts" / "run_premarket.sh")],
+                ["bash", str(tmp / "scripts" / "entrypoints" / "run_premarket.sh")],
                 capture_output=True,
                 text=True,
                 check=False,
@@ -669,7 +696,7 @@ class KronosRunnerTests(unittest.TestCase):
                 KRONOS_PROJECT_ROOT=str(tmp / "missing-kronos-project"),
             )
             result = subprocess.run(
-                ["bash", str(tmp / "scripts" / "run_premarket.sh")],
+                ["bash", str(tmp / "scripts" / "entrypoints" / "run_premarket.sh")],
                 capture_output=True,
                 text=True,
                 check=False,

@@ -3,8 +3,8 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# shellcheck source=scripts/common.sh
-source "$SCRIPT_DIR/common.sh"
+# shellcheck source=scripts/lib/common.sh
+source "$SCRIPT_DIR/../lib/common.sh"
 
 if [[ "$TRADING_MODE" != "paper" ]]; then
   log_line "run_all_paper_once refused: TRADING_MODE=$TRADING_MODE"

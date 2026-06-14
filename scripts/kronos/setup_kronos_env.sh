@@ -3,7 +3,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 KRONOS_REPO_URL="https://github.com/shiyu-coder/Kronos.git"
 KRONOS_COMMIT_SHA="67b630e67f6a18c9e9be918d9b4337c960db1e9a"
 VENV_DIR="$REPO_ROOT/.venv-kronos"
@@ -57,7 +57,7 @@ choose_bootstrap_python() {
     if ! is_supported_bootstrap_version "$version"; then
       err "KRONOS_BOOTSTRAP_PYTHON=$resolved uses Python $version."
       err "Kronos setup requires Python 3.11 or 3.12 for upstream pandas==2.2.2 compatibility."
-      err "Install python3.12 or python3.11, then rerun ./scripts/setup_kronos_env.sh."
+      err "Install python3.12 or python3.11, then rerun ./scripts/kronos/setup_kronos_env.sh."
       exit 1
     fi
 
@@ -118,7 +118,7 @@ fi
 
 if [[ ! -x "$VENV_DIR/bin/python" ]]; then
   err "Kronos virtualenv is missing $VENV_DIR/bin/python."
-  err "Remove $VENV_DIR and rerun ./scripts/setup_kronos_env.sh with Python 3.11 or 3.12."
+  err "Remove $VENV_DIR and rerun ./scripts/kronos/setup_kronos_env.sh with Python 3.11 or 3.12."
   exit 1
 fi
 
@@ -142,4 +142,4 @@ write_local_env_overrides
 
 echo "Using bootstrap Python: $BOOTSTRAP_PYTHON (Python $BOOTSTRAP_VERSION)"
 echo "Kronos portable environment ready."
-echo "Next: ./scripts/verify_kronos_env.sh"
+echo "Next: ./scripts/kronos/verify_kronos_env.sh"

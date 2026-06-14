@@ -15,8 +15,8 @@ from trading_agent.core.run_history import append_stage_log, snapshot_stage_arti
 from trading_agent.core.time import PT, pt_date_string
 from trading_agent.data.market_context import collect_market_context
 from trading_agent.data.universe import parse_universe
+from trading_agent.planner.candidates import build_candidate_snapshot
 from trading_agent.prompts.codex import run_codex_prompt
-from trading_agent.reporting.archive import write_premarket_archive_json
 from trading_agent.reporting.premarket import build_fail_closed_daily_plan, build_premarket_archive_payload
 from trading_agent.signals.kronos import (
     build_failed_kronos_payload,
@@ -28,25 +28,43 @@ from trading_agent.signals.technical_fallback import build_failed_technical_payl
 
 @dataclass
 class PremarketPipeline:
+    run_account_snapshot: callable
     collect_market_context: callable
     run_dsa: callable
     run_kronos: callable
     run_technical: callable
-    run_planner: callable
+    run_market_calendar: callable
+    run_quote_snapshot_core: callable
+    run_candidate_merge: callable
+    run_quote_snapshot_candidates: callable
+    run_tradability_candidates: callable
+    run_catalyst_enrichment: callable
+    run_final_planner: callable
     run_archive: callable
 
     def run(self) -> None:
+        self.run_account_snapshot()
         self.collect_market_context()
-        with ThreadPoolExecutor(max_workers=3) as executor:
+        with ThreadPoolExecutor(max_workers=5) as executor:
             futures = [
                 executor.submit(self._run_advisory, self.run_dsa),
                 executor.submit(self._run_advisory, self.run_kronos),
                 executor.submit(self._run_advisory, self.run_technical),
+                executor.submit(self._run_advisory, self.run_market_calendar),
+                executor.submit(self._run_advisory, self.run_quote_snapshot_core),
+            ]
+            wait(futures)
+        self.run_candidate_merge()
+        with ThreadPoolExecutor(max_workers=3) as executor:
+            futures = [
+                executor.submit(self._run_advisory, self.run_quote_snapshot_candidates),
+                executor.submit(self._run_advisory, self.run_tradability_candidates),
+                executor.submit(self._run_advisory, self.run_catalyst_enrichment),
             ]
             wait(futures)
         planner_error: Exception | None = None
         try:
-            self.run_planner()
+            self.run_final_planner()
         except Exception as exc:
             planner_error = exc
         self.run_archive()
@@ -78,7 +96,7 @@ def _write_kronos_signals(agent_root: Path) -> None:
         if requested_python != current_python:
             cmd = [
                 kronos_python,
-                str(agent_root / "scripts" / "kronos_generate_signals.py"),
+                str(agent_root / "scripts" / "kronos" / "kronos_generate_signals.py"),
                 "--universe-file",
                 str(universe_file),
                 "--output-file",
@@ -146,6 +164,15 @@ def run_premarket_pipeline(*, dry_run: bool) -> int:
             )
             raise
 
+    def run_account_snapshot() -> None:
+        status = run_codex_prompt(
+            "account_snapshot",
+            agent_root,
+            agent_root / "prompts" / "premarket" / "account_snapshot.txt",
+        )
+        if status != 0:
+            raise RuntimeError("account snapshot prompt failed")
+
     def collect_context() -> None:
         if os.environ.get("ENABLE_MARKET_FEED_LAYER", "1") != "1":
             append_stage_log(agent_root, run_date, "market_context", "skipped", "market feed layer disabled")
@@ -163,7 +190,7 @@ def run_premarket_pipeline(*, dry_run: bool) -> int:
         if os.environ.get("ENABLE_DSA_SIGNAL_LAYER", "1") != "1":
             append_stage_log(agent_root, run_date, "dsa", "skipped", "DSA signal layer disabled")
             return
-        status = run_codex_prompt("dsa_premarket_scan", agent_root, agent_root / "prompts" / "dsa_premarket_scan.txt")
+        status = run_codex_prompt("dsa_premarket_scan", agent_root, agent_root / "prompts" / "signals" / "dsa_scan.txt")
         if status != 0:
             raise RuntimeError("dsa prompt failed")
 
@@ -201,7 +228,7 @@ def run_premarket_pipeline(*, dry_run: bool) -> int:
                 ),
             )
             return
-        status = run_codex_prompt("technical_research", agent_root, agent_root / "prompts" / "technical_research.txt")
+        status = run_codex_prompt("technical_research", agent_root, agent_root / "prompts" / "technical" / "research.txt")
         if status != 0:
             write_json(
                 paths.technical_signals_path,
@@ -213,8 +240,56 @@ def run_premarket_pipeline(*, dry_run: bool) -> int:
             )
             raise RuntimeError("technical prompt failed")
 
-    def run_planner() -> None:
-        status = run_codex_prompt("premarket", agent_root, agent_root / "prompts" / "premarket_research.txt")
+    def run_market_calendar() -> None:
+        status = run_codex_prompt(
+            "market_calendar",
+            agent_root,
+            agent_root / "prompts" / "premarket" / "market_calendar.txt",
+        )
+        if status != 0:
+            raise RuntimeError("market calendar prompt failed")
+
+    def run_quote_snapshot_core() -> None:
+        status = run_codex_prompt(
+            "quote_snapshot_core",
+            agent_root,
+            agent_root / "prompts" / "premarket" / "quote_snapshot_core.txt",
+        )
+        if status != 0:
+            raise RuntimeError("quote snapshot core prompt failed")
+
+    def run_candidate_merge() -> None:
+        build_candidate_snapshot(agent_root, run_date)
+
+    def run_quote_snapshot_candidates() -> None:
+        status = run_codex_prompt(
+            "quote_snapshot_candidates",
+            agent_root,
+            agent_root / "prompts" / "premarket" / "quote_snapshot_candidates.txt",
+        )
+        if status != 0:
+            raise RuntimeError("quote snapshot candidates prompt failed")
+
+    def run_tradability_candidates() -> None:
+        status = run_codex_prompt(
+            "tradability_candidates",
+            agent_root,
+            agent_root / "prompts" / "premarket" / "tradability_candidates.txt",
+        )
+        if status != 0:
+            raise RuntimeError("tradability candidates prompt failed")
+
+    def run_catalyst_enrichment() -> None:
+        status = run_codex_prompt(
+            "catalyst_enrichment",
+            agent_root,
+            agent_root / "prompts" / "premarket" / "catalyst_enrichment.txt",
+        )
+        if status != 0:
+            raise RuntimeError("catalyst enrichment prompt failed")
+
+    def run_final_planner() -> None:
+        status = run_codex_prompt("final_premarket", agent_root, agent_root / "prompts" / "premarket" / "final_research.txt")
         if status != 0:
             raise RuntimeError("premarket prompt failed")
 
@@ -241,11 +316,18 @@ def run_premarket_pipeline(*, dry_run: bool) -> int:
         write_json(archive_output, payload)
 
     pipeline = PremarketPipeline(
+        run_account_snapshot=lambda: run_stage("account_snapshot", run_account_snapshot),
         collect_market_context=lambda: run_stage("market_context", collect_context),
         run_dsa=lambda: run_stage("dsa", run_dsa),
         run_kronos=lambda: run_stage("kronos", run_kronos),
         run_technical=lambda: run_stage("technical", run_technical),
-        run_planner=lambda: run_stage("planner", run_planner),
+        run_market_calendar=lambda: run_stage("market_calendar", run_market_calendar),
+        run_quote_snapshot_core=lambda: run_stage("quote_snapshot_core", run_quote_snapshot_core),
+        run_candidate_merge=lambda: run_stage("candidate_merge", run_candidate_merge),
+        run_quote_snapshot_candidates=lambda: run_stage("quote_snapshot_candidates", run_quote_snapshot_candidates),
+        run_tradability_candidates=lambda: run_stage("tradability_candidates", run_tradability_candidates),
+        run_catalyst_enrichment=lambda: run_stage("catalyst_enrichment", run_catalyst_enrichment),
+        run_final_planner=lambda: run_stage("final_planner", run_final_planner),
         run_archive=lambda: run_stage("archive", run_archive),
     )
     append_stage_log(agent_root, run_date, "pipeline", "started", "premarket pipeline started")

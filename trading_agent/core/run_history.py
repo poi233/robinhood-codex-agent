@@ -77,7 +77,42 @@ def snapshot_stage_artifacts(agent_root: Path, run_date: str, stage: str) -> lis
         "technical": [
             (paths.technical_signals_path, run_dir / "signals" / "technical_signals.json"),
         ],
+        "account_snapshot": [
+            (paths.account_snapshot_path, run_dir / "planner" / "account_snapshot.json"),
+        ],
+        "market_calendar": [
+            (paths.market_calendar_path, run_dir / "planner" / "market_calendar.json"),
+        ],
+        "quote_snapshot_core": [
+            (paths.quote_snapshot_core_path, run_dir / "planner" / "quote_snapshot_core.json"),
+        ],
+        "candidate_merge": [
+            (paths.candidate_snapshot_path, run_dir / "planner" / "candidate_snapshot.json"),
+        ],
+        "quote_snapshot_candidates": [
+            (paths.quote_snapshot_candidates_path, run_dir / "planner" / "quote_snapshot_candidates.json"),
+        ],
+        "tradability_candidates": [
+            (paths.tradability_snapshot_path, run_dir / "planner" / "tradability_snapshot.json"),
+        ],
+        "catalyst_enrichment": [
+            (paths.catalyst_snapshot_path, run_dir / "planner" / "catalyst_snapshot.json"),
+        ],
         "planner": [
+            (paths.account_snapshot_path, run_dir / "planner" / "account_snapshot.json"),
+            (paths.market_calendar_path, run_dir / "planner" / "market_calendar.json"),
+            (paths.quote_snapshot_core_path, run_dir / "planner" / "quote_snapshot_core.json"),
+            (paths.candidate_snapshot_path, run_dir / "planner" / "candidate_snapshot.json"),
+            (paths.quote_snapshot_candidates_path, run_dir / "planner" / "quote_snapshot_candidates.json"),
+            (paths.tradability_snapshot_path, run_dir / "planner" / "tradability_snapshot.json"),
+            (paths.catalyst_snapshot_path, run_dir / "planner" / "catalyst_snapshot.json"),
+            (paths.daily_plan_path, run_dir / "planner" / "daily_plan.json"),
+            (paths.daily_plan_markdown_path, run_dir / "planner" / "daily_plan.md"),
+            (paths.dynamic_allowlist_path, run_dir / "planner" / "dynamic_allowlist.json"),
+            (paths.today_allowlist_path, run_dir / "planner" / "today_allowlist.txt"),
+            (paths.daily_usage_path, run_dir / "planner" / "daily_usage.json"),
+        ],
+        "final_planner": [
             (paths.daily_plan_path, run_dir / "planner" / "daily_plan.json"),
             (paths.daily_plan_markdown_path, run_dir / "planner" / "daily_plan.md"),
             (paths.dynamic_allowlist_path, run_dir / "planner" / "dynamic_allowlist.json"),

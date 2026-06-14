@@ -3,8 +3,8 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# shellcheck source=scripts/common.sh
-source "$SCRIPT_DIR/common.sh"
+# shellcheck source=scripts/lib/common.sh
+source "$SCRIPT_DIR/../lib/common.sh"
 
 [[ -x "$KRONOS_PYTHON_BIN" ]] || { echo "missing executable KRONOS_PYTHON_BIN: $KRONOS_PYTHON_BIN"; exit 1; }
 [[ -d "$KRONOS_PROJECT_ROOT" ]] || { echo "missing KRONOS_PROJECT_ROOT: $KRONOS_PROJECT_ROOT"; exit 1; }
@@ -20,18 +20,14 @@ from model import Kronos, KronosPredictor, KronosTokenizer  # noqa: F401
 print("python imports ok")
 PY
 
-if [[ -f "$AGENT_ROOT/scripts/kronos_generate_signals.py" ]]; then
-  mkdir -p "$AGENT_ROOT/state"
-  TEMP_OUTPUT_FILE="$(mktemp "$AGENT_ROOT/state/kronos_signals.verify.XXXXXX")"
-  trap 'rm -f "$TEMP_OUTPUT_FILE"' EXIT
+mkdir -p "$AGENT_ROOT/state"
+TEMP_OUTPUT_FILE="$(mktemp "$AGENT_ROOT/state/kronos_signals.verify.XXXXXX")"
+trap 'rm -f "$TEMP_OUTPUT_FILE"' EXIT
 
-  "$KRONOS_PYTHON_BIN" "$AGENT_ROOT/scripts/kronos_generate_signals.py" \
-    --universe-file "$AGENT_ROOT/config/universe.txt" \
-    --output-file "$TEMP_OUTPUT_FILE" \
-    --date "$(pt_date)" \
-    --mock
-else
-  echo "signal generation verification is pending Task 3 because scripts/kronos_generate_signals.py does not exist yet"
-fi
+"$KRONOS_PYTHON_BIN" "$AGENT_ROOT/scripts/kronos/kronos_generate_signals.py" \
+  --universe-file "$AGENT_ROOT/config/universe.txt" \
+  --output-file "$TEMP_OUTPUT_FILE" \
+  --date "$(pt_date)" \
+  --mock
 
 echo "Kronos portable verification passed."

@@ -20,6 +20,7 @@ class RuntimePaths:
     run_logs_dir: Path
     signals_dir: Path
     planner_dir: Path
+    paper_dir: Path
     archive_dir: Path
     market_feed_dir: Path
     dsa_signals_path: Path
@@ -30,6 +31,16 @@ class RuntimePaths:
     dynamic_allowlist_path: Path
     today_allowlist_path: Path
     daily_usage_path: Path
+    account_snapshot_path: Path
+    market_calendar_path: Path
+    quote_snapshot_core_path: Path
+    candidate_snapshot_path: Path
+    quote_snapshot_candidates_path: Path
+    tradability_snapshot_path: Path
+    catalyst_snapshot_path: Path
+    paper_account_path: Path
+    paper_positions_path: Path
+    paper_orders_log_path: Path
     decisions_log_path: Path
     orders_log_path: Path
     codex_run_log_path: Path
@@ -55,6 +66,7 @@ def build_runtime_paths(agent_root: Path, *, run_date: str | None = None) -> Run
     run_logs_dir = logs_dir / "runs" / resolved_run_date
     signals_dir = run_state_dir / "signals"
     planner_dir = run_state_dir / "planner"
+    paper_dir = run_state_dir / "paper"
     archive_dir = run_state_dir / "archive"
     market_feed_dir = _resolve_env_path(agent_root, "MARKET_FEED_DIR", run_state_dir / "market_feed")
     return RuntimePaths(
@@ -69,6 +81,7 @@ def build_runtime_paths(agent_root: Path, *, run_date: str | None = None) -> Run
         run_logs_dir=run_logs_dir,
         signals_dir=signals_dir,
         planner_dir=planner_dir,
+        paper_dir=paper_dir,
         archive_dir=archive_dir,
         market_feed_dir=market_feed_dir,
         dsa_signals_path=_resolve_env_path(agent_root, "DSA_SIGNALS_PATH", signals_dir / "dsa_signals.json"),
@@ -79,6 +92,16 @@ def build_runtime_paths(agent_root: Path, *, run_date: str | None = None) -> Run
         dynamic_allowlist_path=_resolve_env_path(agent_root, "DYNAMIC_ALLOWLIST_PATH", planner_dir / "dynamic_allowlist.json"),
         today_allowlist_path=_resolve_env_path(agent_root, "TODAY_ALLOWLIST_PATH", planner_dir / "today_allowlist.txt"),
         daily_usage_path=_resolve_env_path(agent_root, "DAILY_USAGE_PATH", planner_dir / "daily_usage.json"),
+        account_snapshot_path=_resolve_env_path(agent_root, "ACCOUNT_SNAPSHOT_PATH", planner_dir / "account_snapshot.json"),
+        market_calendar_path=_resolve_env_path(agent_root, "MARKET_CALENDAR_PATH", planner_dir / "market_calendar.json"),
+        quote_snapshot_core_path=_resolve_env_path(agent_root, "QUOTE_SNAPSHOT_CORE_PATH", planner_dir / "quote_snapshot_core.json"),
+        candidate_snapshot_path=_resolve_env_path(agent_root, "CANDIDATE_SNAPSHOT_PATH", planner_dir / "candidate_snapshot.json"),
+        quote_snapshot_candidates_path=_resolve_env_path(agent_root, "QUOTE_SNAPSHOT_CANDIDATES_PATH", planner_dir / "quote_snapshot_candidates.json"),
+        tradability_snapshot_path=_resolve_env_path(agent_root, "TRADABILITY_SNAPSHOT_PATH", planner_dir / "tradability_snapshot.json"),
+        catalyst_snapshot_path=_resolve_env_path(agent_root, "CATALYST_SNAPSHOT_PATH", planner_dir / "catalyst_snapshot.json"),
+        paper_account_path=_resolve_env_path(agent_root, "PAPER_ACCOUNT_PATH", paper_dir / "account.json"),
+        paper_positions_path=_resolve_env_path(agent_root, "PAPER_POSITIONS_PATH", paper_dir / "positions.json"),
+        paper_orders_log_path=_resolve_env_path(agent_root, "PAPER_ORDERS_LOG_PATH", paper_dir / "orders.jsonl"),
         decisions_log_path=_resolve_env_path(agent_root, "DECISIONS_LOG_PATH", run_logs_dir / "decisions.jsonl"),
         orders_log_path=_resolve_env_path(agent_root, "ORDERS_LOG_PATH", run_logs_dir / "orders.jsonl"),
         codex_run_log_path=_resolve_env_path(agent_root, "CODEX_RUN_LOG_PATH", run_logs_dir / "codex_runs.log"),

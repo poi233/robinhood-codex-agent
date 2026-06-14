@@ -3,8 +3,8 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# shellcheck source=scripts/common.sh
-source "$SCRIPT_DIR/common.sh"
+# shellcheck source=scripts/lib/common.sh
+source "$SCRIPT_DIR/../lib/common.sh"
 
 acquire_lock "technical_research"
 
@@ -18,4 +18,4 @@ if [[ ! -f "$MARKET_FEED_DIR/manifest.json" ]]; then
   exit 1
 fi
 
-run_codex_prompt "technical_research" "$AGENT_ROOT/prompts/technical_research.txt"
+run_codex_prompt "technical_research" "$AGENT_ROOT/prompts/technical/research.txt"

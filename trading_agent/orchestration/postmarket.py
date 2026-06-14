@@ -17,4 +17,4 @@ def run_postmarket_pipeline(*, dry_run: bool) -> int:
     agent_root = Path.cwd()
     if not _is_weekday_pt() and os.environ.get("ALLOW_WEEKEND_RUN", "0") != "1":
         return 0
-    return run_codex_prompt("postmarket", agent_root, agent_root / "prompts" / "postmarket_summary.txt")
+    return run_codex_prompt("postmarket", agent_root, agent_root / "prompts" / "postmarket" / "summary.txt")

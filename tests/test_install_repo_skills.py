@@ -5,8 +5,8 @@ import unittest
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-INSTALL_SCRIPT = REPO_ROOT / "scripts" / "install_repo_skills.sh"
-VERIFY_SCRIPT = REPO_ROOT / "scripts" / "verify_repo_skills.sh"
+INSTALL_SCRIPT = REPO_ROOT / "scripts" / "skills" / "install_repo_skills.sh"
+VERIFY_SCRIPT = REPO_ROOT / "scripts" / "skills" / "verify_repo_skills.sh"
 
 
 class RepoSkillInstallTests(unittest.TestCase):
@@ -46,10 +46,10 @@ class CommonRuntimeSkillFeedTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             tmp = Path(tmpdir)
             (tmp / "config").mkdir()
-            (tmp / "scripts").mkdir()
+            (tmp / "scripts" / "lib").mkdir(parents=True)
             (tmp / "config" / "runtime.env").write_text("TRADING_MODE=paper\n", encoding="utf-8")
-            (tmp / "scripts" / "common.sh").write_text(
-                (REPO_ROOT / "scripts" / "common.sh").read_text(encoding="utf-8"),
+            (tmp / "scripts" / "lib" / "common.sh").write_text(
+                (REPO_ROOT / "scripts" / "lib" / "common.sh").read_text(encoding="utf-8"),
                 encoding="utf-8",
             )
 
@@ -58,7 +58,7 @@ class CommonRuntimeSkillFeedTests(unittest.TestCase):
                     "bash",
                     "-lc",
                     (
-                        f"cd {tmp} && source scripts/common.sh && "
+                        f"cd {tmp} && source scripts/lib/common.sh && "
                         "printf '%s\\n%s\\n%s\\n%s\\n%s' "
                         "\"$ENABLE_MARKET_FEED_LAYER\" "
                         "\"$MARKET_FEED_DIR\" "
@@ -82,10 +82,10 @@ class CommonRuntimeSkillFeedTests(unittest.TestCase):
             tmp = Path(tmpdir)
             override_dir = tmp / "custom-feed"
             (tmp / "config").mkdir()
-            (tmp / "scripts").mkdir()
+            (tmp / "scripts" / "lib").mkdir(parents=True)
             (tmp / "config" / "runtime.env").write_text("TRADING_MODE=paper\n", encoding="utf-8")
-            (tmp / "scripts" / "common.sh").write_text(
-                (REPO_ROOT / "scripts" / "common.sh").read_text(encoding="utf-8"),
+            (tmp / "scripts" / "lib" / "common.sh").write_text(
+                (REPO_ROOT / "scripts" / "lib" / "common.sh").read_text(encoding="utf-8"),
                 encoding="utf-8",
             )
 
@@ -93,7 +93,7 @@ class CommonRuntimeSkillFeedTests(unittest.TestCase):
                 [
                     "bash",
                     "-lc",
-                    f"cd {tmp} && export MARKET_FEED_DIR={override_dir} && source scripts/common.sh && printf '%s' \"$MARKET_FEED_DIR\"",
+                    f"cd {tmp} && export MARKET_FEED_DIR={override_dir} && source scripts/lib/common.sh && printf '%s' \"$MARKET_FEED_DIR\"",
                 ],
                 capture_output=True,
                 text=True,
@@ -108,10 +108,10 @@ class CommonRuntimeSkillFeedTests(unittest.TestCase):
             tmp = Path(tmpdir)
             fake_python = tmp / "fake-python"
             (tmp / "config").mkdir()
-            (tmp / "scripts").mkdir()
+            (tmp / "scripts" / "lib").mkdir(parents=True)
             (tmp / "config" / "runtime.env").write_text("TRADING_MODE=paper\n", encoding="utf-8")
-            (tmp / "scripts" / "common.sh").write_text(
-                (REPO_ROOT / "scripts" / "common.sh").read_text(encoding="utf-8"),
+            (tmp / "scripts" / "lib" / "common.sh").write_text(
+                (REPO_ROOT / "scripts" / "lib" / "common.sh").read_text(encoding="utf-8"),
                 encoding="utf-8",
             )
             fake_python.write_text(
@@ -128,7 +128,7 @@ class CommonRuntimeSkillFeedTests(unittest.TestCase):
                     "-lc",
                     (
                         f"cd {tmp} && export MARKET_FEED_PYTHON_BIN={fake_python} && "
-                        "source scripts/common.sh && resolve_market_feed_python_bin"
+                        "source scripts/lib/common.sh && resolve_market_feed_python_bin"
                     ),
                 ],
                 capture_output=True,
