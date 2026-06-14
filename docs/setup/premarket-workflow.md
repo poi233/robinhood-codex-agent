@@ -77,6 +77,13 @@ state/runs/<date>/
     catalyst_snapshot.json
     daily_plan.json
     daily_plan.md
+  paper/
+    day_start.json
+    day_end.json
+    equity_curve.jsonl
+    account.json
+    positions.json
+    orders.jsonl
   archive/
 
 logs/runs/<date>/

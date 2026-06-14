@@ -42,6 +42,99 @@ def _append_order(path: Path, payload: dict[str, Any]) -> None:
         handle.write(json.dumps(payload, sort_keys=True) + "\n")
 
 
+def _position_payload(position: Any, symbol: str) -> dict[str, Any]:
+    if isinstance(position, dict):
+        payload = dict(position)
+        payload.setdefault("symbol", symbol)
+        return payload
+    return {
+        "symbol": getattr(position, "symbol", symbol),
+        "quantity": getattr(position, "quantity", 0.0),
+        "average_cost": getattr(position, "average_cost", 0.0),
+        "market_price": getattr(position, "market_price", 0.0),
+    }
+
+
+def _normalize_positions(positions: Any) -> dict[str, Any]:
+    if not isinstance(positions, dict):
+        return {}
+    return {str(symbol).upper(): _position_payload(position, str(symbol).upper()) for symbol, position in positions.items()}
+
+
+def _positions_market_value(positions: dict[str, Any]) -> float:
+    total = 0.0
+    for position in positions.values():
+        if not isinstance(position, dict):
+            continue
+        quantity = float(position.get("quantity", 0) or 0)
+        price = float(position.get("market_price") or position.get("price") or position.get("last_trade_price") or 0)
+        total += quantity * price
+    return round(total, 2)
+
+
+def _snapshot_payload(
+    *,
+    run_date: str,
+    event: str,
+    account: dict[str, Any],
+    positions: dict[str, Any],
+    timestamp: str | None = None,
+) -> dict[str, Any]:
+    resolved_timestamp = timestamp or datetime.now(tz=PT).isoformat()
+    cash = round(float(account.get("cash", account.get("buying_power", 0)) or 0), 2)
+    positions_value = _positions_market_value(positions)
+    return {
+        "timestamp": resolved_timestamp,
+        "date": run_date,
+        "event": event,
+        "cash": cash,
+        "starting_cash": round(float(account.get("starting_cash", cash) or cash), 2),
+        "realized_pnl": round(float(account.get("realized_pnl", 0) or 0), 2),
+        "positions_market_value": positions_value,
+        "total_equity": round(cash + positions_value, 2),
+        "positions": positions,
+    }
+
+
+def _append_equity_point(path: Path, payload: dict[str, Any]) -> None:
+    point = {key: value for key, value in payload.items() if key != "positions"}
+    _append_order(path, point)
+
+
+def record_paper_day_start(
+    agent_root: Path,
+    *,
+    run_date: str,
+    starting_cash: float,
+    positions: dict[str, Any] | None = None,
+) -> bool:
+    paths = build_runtime_paths(agent_root, run_date=run_date)
+    if paths.paper_day_start_path.exists():
+        return False
+    account = _initialize_account(paths.paper_account_path, starting_cash)
+    normalized_positions = _normalize_positions(positions) if positions is not None else _read_json_or(paths.paper_positions_path, {})
+    if not isinstance(normalized_positions, dict):
+        normalized_positions = {}
+    payload = _snapshot_payload(run_date=run_date, event="day_start", account=account, positions=normalized_positions)
+    write_json(paths.paper_account_path, account)
+    write_json(paths.paper_positions_path, normalized_positions)
+    write_json(paths.paper_day_start_path, payload)
+    _append_equity_point(paths.paper_equity_curve_path, payload)
+    return True
+
+
+def record_paper_day_end(agent_root: Path, *, run_date: str) -> bool:
+    paths = build_runtime_paths(agent_root, run_date=run_date)
+    account = _initialize_account(paths.paper_account_path, 0.0)
+    positions = _read_json_or(paths.paper_positions_path, {})
+    if not isinstance(positions, dict):
+        positions = {}
+    payload = _snapshot_payload(run_date=run_date, event="day_end", account=account, positions=positions)
+    write_json(paths.paper_day_end_path, payload)
+    _append_equity_point(paths.paper_equity_curve_path, payload)
+    return True
+
+
 def _update_daily_usage(path: Path, *, run_date: str, notional: float, timestamp: str) -> None:
     usage = _read_json_or(path, {})
     if not isinstance(usage, dict):
@@ -105,6 +198,7 @@ def apply_paper_intent(
         return PaperFillResult(False, "no_paper_fill")
 
     paths = build_runtime_paths(agent_root, run_date=run_date)
+    record_paper_day_start(agent_root, run_date=run_date, starting_cash=starting_cash)
     account = _initialize_account(paths.paper_account_path, starting_cash)
     positions = _read_json_or(paths.paper_positions_path, {})
     if not isinstance(positions, dict):
@@ -132,4 +226,8 @@ def apply_paper_intent(
     write_json(paths.paper_positions_path, positions)
     _append_order(paths.paper_orders_log_path, order)
     _update_daily_usage(paths.daily_usage_path, run_date=run_date, notional=order["notional"], timestamp=now)
+    _append_equity_point(
+        paths.paper_equity_curve_path,
+        _snapshot_payload(run_date=run_date, event="fill", account=account, positions=positions, timestamp=now),
+    )
     return result

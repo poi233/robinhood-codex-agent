@@ -5,6 +5,9 @@ from datetime import datetime
 from pathlib import Path
 
 from trading_agent.core.time import PT
+from trading_agent.core.config import load_runtime_config
+from trading_agent.core.time import pt_date_string
+from trading_agent.paper.broker import record_paper_day_end
 from trading_agent.prompts.codex import run_codex_prompt
 
 
@@ -17,4 +20,8 @@ def run_postmarket_pipeline(*, dry_run: bool) -> int:
     agent_root = Path.cwd()
     if not _is_weekday_pt() and os.environ.get("ALLOW_WEEKEND_RUN", "0") != "1":
         return 0
-    return run_codex_prompt("postmarket", agent_root, agent_root / "prompts" / "postmarket" / "summary.txt")
+    status = run_codex_prompt("postmarket", agent_root, agent_root / "prompts" / "postmarket" / "summary.txt")
+    runtime = load_runtime_config(agent_root)
+    if runtime.trading_mode == "paper":
+        record_paper_day_end(agent_root, run_date=pt_date_string())
+    return status

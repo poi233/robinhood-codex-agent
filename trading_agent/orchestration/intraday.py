@@ -10,7 +10,7 @@ from trading_agent.core.config import load_runtime_config
 from trading_agent.core.context import build_runtime_paths
 from trading_agent.core.time import PT
 from trading_agent.core.time import pt_date_string
-from trading_agent.paper.broker import apply_paper_intent
+from trading_agent.paper.broker import apply_paper_intent, record_paper_day_start
 from trading_agent.policy.engine import generate_order_intent
 from trading_agent.policy.loaders import load_policy_inputs
 from trading_agent.policy.models import PolicyDecision
@@ -71,6 +71,13 @@ def run_intraday_pipeline(*, dry_run: bool) -> int:
         risk_tier=runtime.risk_tier,
         robinhood_gateway=None,
     )
+    if runtime.trading_mode == "paper":
+        record_paper_day_start(
+            agent_root,
+            run_date=run_date,
+            starting_cash=float(inputs.account.get("buying_power", 0) or 0),
+            positions=inputs.positions,
+        )
     decision = generate_order_intent(inputs)
     if runtime.trading_mode == "paper" and decision.decision == "would_trade":
         paper_result = apply_paper_intent(

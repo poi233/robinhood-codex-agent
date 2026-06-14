@@ -53,7 +53,10 @@ class IntradayPolicyIntegrationTests(unittest.TestCase):
 
                     status = intraday_module.run_intraday_pipeline(dry_run=False)
                     decisions = read_decisions(root)
-                    paper_orders_written = (root / "state" / "runs" / "2026-06-14" / "paper" / "orders.jsonl").exists()
+                    paper_dir = root / "state" / "runs" / "2026-06-14" / "paper"
+                    paper_orders_written = (paper_dir / "orders.jsonl").exists()
+                    day_start_written = (paper_dir / "day_start.json").exists()
+                    equity_curve_written = (paper_dir / "equity_curve.jsonl").exists()
             finally:
                 os.chdir(original_cwd)
 
@@ -64,6 +67,8 @@ class IntradayPolicyIntegrationTests(unittest.TestCase):
         self.assertEqual(decisions[0]["action_taken"], "paper_fill")
         self.assertEqual(decisions[0]["proposed_order"]["symbol"], "NVDA")
         self.assertTrue(paper_orders_written)
+        self.assertTrue(day_start_written)
+        self.assertTrue(equity_curve_written)
 
     def test_review_mode_blocks_when_execution_is_unwired(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

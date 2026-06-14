@@ -41,6 +41,9 @@ class RuntimePaths:
     paper_account_path: Path
     paper_positions_path: Path
     paper_orders_log_path: Path
+    paper_day_start_path: Path
+    paper_day_end_path: Path
+    paper_equity_curve_path: Path
     decisions_log_path: Path
     orders_log_path: Path
     codex_run_log_path: Path
@@ -102,6 +105,9 @@ def build_runtime_paths(agent_root: Path, *, run_date: str | None = None) -> Run
         paper_account_path=_resolve_env_path(agent_root, "PAPER_ACCOUNT_PATH", paper_dir / "account.json"),
         paper_positions_path=_resolve_env_path(agent_root, "PAPER_POSITIONS_PATH", paper_dir / "positions.json"),
         paper_orders_log_path=_resolve_env_path(agent_root, "PAPER_ORDERS_LOG_PATH", paper_dir / "orders.jsonl"),
+        paper_day_start_path=_resolve_env_path(agent_root, "PAPER_DAY_START_PATH", paper_dir / "day_start.json"),
+        paper_day_end_path=_resolve_env_path(agent_root, "PAPER_DAY_END_PATH", paper_dir / "day_end.json"),
+        paper_equity_curve_path=_resolve_env_path(agent_root, "PAPER_EQUITY_CURVE_PATH", paper_dir / "equity_curve.jsonl"),
         decisions_log_path=_resolve_env_path(agent_root, "DECISIONS_LOG_PATH", run_logs_dir / "decisions.jsonl"),
         orders_log_path=_resolve_env_path(agent_root, "ORDERS_LOG_PATH", run_logs_dir / "orders.jsonl"),
         codex_run_log_path=_resolve_env_path(agent_root, "CODEX_RUN_LOG_PATH", run_logs_dir / "codex_runs.log"),

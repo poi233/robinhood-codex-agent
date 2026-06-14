@@ -194,6 +194,9 @@ state/runs/YYYY-MM-DD/
     daily_plan.md
     daily_usage.json
   paper/
+    day_start.json
+    day_end.json
+    equity_curve.jsonl
     account.json
     positions.json
     orders.jsonl
@@ -218,8 +221,10 @@ Important state contracts:
 - `planner/quote_snapshot_core.json` and `planner/quote_snapshot_candidates.json` provide intraday
   prices.
 - `planner/daily_usage.json` starts from the final premarket planner and is updated by paper fills.
-- `paper/account.json`, `paper/positions.json`, and `paper/orders.jsonl` are the local simulated
-  account used only in `TRADING_MODE=paper`.
+- `paper/day_start.json`, `paper/day_end.json`, and `paper/equity_curve.jsonl` are the
+  visualization-friendly daily paper snapshots and equity curve.
+- `paper/account.json`, `paper/positions.json`, and `paper/orders.jsonl` are the current simulated
+  account ledger used only in `TRADING_MODE=paper`.
 - In paper mode, policy loading first reads real snapshots and then overlays the paper ledger cash
   and positions.
 
@@ -326,6 +331,10 @@ When policy returns `would_trade`:
 - Sells require an existing paper position, increase cash, reduce/remove the position, and update
   realized PnL.
 - Every fill appends to `paper/orders.jsonl`.
+- The first paper intraday run writes `paper/day_start.json` once.
+- Postmarket writes `paper/day_end.json`.
+- Paper fills append `fill` points to `paper/equity_curve.jsonl`; day start/end append their own
+  equity curve points.
 - Every fill updates `planner/daily_usage.json`:
   - `used_notional`
   - `paper_filled_notional`
