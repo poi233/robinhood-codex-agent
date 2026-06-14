@@ -50,6 +50,7 @@ def build_runtime_block(run_kind: str, agent_root: Path) -> str:
         "TODAY_ALLOWLIST_PATH": str(paths.today_allowlist_path),
         "DAILY_USAGE_PATH": str(paths.daily_usage_path),
         "ACCOUNT_SNAPSHOT_PATH": str(paths.account_snapshot_path),
+        "CAPITAL_SNAPSHOT_PATH": str(paths.capital_snapshot_path),
         "MARKET_CALENDAR_PATH": str(paths.market_calendar_path),
         "QUOTE_SNAPSHOT_CORE_PATH": str(paths.quote_snapshot_core_path),
         "CANDIDATE_SNAPSHOT_PATH": str(paths.candidate_snapshot_path),

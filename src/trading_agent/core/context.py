@@ -37,6 +37,7 @@ class RuntimePaths:
     today_allowlist_path: Path
     daily_usage_path: Path
     account_snapshot_path: Path
+    capital_snapshot_path: Path
     market_calendar_path: Path
     quote_snapshot_core_path: Path
     candidate_snapshot_path: Path
@@ -110,6 +111,7 @@ def build_runtime_paths(agent_root: Path, *, run_date: str | None = None) -> Run
         today_allowlist_path=_resolve_env_path(agent_root, "TODAY_ALLOWLIST_PATH", planner_dir / "today_allowlist.txt"),
         daily_usage_path=_resolve_env_path(agent_root, "DAILY_USAGE_PATH", planner_dir / "daily_usage.json"),
         account_snapshot_path=_resolve_env_path(agent_root, "ACCOUNT_SNAPSHOT_PATH", planner_dir / "account_snapshot.json"),
+        capital_snapshot_path=_resolve_env_path(agent_root, "CAPITAL_SNAPSHOT_PATH", planner_dir / "capital_snapshot.json"),
         market_calendar_path=_resolve_env_path(agent_root, "MARKET_CALENDAR_PATH", planner_dir / "market_calendar.json"),
         quote_snapshot_core_path=_resolve_env_path(agent_root, "QUOTE_SNAPSHOT_CORE_PATH", planner_dir / "quote_snapshot_core.json"),
         candidate_snapshot_path=_resolve_env_path(agent_root, "CANDIDATE_SNAPSHOT_PATH", planner_dir / "candidate_snapshot.json"),

@@ -83,6 +83,9 @@ def snapshot_stage_artifacts(agent_root: Path, run_date: str, stage: str) -> lis
         "account_snapshot": [
             (paths.account_snapshot_path, run_dir / "planner" / "account_snapshot.json"),
         ],
+        "capital_snapshot": [
+            (paths.capital_snapshot_path, run_dir / "planner" / "capital_snapshot.json"),
+        ],
         "market_calendar": [
             (paths.market_calendar_path, run_dir / "planner" / "market_calendar.json"),
         ],
@@ -103,6 +106,7 @@ def snapshot_stage_artifacts(agent_root: Path, run_date: str, stage: str) -> lis
         ],
         "planner": [
             (paths.account_snapshot_path, run_dir / "planner" / "account_snapshot.json"),
+            (paths.capital_snapshot_path, run_dir / "planner" / "capital_snapshot.json"),
             (paths.market_calendar_path, run_dir / "planner" / "market_calendar.json"),
             (paths.quote_snapshot_core_path, run_dir / "planner" / "quote_snapshot_core.json"),
             (paths.candidate_snapshot_path, run_dir / "planner" / "candidate_snapshot.json"),

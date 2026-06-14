@@ -13,6 +13,7 @@ Read these local files first:
 - `src/config/runtime.env`
 - `src/config/dsa_strategy_weights.json`
 - `ACCOUNT_SNAPSHOT_PATH`
+- `CAPITAL_SNAPSHOT_PATH`
 - `MARKET_CALENDAR_PATH`
 - `QUOTE_SNAPSHOT_CORE_PATH`
 - `CANDIDATE_SNAPSHOT_PATH`
@@ -50,32 +51,33 @@ Tasks:
    - Use `long_setup`, `short_setup`, and `no_trade_zone` to refine written `symbol_trade_rules` for the daily plan.
    - If it is missing, stale, invalid, or partial, continue the main scan and record `technical_signal_status` accordingly.
 8. Read `QUOTE_SNAPSHOT_CORE_PATH`, `CANDIDATE_SNAPSHOT_PATH`, `QUOTE_SNAPSHOT_CANDIDATES_PATH`, `TRADABILITY_SNAPSHOT_PATH`, and `CATALYST_SNAPSHOT_PATH`.
-9. Perform an aggressive-growth market scan from the snapshots:
+9. Read `CAPITAL_SNAPSHOT_PATH`. In `TRADING_MODE=paper`, use `sizing_buying_power` from this file for paper sizing; do not use Robinhood `ACCOUNT_SNAPSHOT_PATH.buying_power` as paper buying power. Keep Robinhood buying power as a real-account reference only.
+10. Perform an aggressive-growth market scan from the snapshots:
    - market regime: SPY, QQQ, IWM, SMH, VIX if available, rates/DXY if available;
    - priority sectors: AI semiconductors, AI data-center infrastructure, CPO/photonics/interconnect, space/defense/autonomy, nuclear/power, high-beta AI software;
    - catalysts: earnings dates, guidance/news, contracts, launches, investor days, policy/regulatory items, sector momentum;
    - technicals: gap, relative strength, prior close, reclaim/breakout/pullback setup, liquidity;
-   - portfolio/account fit: small Agentic Account cash, existing positions, open orders, buying power from `ACCOUNT_SNAPSHOT_PATH`.
-10. Apply a compressed multi-framework quality check before selecting candidates:
+   - portfolio/account fit: paper buying power from `CAPITAL_SNAPSHOT_PATH`, real Agentic Account reference from `ACCOUNT_SNAPSHOT_PATH`, existing positions, and open orders.
+11. Apply a compressed multi-framework quality check before selecting candidates:
    - Serenity/narrow-gate: is there a real supply-chain bottleneck or hard catalyst?
    - Public-equity PM: why now, what is priced in, first rebuttal, what kills the setup?
    - Buffett filter: avoid obvious quality/balance-sheet/valuation traps for larger orders.
    - TradingAgents-style debate: bull case, bear case, risk manager limit.
    - UZI-style trap screen: avoid hype-only moves, thin liquidity, financing/issuance risk, and unverified news.
-11. Apply Daily Stock Analysis-style signal blending:
+12. Apply Daily Stock Analysis-style signal blending:
    - Use `hot_theme`, `event_driven`, `bull_trend`, `shrink_pullback`, `volume_breakout`, `growth_quality`, and `dragon_head` signals only when supported by current data.
    - A DSA `promote` signal can add confidence, but cannot select a symbol that fails Robinhood quote/tradability/risk checks.
    - A DSA `block` signal should block the symbol unless stronger verified current evidence proves the block is obsolete.
    - A DSA `watch_only` or low-confidence signal cannot become an executable candidate by itself.
-12. Select 3-8 symbols for today's dynamic allowlist. Prefer AI, space, defense, nuclear/power, and infrastructure when their score and data quality justify it. Include broad ETFs only when single-name quality is weak or market risk is elevated.
-13. Decide today's `market_regime`: `normal`, `aggressive_ok`, `risk_off`, or `no_trade`.
-14. Decide today's `risk_level`, `risk_multiplier`, `today_watchlist`, `blocked_symbols`, `allowed_actions`, and per-symbol rules.
-15. Write `TODAY_ALLOWLIST_PATH` with today's selected symbols, one symbol per line. Include comments only after `#`.
-16. Write `DYNAMIC_ALLOWLIST_PATH` with scores and reasons.
-17. Write `DAILY_PLAN_PATH` with the exact JSON schema below.
-18. Write `DAILY_PLAN_MARKDOWN_PATH` with a concise human-readable summary.
-19. Initialize or reset `DAILY_USAGE_PATH` for the current date, preserving no old usage if the date changed.
-20. Append one JSON line to `DECISIONS_LOG_PATH` with `decision="premarket_plan"`.
+13. Select 3-8 symbols for today's dynamic allowlist. Prefer AI, space, defense, nuclear/power, and infrastructure when their score and data quality justify it. Include broad ETFs only when single-name quality is weak or market risk is elevated.
+14. Decide today's `market_regime`: `normal`, `aggressive_ok`, `risk_off`, or `no_trade`.
+15. Decide today's `risk_level`, `risk_multiplier`, `today_watchlist`, `blocked_symbols`, `allowed_actions`, and per-symbol rules.
+16. Write `TODAY_ALLOWLIST_PATH` with today's selected symbols, one symbol per line. Include comments only after `#`.
+17. Write `DYNAMIC_ALLOWLIST_PATH` with scores and reasons.
+18. Write `DAILY_PLAN_PATH` with the exact JSON schema below.
+19. Write `DAILY_PLAN_MARKDOWN_PATH` with a concise human-readable summary. Include both `Paper buying power` and `Robinhood Agentic account buying power` in the Account Fit section.
+20. Initialize or reset `DAILY_USAGE_PATH` for the current date, preserving no old usage if the date changed.
+21. Append one JSON line to `DECISIONS_LOG_PATH` with `decision="premarket_plan"`.
 
 `DAILY_PLAN_PATH` schema:
 {
@@ -93,6 +95,12 @@ Tasks:
   "allowed_actions": ["small_limit_buy", "partial_take_profit"],
   "max_daily_notional": 25,
   "max_single_order_notional": 10,
+  "capital_snapshot": {
+    "sizing_buying_power": 0.0,
+    "sizing_source": "paper_account|paper_starting_cash|robinhood_account_snapshot|missing_robinhood_account_snapshot",
+    "paper_buying_power": 0.0,
+    "real_account_buying_power": 0.0
+  },
   "symbol_trade_rules": {
     "SPY": {
       "score": 0,
@@ -159,6 +167,8 @@ Safety requirements:
 - If the universe cannot be read, set `market_regime="no_trade"`.
 - If fewer than 1 symbol passes data/tradability/score checks, set `market_regime="no_trade"`.
 - If `TRADABILITY_SNAPSHOT_PATH` is missing or failed, do not select executable candidates.
+- If `CAPITAL_SNAPSHOT_PATH` is missing or failed, set `market_regime="no_trade"`.
+- In paper mode, never cap sizing with Robinhood `ACCOUNT_SNAPSHOT_PATH.buying_power`; cap with `CAPITAL_SNAPSHOT_PATH.sizing_buying_power`.
 - Do not select a symbol outside `src/config/universe.txt`.
 - Do not let `max_single_order_notional` or `max_daily_notional` exceed the runtime risk tier caps.
 - Use `src/config/risk_tiers.json` as the machine-readable source for tier caps.

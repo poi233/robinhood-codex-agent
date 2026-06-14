@@ -185,6 +185,7 @@ runtime/state/runs/YYYY-MM-DD/
     technical_signals.json
   planner/
     account_snapshot.json
+    capital_snapshot.json
     market_calendar.json
     quote_snapshot_core.json
     candidate_snapshot.json
@@ -222,6 +223,9 @@ Important state contracts:
 
 - `planner/account_snapshot.json` is the local account/positions/open-orders source created by the
   premarket account snapshot prompt.
+- `planner/capital_snapshot.json` separates paper and real account capital. In paper mode, sizing
+  uses the paper ledger or `PAPER_STARTING_CASH`; Robinhood buying power remains a read-only
+  real-account reference.
 - `planner/quote_snapshot_core.json` and `planner/quote_snapshot_candidates.json` provide intraday
   prices.
 - `planner/trader_watch_levels.json` is a normalized, trader-facing copy of technical price levels:
@@ -250,21 +254,23 @@ python3 -m trading_agent premarket
 Premarket does the following:
 
 1. Writes `planner/account_snapshot.json` with Robinhood account, positions, and open orders.
-2. Collects deterministic market context with yfinance-backed data into `market_feed/`.
-3. Runs advisory layers in parallel:
+2. Writes `planner/capital_snapshot.json`, separating paper sizing cash from real Robinhood buying
+   power.
+3. Collects deterministic market context with yfinance-backed data into `market_feed/`.
+4. Runs advisory layers in parallel:
    - DSA-inspired signal scan through Codex.
    - Kronos forecast locally.
    - Repo-owned technical research through Codex.
    - Market calendar snapshot through Codex.
    - Core quote snapshot through Codex.
-4. Builds `planner/trader_watch_levels.json` locally from the technical layer. This is a schema
+5. Builds `planner/trader_watch_levels.json` locally from the technical layer. This is a schema
    normalization step only; it does not create new technical opinions.
-5. Builds `planner/candidate_snapshot.json` locally from account holdings, open orders, and advisory
+6. Builds `planner/candidate_snapshot.json` locally from account holdings, open orders, and advisory
    signals.
-6. Runs candidate quote, tradability, and catalyst enrichment prompts in parallel.
-7. Runs the final premarket planner prompt.
-8. Archives `archive/premarket_report.json`.
-9. Logs stage status to `runtime/logs/runs/YYYY-MM-DD/pipeline.jsonl`.
+7. Runs candidate quote, tradability, and catalyst enrichment prompts in parallel.
+8. Runs the final premarket planner prompt.
+9. Archives `archive/premarket_report.json`.
+10. Logs stage status to `runtime/logs/runs/YYYY-MM-DD/pipeline.jsonl`.
 
 The final planner writes:
 

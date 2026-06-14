@@ -16,6 +16,7 @@ from trading_agent.core.time import PT, pt_date_string
 from trading_agent.data.market_context import collect_market_context
 from trading_agent.data.universe import parse_universe
 from trading_agent.planner.candidates import build_candidate_snapshot
+from trading_agent.planner.risk_overlay import build_capital_snapshot
 from trading_agent.prompts.codex import run_codex_prompt
 from trading_agent.reporting.premarket import build_fail_closed_daily_plan, build_premarket_archive_payload
 from trading_agent.reporting.trader_watch_levels import build_trader_watch_levels
@@ -30,6 +31,7 @@ from trading_agent.signals.technical_fallback import build_failed_technical_payl
 @dataclass
 class PremarketPipeline:
     run_account_snapshot: callable
+    run_capital_snapshot: callable
     collect_market_context: callable
     run_dsa: callable
     run_kronos: callable
@@ -46,6 +48,7 @@ class PremarketPipeline:
 
     def run(self) -> None:
         self.run_account_snapshot()
+        self.run_capital_snapshot()
         self.collect_market_context()
         with ThreadPoolExecutor(max_workers=5) as executor:
             futures = [
@@ -175,6 +178,21 @@ def run_premarket_pipeline(*, dry_run: bool) -> int:
         )
         if status != 0:
             raise RuntimeError("account snapshot prompt failed")
+
+    def run_capital_snapshot() -> None:
+        account_snapshot = read_json(paths.account_snapshot_path) if paths.account_snapshot_path.exists() else {}
+        paper_account = read_json(paths.paper_account_path) if paths.paper_account_path.exists() else None
+        paper_starting_cash = float(os.environ.get("PAPER_STARTING_CASH", "400000") or 400000)
+        write_json(
+            paths.capital_snapshot_path,
+            build_capital_snapshot(
+                run_date=run_date,
+                trading_mode=os.environ.get("TRADING_MODE", "paper"),
+                paper_account=paper_account if isinstance(paper_account, dict) else None,
+                account_snapshot=account_snapshot if isinstance(account_snapshot, dict) else {},
+                paper_starting_cash=paper_starting_cash,
+            ),
+        )
 
     def collect_context() -> None:
         if os.environ.get("ENABLE_MARKET_FEED_LAYER", "1") != "1":
@@ -326,6 +344,7 @@ def run_premarket_pipeline(*, dry_run: bool) -> int:
 
     pipeline = PremarketPipeline(
         run_account_snapshot=lambda: run_stage("account_snapshot", run_account_snapshot),
+        run_capital_snapshot=lambda: run_stage("capital_snapshot", run_capital_snapshot),
         collect_market_context=lambda: run_stage("market_context", collect_context),
         run_dsa=lambda: run_stage("dsa", run_dsa),
         run_kronos=lambda: run_stage("kronos", run_kronos),

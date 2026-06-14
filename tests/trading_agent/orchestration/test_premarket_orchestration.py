@@ -14,6 +14,7 @@ class PremarketOrchestrationTests(unittest.TestCase):
 
         pipeline = PremarketPipeline(
             run_account_snapshot=lambda: events.append("account_snapshot"),
+            run_capital_snapshot=lambda: events.append("capital_snapshot"),
             collect_market_context=lambda: events.append("market_context"),
             run_dsa=lambda: events.append("dsa"),
             run_kronos=lambda: events.append("kronos"),
@@ -31,7 +32,7 @@ class PremarketOrchestrationTests(unittest.TestCase):
 
         pipeline.run()
 
-        self.assertEqual(events[:2], ["account_snapshot", "market_context"])
+        self.assertEqual(events[:3], ["account_snapshot", "capital_snapshot", "market_context"])
         self.assertLess(events.index("account_snapshot"), events.index("quote_snapshot_core"))
         self.assertLess(events.index("technical"), events.index("trader_watch_levels"))
         self.assertLess(events.index("trader_watch_levels"), events.index("candidate_merge"))
@@ -49,6 +50,7 @@ class PremarketOrchestrationTests(unittest.TestCase):
 
         pipeline = PremarketPipeline(
             run_account_snapshot=lambda: events.append("account_snapshot"),
+            run_capital_snapshot=lambda: events.append("capital_snapshot"),
             collect_market_context=lambda: events.append("market_context"),
             run_dsa=broken_dsa,
             run_kronos=lambda: events.append("kronos"),
@@ -73,6 +75,7 @@ class PremarketOrchestrationTests(unittest.TestCase):
 
         pipeline = PremarketPipeline(
             run_account_snapshot=lambda: events.append("account_snapshot"),
+            run_capital_snapshot=lambda: events.append("capital_snapshot"),
             collect_market_context=lambda: events.append("market_context"),
             run_dsa=lambda: events.append("dsa"),
             run_kronos=lambda: events.append("kronos"),
