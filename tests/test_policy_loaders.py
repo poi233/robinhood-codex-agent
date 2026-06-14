@@ -175,6 +175,84 @@ class PolicyLoaderTests(unittest.TestCase):
         self.assertEqual(inputs.positions, {})
         self.assertEqual(inputs.open_orders, [])
 
+    def test_load_policy_inputs_reads_premarket_account_and_quote_snapshots(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            (root / "config").mkdir()
+            (root / "state" / "runs" / "2026-06-14" / "planner").mkdir(parents=True)
+            (root / "config" / "universe.txt").write_text("NVDA\nSMH\n", encoding="utf-8")
+            (root / "state" / "runs" / "2026-06-14" / "planner" / "today_allowlist.txt").write_text("NVDA\nSMH\n", encoding="utf-8")
+            write_json(root / "config" / "risk_tiers.json", {"0": {"max_single_order_notional": 10, "max_daily_notional": 25}})
+            write_json(
+                root / "state" / "runs" / "2026-06-14" / "planner" / "daily_plan.json",
+                {
+                    "date": "2026-06-14",
+                    "market_regime": "normal",
+                    "allowed_actions": ["small_limit_buy"],
+                    "today_watchlist": ["NVDA", "SMH"],
+                    "symbol_trade_rules": {"NVDA": {"max_notional": 10}},
+                },
+            )
+            write_json(
+                root / "state" / "runs" / "2026-06-14" / "planner" / "account_snapshot.json",
+                {
+                    "data_status": "ok",
+                    "agentic_account_identified": True,
+                    "buying_power": "31.25",
+                    "current_positions": [{"symbol": "NVDA", "quantity": "1", "average_cost": "100", "market_price": "105"}],
+                    "open_orders": [{"symbol": "SMH", "side": "buy", "quantity": "0.1", "notional": "26", "status": "queued"}],
+                },
+            )
+            write_json(
+                root / "state" / "runs" / "2026-06-14" / "planner" / "quote_snapshot_core.json",
+                {"symbols": {"NVDA": {"last_price": "105.50", "previous_close": "103.00"}}},
+            )
+            write_json(
+                root / "state" / "runs" / "2026-06-14" / "planner" / "quote_snapshot_candidates.json",
+                {"symbols": {"SMH": {"last_price": "260.10", "previous_close": "259.00"}}},
+            )
+
+            inputs = load_policy_inputs(root, run_date="2026-06-14", trading_mode="paper", risk_tier=0)
+
+        self.assertEqual(inputs.account["buying_power"], 31.25)
+        self.assertEqual(inputs.positions["NVDA"].quantity, 1.0)
+        self.assertEqual(inputs.open_orders[0].symbol, "SMH")
+        self.assertEqual(inputs.quotes["NVDA"].price, 105.5)
+        self.assertEqual(inputs.quotes["SMH"].price, 260.1)
+
+    def test_paper_mode_overrides_account_and_positions_from_paper_ledger(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            (root / "config").mkdir()
+            (root / "state" / "runs" / "2026-06-14" / "planner").mkdir(parents=True)
+            (root / "config" / "universe.txt").write_text("NVDA\n", encoding="utf-8")
+            (root / "state" / "runs" / "2026-06-14" / "planner" / "today_allowlist.txt").write_text("NVDA\n", encoding="utf-8")
+            write_json(root / "config" / "risk_tiers.json", {"0": {"max_single_order_notional": 10, "max_daily_notional": 25}})
+            write_json(
+                root / "state" / "runs" / "2026-06-14" / "planner" / "daily_plan.json",
+                {"date": "2026-06-14", "today_watchlist": ["NVDA"], "allowed_actions": ["small_limit_buy"]},
+            )
+            write_json(
+                root / "state" / "runs" / "2026-06-14" / "planner" / "account_snapshot.json",
+                {
+                    "agentic_account_identified": True,
+                    "buying_power": "100.00",
+                    "current_positions": [{"symbol": "NVDA", "quantity": "5", "average_cost": "90", "market_price": "100"}],
+                },
+            )
+            write_json(root / "state" / "runs" / "2026-06-14" / "planner" / "quote_snapshot_core.json", {"symbols": {"NVDA": {"last_price": "101.00"}}})
+            write_json(root / "state" / "runs" / "2026-06-14" / "paper" / "account.json", {"cash": 14.25})
+            write_json(
+                root / "state" / "runs" / "2026-06-14" / "paper" / "positions.json",
+                {"NVDA": {"symbol": "NVDA", "quantity": 0.1, "average_cost": 100.0, "market_price": 101.0}},
+            )
+
+            inputs = load_policy_inputs(root, run_date="2026-06-14", trading_mode="paper", risk_tier=0)
+
+        self.assertEqual(inputs.account["buying_power"], 14.25)
+        self.assertEqual(inputs.positions["NVDA"].quantity, 0.1)
+        self.assertEqual(inputs.quotes["NVDA"].price, 101.0)
+
 
 if __name__ == "__main__":
     unittest.main()

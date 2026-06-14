@@ -32,7 +32,7 @@ def policy_ready_inputs(*, trading_mode: str = "paper") -> PolicyInputs:
 
 
 def read_decisions(root: Path) -> list[dict[str, object]]:
-    path = root / "logs" / "decisions.jsonl"
+    path = root / "logs" / "runs" / "2026-06-14" / "decisions.jsonl"
     return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()]
 
 
@@ -45,6 +45,7 @@ class IntradayPolicyIntegrationTests(unittest.TestCase):
             try:
                 with mock.patch.object(intraday_module, "_is_weekday_pt", return_value=True), \
                     mock.patch.object(intraday_module, "_is_intraday_window_pt", return_value=True), \
+                    mock.patch.object(intraday_module, "pt_date_string", return_value="2026-06-14"), \
                     mock.patch.object(intraday_module, "load_runtime_config") as load_runtime_config, \
                     mock.patch.object(intraday_module, "load_policy_inputs", return_value=policy_ready_inputs()), \
                     mock.patch.object(intraday_module, "run_codex_prompt") as run_codex_prompt:
@@ -52,6 +53,7 @@ class IntradayPolicyIntegrationTests(unittest.TestCase):
 
                     status = intraday_module.run_intraday_pipeline(dry_run=False)
                     decisions = read_decisions(root)
+                    paper_orders_written = (root / "state" / "runs" / "2026-06-14" / "paper" / "orders.jsonl").exists()
             finally:
                 os.chdir(original_cwd)
 
@@ -59,7 +61,9 @@ class IntradayPolicyIntegrationTests(unittest.TestCase):
         run_codex_prompt.assert_not_called()
         self.assertEqual(len(decisions), 1)
         self.assertEqual(decisions[0]["decision"], "would_trade")
+        self.assertEqual(decisions[0]["action_taken"], "paper_fill")
         self.assertEqual(decisions[0]["proposed_order"]["symbol"], "NVDA")
+        self.assertTrue(paper_orders_written)
 
     def test_review_mode_blocks_when_execution_is_unwired(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -69,6 +73,7 @@ class IntradayPolicyIntegrationTests(unittest.TestCase):
             try:
                 with mock.patch.object(intraday_module, "_is_weekday_pt", return_value=True), \
                     mock.patch.object(intraday_module, "_is_intraday_window_pt", return_value=True), \
+                    mock.patch.object(intraday_module, "pt_date_string", return_value="2026-06-14"), \
                     mock.patch.object(intraday_module, "load_runtime_config") as load_runtime_config, \
                     mock.patch.object(intraday_module, "load_policy_inputs", return_value=policy_ready_inputs(trading_mode="review")):
                     load_runtime_config.return_value = mock.Mock(trading_mode="review", risk_tier=0)
@@ -91,7 +96,8 @@ class IntradayPolicyIntegrationTests(unittest.TestCase):
             os.chdir(root)
             try:
                 with mock.patch.object(intraday_module, "_is_weekday_pt", return_value=True), \
-                    mock.patch.object(intraday_module, "_is_intraday_window_pt", return_value=True):
+                    mock.patch.object(intraday_module, "_is_intraday_window_pt", return_value=True), \
+                    mock.patch.object(intraday_module, "pt_date_string", return_value="2026-06-14"):
                     status = intraday_module.run_intraday_pipeline(dry_run=False)
                     decisions = read_decisions(root)
             finally:

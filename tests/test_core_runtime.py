@@ -18,6 +18,8 @@ class CoreRuntimeTests(unittest.TestCase):
             self.assertEqual(paths.agent_root, root)
             self.assertEqual(paths.state_dir, root / "state")
             self.assertEqual(paths.reports_dir, root / "reports")
+            self.assertEqual(paths.paper_account_path, root / "state" / "runs" / paths.run_date / "paper" / "account.json")
+            self.assertEqual(paths.paper_positions_path, root / "state" / "runs" / paths.run_date / "paper" / "positions.json")
 
     def test_runtime_paths_are_dataclass_like(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

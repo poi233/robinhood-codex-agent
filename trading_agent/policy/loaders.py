@@ -127,6 +127,50 @@ def _parse_quote(payload: dict[str, Any]) -> Quote | None:
     )
 
 
+def _payload_list(value: Any) -> list[dict[str, Any]]:
+    if isinstance(value, list):
+        return [item for item in value if isinstance(item, dict)]
+    if isinstance(value, dict):
+        rows: list[dict[str, Any]] = []
+        for key, item in value.items():
+            if not isinstance(item, dict):
+                continue
+            payload = dict(item)
+            payload.setdefault("symbol", key)
+            rows.append(payload)
+        return rows
+    return []
+
+
+def _hydrate_account_snapshot(inputs: PolicyInputs, snapshot: dict[str, Any]) -> None:
+    account_payload = {
+        "buying_power": snapshot.get("buying_power"),
+        "account_type": "agentic" if snapshot.get("agentic_account_identified") else snapshot.get("account_type"),
+        "status": snapshot.get("data_status"),
+    }
+    if isinstance(snapshot.get("account"), dict):
+        account_payload.update(snapshot["account"])
+    inputs.account = _sanitize_account(account_payload)
+    inputs.positions = {
+        position.symbol: position
+        for payload in _payload_list(snapshot.get("current_positions") or snapshot.get("positions") or snapshot.get("equity_positions"))
+        if (position := _parse_position(payload)) is not None
+    }
+    inputs.open_orders = [
+        order
+        for payload in _payload_list(snapshot.get("open_orders") or snapshot.get("equity_orders") or snapshot.get("orders"))
+        if (order := _parse_open_order(payload)) is not None and order.status.lower() in {"open", "queued", "new", "pending", "partially_filled"}
+    ]
+
+
+def _hydrate_quote_snapshot(inputs: PolicyInputs, snapshot: dict[str, Any]) -> None:
+    candidates = snapshot.get("quotes") or snapshot.get("equity_quotes") or snapshot.get("symbols")
+    for payload in _payload_list(candidates):
+        quote = _parse_quote(payload)
+        if quote is not None:
+            inputs.quotes[quote.symbol] = quote
+
+
 def _quote_symbols(inputs: PolicyInputs) -> list[str]:
     symbols: list[str] = []
     candidates: list[str] = []
@@ -171,6 +215,35 @@ def _hydrate_robinhood_inputs(inputs: PolicyInputs, gateway: RobinhoodPolicyGate
         inputs.quotes = {}
 
 
+def _hydrate_snapshots_if_present(inputs: PolicyInputs, paths: Any) -> None:
+    account = _read_json_if_exists(paths.account_snapshot_path)
+    if account:
+        _hydrate_account_snapshot(inputs, account)
+    for quote_path in (paths.quote_snapshot_core_path, paths.quote_snapshot_candidates_path):
+        quote_snapshot = _read_json_if_exists(quote_path)
+        if quote_snapshot:
+            _hydrate_quote_snapshot(inputs, quote_snapshot)
+
+
+def _hydrate_paper_ledger_if_present(inputs: PolicyInputs, paths: Any) -> None:
+    if inputs.trading_mode != "paper":
+        return
+    account = _read_json_if_exists(paths.paper_account_path)
+    if account:
+        inputs.account = {"buying_power": _as_float(account.get("cash"))}
+        if "starting_cash" in account:
+            inputs.account["starting_cash"] = _as_float(account.get("starting_cash"))
+        if "realized_pnl" in account:
+            inputs.account["realized_pnl"] = _as_float(account.get("realized_pnl"))
+    positions_payload = _read_json_if_exists(paths.paper_positions_path)
+    if positions_payload:
+        inputs.positions = {
+            position.symbol: position
+            for payload in _payload_list(positions_payload)
+            if (position := _parse_position(payload)) is not None
+        }
+
+
 def load_policy_inputs(
     agent_root: Path,
     *,
@@ -201,5 +274,9 @@ def load_policy_inputs(
         research_reports=_load_research_reports(agent_root, run_date),
         kill_switch_present=(agent_root / "KILL_SWITCH").exists(),
     )
-    _hydrate_robinhood_inputs(inputs, robinhood_gateway)
+    if robinhood_gateway is None:
+        _hydrate_snapshots_if_present(inputs, paths)
+    else:
+        _hydrate_robinhood_inputs(inputs, robinhood_gateway)
+    _hydrate_paper_ledger_if_present(inputs, paths)
     return inputs

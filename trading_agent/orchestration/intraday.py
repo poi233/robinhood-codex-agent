@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+from dataclasses import replace
 from datetime import datetime
 from pathlib import Path
 
@@ -9,6 +10,7 @@ from trading_agent.core.config import load_runtime_config
 from trading_agent.core.context import build_runtime_paths
 from trading_agent.core.time import PT
 from trading_agent.core.time import pt_date_string
+from trading_agent.paper.broker import apply_paper_intent
 from trading_agent.policy.engine import generate_order_intent
 from trading_agent.policy.loaders import load_policy_inputs
 from trading_agent.policy.models import PolicyDecision
@@ -61,13 +63,25 @@ def run_intraday_pipeline(*, dry_run: bool) -> int:
         _append_local_decision(agent_root, "kill_switch_skip", "KILL_SWITCH_present")
         return 0
     runtime = load_runtime_config(agent_root)
+    run_date = pt_date_string()
     inputs = load_policy_inputs(
         agent_root,
-        run_date=pt_date_string(),
+        run_date=run_date,
         trading_mode=runtime.trading_mode,
         risk_tier=runtime.risk_tier,
         robinhood_gateway=None,
     )
     decision = generate_order_intent(inputs)
+    if runtime.trading_mode == "paper" and decision.decision == "would_trade":
+        paper_result = apply_paper_intent(
+            agent_root,
+            run_date=run_date,
+            decision=decision,
+            starting_cash=float(inputs.account.get("buying_power", 0) or 0),
+        )
+        if paper_result.applied:
+            decision = replace(decision, action_taken="paper_fill")
+        elif paper_result.reason:
+            decision.blocked_reasons.append(paper_result.reason)
     _append_policy_decision(agent_root, decision)
     return 0
