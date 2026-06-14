@@ -12,9 +12,9 @@ The package already has:
 
 - `trading_agent` package entrypoints for `premarket`, `intraday`, and `postmarket`.
 - Premarket orchestration for market context, DSA, Kronos, technical research, planner, and archive.
-- Prompt-based intraday decision logic in `prompts/intraday_check.txt`.
+- Prompt-based intraday decision logic in `prompts/intraday/check.txt`.
 - Safety defaults in `config/runtime.env`, `config/risk.md`, `config/risk_tiers.json`, and `KILL_SWITCH`.
-- Advisory files such as `state/dsa_signals.json`, `state/kronos_signals.json`, and `state/technical_signals.json`.
+- Advisory files such as `state/runs/<date>/signals/dsa_signals.json`, `state/runs/<date>/signals/kronos_signals.json`, and `state/runs/<date>/signals/technical_signals.json`.
 
 The current gap is that final intraday trading logic is still prompt-owned. That makes the strategy difficult to reproduce, unit test, and audit.
 
@@ -100,9 +100,9 @@ Reads local state into `PolicyInputs`:
 - `state/dynamic_allowlist.json`
 - `state/today_allowlist.txt`
 - `state/daily_usage.json`
-- `state/dsa_signals.json` when present
-- `state/kronos_signals.json` when present
-- `state/technical_signals.json` when present
+- `state/runs/<date>/signals/dsa_signals.json` when present
+- `state/runs/<date>/signals/kronos_signals.json` when present
+- `state/runs/<date>/signals/technical_signals.json` when present
 - `state/research_reports/YYYY-MM-DD/*.json` when present
 
 The first slice may use empty quotes, positions, and open orders when no broker/account adapter exists. Missing market/account data should fail closed unless a test fixture supplies it.
