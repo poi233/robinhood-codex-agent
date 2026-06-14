@@ -193,6 +193,7 @@ runtime/state/runs/YYYY-MM-DD/
     tradability_snapshot.json
     catalyst_snapshot.json
     trader_watch_levels.json
+    data_status_summary.json
     today_allowlist.txt
     dynamic_allowlist.json
     daily_plan.json
@@ -231,6 +232,9 @@ Important state contracts:
 - `planner/trader_watch_levels.json` is a normalized, trader-facing copy of technical price levels:
   reference price, supports, resistances, entry zone, buy trigger, invalidation, targets,
   no-trade zone, and existing-long risk-reduction levels.
+- `planner/data_status_summary.json` normalizes each layer's `ok`, `partial`, `failed`, or
+  `missing` state with reason codes such as `market_closed`, `provider_partial`, `provider_failed`,
+  `schema_invalid`, and `mcp_unavailable`.
 - `planner/daily_usage.json` starts from the final premarket planner and is updated by paper fills.
 - `paper/day_start.json`, `paper/day_end.json`, and `paper/equity_curve.jsonl` are the
   visualization-friendly daily paper snapshots and equity curve.
@@ -268,9 +272,10 @@ Premarket does the following:
 6. Builds `planner/candidate_snapshot.json` locally from account holdings, open orders, and advisory
    signals.
 7. Runs candidate quote, tradability, and catalyst enrichment prompts in parallel.
-8. Runs the final premarket planner prompt.
-9. Archives `archive/premarket_report.json`.
-10. Logs stage status to `runtime/logs/runs/YYYY-MM-DD/pipeline.jsonl`.
+8. Writes `planner/data_status_summary.json` with structured status reason codes.
+9. Runs the final premarket planner prompt.
+10. Archives `archive/premarket_report.json`.
+11. Logs stage status to `runtime/logs/runs/YYYY-MM-DD/pipeline.jsonl`.
 
 The final planner writes:
 

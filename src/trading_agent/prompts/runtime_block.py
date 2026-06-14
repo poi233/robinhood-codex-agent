@@ -57,6 +57,7 @@ def build_runtime_block(run_kind: str, agent_root: Path) -> str:
         "QUOTE_SNAPSHOT_CANDIDATES_PATH": str(paths.quote_snapshot_candidates_path),
         "TRADABILITY_SNAPSHOT_PATH": str(paths.tradability_snapshot_path),
         "CATALYST_SNAPSHOT_PATH": str(paths.catalyst_snapshot_path),
+        "DATA_STATUS_SUMMARY_PATH": str(paths.data_status_summary_path),
         "PAPER_ACCOUNT_PATH": str(paths.paper_account_path),
         "PAPER_POSITIONS_PATH": str(paths.paper_positions_path),
         "PAPER_ORDERS_LOG_PATH": str(paths.paper_orders_log_path),

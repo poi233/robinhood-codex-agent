@@ -104,6 +104,9 @@ def snapshot_stage_artifacts(agent_root: Path, run_date: str, stage: str) -> lis
         "catalyst_enrichment": [
             (paths.catalyst_snapshot_path, run_dir / "planner" / "catalyst_snapshot.json"),
         ],
+        "data_status_summary": [
+            (paths.data_status_summary_path, run_dir / "planner" / "data_status_summary.json"),
+        ],
         "planner": [
             (paths.account_snapshot_path, run_dir / "planner" / "account_snapshot.json"),
             (paths.capital_snapshot_path, run_dir / "planner" / "capital_snapshot.json"),
@@ -114,6 +117,7 @@ def snapshot_stage_artifacts(agent_root: Path, run_date: str, stage: str) -> lis
             (paths.tradability_snapshot_path, run_dir / "planner" / "tradability_snapshot.json"),
             (paths.catalyst_snapshot_path, run_dir / "planner" / "catalyst_snapshot.json"),
             (paths.trader_watch_levels_path, run_dir / "planner" / "trader_watch_levels.json"),
+            (paths.data_status_summary_path, run_dir / "planner" / "data_status_summary.json"),
             (paths.daily_plan_path, run_dir / "planner" / "daily_plan.json"),
             (paths.daily_plan_markdown_path, run_dir / "planner" / "daily_plan.md"),
             (paths.dynamic_allowlist_path, run_dir / "planner" / "dynamic_allowlist.json"),
@@ -121,6 +125,7 @@ def snapshot_stage_artifacts(agent_root: Path, run_date: str, stage: str) -> lis
             (paths.daily_usage_path, run_dir / "planner" / "daily_usage.json"),
         ],
         "final_planner": [
+            (paths.data_status_summary_path, run_dir / "planner" / "data_status_summary.json"),
             (paths.daily_plan_path, run_dir / "planner" / "daily_plan.json"),
             (paths.daily_plan_markdown_path, run_dir / "planner" / "daily_plan.md"),
             (paths.dynamic_allowlist_path, run_dir / "planner" / "dynamic_allowlist.json"),
