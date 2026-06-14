@@ -41,10 +41,12 @@ class RuntimePaths:
     market_calendar_path: Path
     quote_snapshot_core_path: Path
     candidate_snapshot_path: Path
+    candidate_scores_path: Path
     quote_snapshot_candidates_path: Path
     tradability_snapshot_path: Path
     catalyst_snapshot_path: Path
     data_status_summary_path: Path
+    risk_overlay_path: Path
     paper_account_path: Path
     paper_positions_path: Path
     paper_orders_log_path: Path
@@ -116,10 +118,12 @@ def build_runtime_paths(agent_root: Path, *, run_date: str | None = None) -> Run
         market_calendar_path=_resolve_env_path(agent_root, "MARKET_CALENDAR_PATH", planner_dir / "market_calendar.json"),
         quote_snapshot_core_path=_resolve_env_path(agent_root, "QUOTE_SNAPSHOT_CORE_PATH", planner_dir / "quote_snapshot_core.json"),
         candidate_snapshot_path=_resolve_env_path(agent_root, "CANDIDATE_SNAPSHOT_PATH", planner_dir / "candidate_snapshot.json"),
+        candidate_scores_path=_resolve_env_path(agent_root, "CANDIDATE_SCORES_PATH", planner_dir / "candidate_scores.json"),
         quote_snapshot_candidates_path=_resolve_env_path(agent_root, "QUOTE_SNAPSHOT_CANDIDATES_PATH", planner_dir / "quote_snapshot_candidates.json"),
         tradability_snapshot_path=_resolve_env_path(agent_root, "TRADABILITY_SNAPSHOT_PATH", planner_dir / "tradability_snapshot.json"),
         catalyst_snapshot_path=_resolve_env_path(agent_root, "CATALYST_SNAPSHOT_PATH", planner_dir / "catalyst_snapshot.json"),
         data_status_summary_path=_resolve_env_path(agent_root, "DATA_STATUS_SUMMARY_PATH", planner_dir / "data_status_summary.json"),
+        risk_overlay_path=_resolve_env_path(agent_root, "RISK_OVERLAY_PATH", planner_dir / "risk_overlay.json"),
         paper_account_path=_resolve_env_path(agent_root, "PAPER_ACCOUNT_PATH", paper_dir / "account.json"),
         paper_positions_path=_resolve_env_path(agent_root, "PAPER_POSITIONS_PATH", paper_dir / "positions.json"),
         paper_orders_log_path=_resolve_env_path(agent_root, "PAPER_ORDERS_LOG_PATH", paper_dir / "orders.jsonl"),

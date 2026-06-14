@@ -95,6 +95,9 @@ def snapshot_stage_artifacts(agent_root: Path, run_date: str, stage: str) -> lis
         "candidate_merge": [
             (paths.candidate_snapshot_path, run_dir / "planner" / "candidate_snapshot.json"),
         ],
+        "candidate_scoring": [
+            (paths.candidate_scores_path, run_dir / "planner" / "candidate_scores.json"),
+        ],
         "quote_snapshot_candidates": [
             (paths.quote_snapshot_candidates_path, run_dir / "planner" / "quote_snapshot_candidates.json"),
         ],
@@ -107,17 +110,22 @@ def snapshot_stage_artifacts(agent_root: Path, run_date: str, stage: str) -> lis
         "data_status_summary": [
             (paths.data_status_summary_path, run_dir / "planner" / "data_status_summary.json"),
         ],
+        "risk_overlay": [
+            (paths.risk_overlay_path, run_dir / "planner" / "risk_overlay.json"),
+        ],
         "planner": [
             (paths.account_snapshot_path, run_dir / "planner" / "account_snapshot.json"),
             (paths.capital_snapshot_path, run_dir / "planner" / "capital_snapshot.json"),
             (paths.market_calendar_path, run_dir / "planner" / "market_calendar.json"),
             (paths.quote_snapshot_core_path, run_dir / "planner" / "quote_snapshot_core.json"),
             (paths.candidate_snapshot_path, run_dir / "planner" / "candidate_snapshot.json"),
+            (paths.candidate_scores_path, run_dir / "planner" / "candidate_scores.json"),
             (paths.quote_snapshot_candidates_path, run_dir / "planner" / "quote_snapshot_candidates.json"),
             (paths.tradability_snapshot_path, run_dir / "planner" / "tradability_snapshot.json"),
             (paths.catalyst_snapshot_path, run_dir / "planner" / "catalyst_snapshot.json"),
             (paths.trader_watch_levels_path, run_dir / "planner" / "trader_watch_levels.json"),
             (paths.data_status_summary_path, run_dir / "planner" / "data_status_summary.json"),
+            (paths.risk_overlay_path, run_dir / "planner" / "risk_overlay.json"),
             (paths.daily_plan_path, run_dir / "planner" / "daily_plan.json"),
             (paths.daily_plan_markdown_path, run_dir / "planner" / "daily_plan.md"),
             (paths.dynamic_allowlist_path, run_dir / "planner" / "dynamic_allowlist.json"),
@@ -126,6 +134,8 @@ def snapshot_stage_artifacts(agent_root: Path, run_date: str, stage: str) -> lis
         ],
         "final_planner": [
             (paths.data_status_summary_path, run_dir / "planner" / "data_status_summary.json"),
+            (paths.candidate_scores_path, run_dir / "planner" / "candidate_scores.json"),
+            (paths.risk_overlay_path, run_dir / "planner" / "risk_overlay.json"),
             (paths.daily_plan_path, run_dir / "planner" / "daily_plan.json"),
             (paths.daily_plan_markdown_path, run_dir / "planner" / "daily_plan.md"),
             (paths.dynamic_allowlist_path, run_dir / "planner" / "dynamic_allowlist.json"),

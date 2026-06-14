@@ -27,6 +27,8 @@ class PremarketOrchestrationTests(unittest.TestCase):
             run_tradability_candidates=lambda: events.append("tradability_candidates"),
             run_catalyst_enrichment=lambda: events.append("catalyst_enrichment"),
             run_data_status_summary=lambda: events.append("data_status_summary"),
+            run_candidate_scoring=lambda: events.append("candidate_scoring"),
+            run_risk_overlay=lambda: events.append("risk_overlay"),
             run_final_planner=lambda: events.append("final_planner"),
             run_archive=lambda: events.append("archive"),
         )
@@ -43,7 +45,9 @@ class PremarketOrchestrationTests(unittest.TestCase):
         self.assertLess(events.index("quote_snapshot_candidates"), events.index("data_status_summary"))
         self.assertLess(events.index("tradability_candidates"), events.index("data_status_summary"))
         self.assertLess(events.index("catalyst_enrichment"), events.index("data_status_summary"))
-        self.assertLess(events.index("data_status_summary"), events.index("final_planner"))
+        self.assertLess(events.index("data_status_summary"), events.index("candidate_scoring"))
+        self.assertLess(events.index("candidate_scoring"), events.index("risk_overlay"))
+        self.assertLess(events.index("risk_overlay"), events.index("final_planner"))
         self.assertEqual(events[-2:], ["final_planner", "archive"])
 
     def test_pipeline_continues_when_advisory_task_fails(self) -> None:
@@ -68,6 +72,8 @@ class PremarketOrchestrationTests(unittest.TestCase):
             run_tradability_candidates=lambda: events.append("tradability_candidates"),
             run_catalyst_enrichment=lambda: events.append("catalyst_enrichment"),
             run_data_status_summary=lambda: events.append("data_status_summary"),
+            run_candidate_scoring=lambda: events.append("candidate_scoring"),
+            run_risk_overlay=lambda: events.append("risk_overlay"),
             run_final_planner=lambda: events.append("final_planner"),
             run_archive=lambda: events.append("archive"),
         )
@@ -94,6 +100,8 @@ class PremarketOrchestrationTests(unittest.TestCase):
             run_tradability_candidates=lambda: events.append("tradability_candidates"),
             run_catalyst_enrichment=lambda: events.append("catalyst_enrichment"),
             run_data_status_summary=lambda: events.append("data_status_summary"),
+            run_candidate_scoring=lambda: events.append("candidate_scoring"),
+            run_risk_overlay=lambda: events.append("risk_overlay"),
             run_final_planner=lambda: (_ for _ in ()).throw(RuntimeError("planner failed")),
             run_archive=lambda: events.append("archive"),
         )

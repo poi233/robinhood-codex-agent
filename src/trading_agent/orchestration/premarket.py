@@ -17,7 +17,8 @@ from trading_agent.data.market_context import collect_market_context
 from trading_agent.data.universe import parse_universe
 from trading_agent.planner.candidates import build_candidate_snapshot
 from trading_agent.planner.data_status import build_data_status_summary_from_paths
-from trading_agent.planner.risk_overlay import build_capital_snapshot
+from trading_agent.planner.risk_overlay import build_capital_snapshot, build_risk_overlay_from_paths
+from trading_agent.planner.scoring import build_candidate_scores_from_paths
 from trading_agent.prompts.codex import run_codex_prompt
 from trading_agent.reporting.premarket import build_fail_closed_daily_plan, build_premarket_archive_payload
 from trading_agent.reporting.trader_watch_levels import build_trader_watch_levels
@@ -45,6 +46,8 @@ class PremarketPipeline:
     run_tradability_candidates: callable
     run_catalyst_enrichment: callable
     run_data_status_summary: callable
+    run_candidate_scoring: callable
+    run_risk_overlay: callable
     run_final_planner: callable
     run_archive: callable
 
@@ -71,6 +74,8 @@ class PremarketPipeline:
             ]
             wait(futures)
         self.run_data_status_summary()
+        self.run_candidate_scoring()
+        self.run_risk_overlay()
         planner_error: Exception | None = None
         try:
             self.run_final_planner()
@@ -321,6 +326,17 @@ def run_premarket_pipeline(*, dry_run: bool) -> int:
     def run_data_status_summary() -> None:
         build_data_status_summary_from_paths(agent_root, run_date)
 
+    def run_candidate_scoring() -> None:
+        build_candidate_scores_from_paths(agent_root, run_date)
+
+    def run_risk_overlay() -> None:
+        build_risk_overlay_from_paths(
+            agent_root,
+            run_date,
+            trading_mode=os.environ.get("TRADING_MODE", "paper"),
+            risk_tier=int(os.environ.get("RISK_TIER", "0")),
+        )
+
     def run_final_planner() -> None:
         status = run_codex_prompt("final_premarket", agent_root, paths.prompts_dir / "premarket" / "final_research.txt")
         if status != 0:
@@ -363,6 +379,8 @@ def run_premarket_pipeline(*, dry_run: bool) -> int:
         run_tradability_candidates=lambda: run_stage("tradability_candidates", run_tradability_candidates),
         run_catalyst_enrichment=lambda: run_stage("catalyst_enrichment", run_catalyst_enrichment),
         run_data_status_summary=lambda: run_stage("data_status_summary", run_data_status_summary),
+        run_candidate_scoring=lambda: run_stage("candidate_scoring", run_candidate_scoring),
+        run_risk_overlay=lambda: run_stage("risk_overlay", run_risk_overlay),
         run_final_planner=lambda: run_stage("final_planner", run_final_planner),
         run_archive=lambda: run_stage("archive", run_archive),
     )

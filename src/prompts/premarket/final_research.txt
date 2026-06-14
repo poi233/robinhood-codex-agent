@@ -17,10 +17,12 @@ Read these local files first:
 - `MARKET_CALENDAR_PATH`
 - `QUOTE_SNAPSHOT_CORE_PATH`
 - `CANDIDATE_SNAPSHOT_PATH`
+- `CANDIDATE_SCORES_PATH`
 - `QUOTE_SNAPSHOT_CANDIDATES_PATH`
 - `TRADABILITY_SNAPSHOT_PATH`
 - `CATALYST_SNAPSHOT_PATH`
 - `DATA_STATUS_SUMMARY_PATH`
+- `RISK_OVERLAY_PATH`
 - `DSA_SIGNALS_PATH` if it exists and is for today
 - `KRONOS_SIGNALS_PATH` if it exists and is for today
 - `TECHNICAL_SIGNALS_PATH` if it exists and is for today
@@ -54,28 +56,28 @@ Tasks:
    - If it is missing, stale, invalid, or partial, continue the main scan and record `technical_signal_status` accordingly.
 9. Read `QUOTE_SNAPSHOT_CORE_PATH`, `CANDIDATE_SNAPSHOT_PATH`, `QUOTE_SNAPSHOT_CANDIDATES_PATH`, `TRADABILITY_SNAPSHOT_PATH`, and `CATALYST_SNAPSHOT_PATH`.
 10. Read `CAPITAL_SNAPSHOT_PATH`. In `TRADING_MODE=paper`, use `sizing_buying_power` from this file for paper sizing; do not use Robinhood `ACCOUNT_SNAPSHOT_PATH.buying_power` as paper buying power. Keep Robinhood buying power as a real-account reference only.
-11. Perform an aggressive-growth market scan from the snapshots:
+11. Read `CANDIDATE_SCORES_PATH` and `RISK_OVERLAY_PATH`. Do not recompute deterministic weighted scores, risk caps, buying-power source, or market-calendar gating. Use these artifacts as the source of truth for ranking, `allowed_actions`, `max_single_order_notional`, `max_daily_notional`, and no-trade reasons.
+12. Perform an aggressive-growth market scan from the snapshots:
    - market regime: SPY, QQQ, IWM, SMH, VIX if available, rates/DXY if available;
    - priority sectors: AI semiconductors, AI data-center infrastructure, CPO/photonics/interconnect, space/defense/autonomy, nuclear/power, high-beta AI software;
    - catalysts: earnings dates, guidance/news, contracts, launches, investor days, policy/regulatory items, sector momentum;
    - technicals: gap, relative strength, prior close, reclaim/breakout/pullback setup, liquidity;
    - portfolio/account fit: paper buying power from `CAPITAL_SNAPSHOT_PATH`, real Agentic Account reference from `ACCOUNT_SNAPSHOT_PATH`, existing positions, and open orders.
-12. Apply a compressed multi-framework quality check before selecting candidates:
+13. Apply a compressed multi-framework quality check before selecting candidates:
    - Serenity/narrow-gate: is there a real supply-chain bottleneck or hard catalyst?
    - Public-equity PM: why now, what is priced in, first rebuttal, what kills the setup?
    - Buffett filter: avoid obvious quality/balance-sheet/valuation traps for larger orders.
    - TradingAgents-style debate: bull case, bear case, risk manager limit.
    - UZI-style trap screen: avoid hype-only moves, thin liquidity, financing/issuance risk, and unverified news.
-13. Apply Daily Stock Analysis-style signal blending:
+14. Apply Daily Stock Analysis-style signal blending:
    - Use `hot_theme`, `event_driven`, `bull_trend`, `shrink_pullback`, `volume_breakout`, `growth_quality`, and `dragon_head` signals only when supported by current data.
    - A DSA `promote` signal can add confidence, but cannot select a symbol that fails Robinhood quote/tradability/risk checks.
    - A DSA `block` signal should block the symbol unless stronger verified current evidence proves the block is obsolete.
    - A DSA `watch_only` or low-confidence signal cannot become an executable candidate by itself.
-14. Select 3-8 symbols for today's dynamic allowlist. Prefer AI, space, defense, nuclear/power, and infrastructure when their score and data quality justify it. Include broad ETFs only when single-name quality is weak or market risk is elevated.
-15. Decide today's `market_regime`: `normal`, `aggressive_ok`, `risk_off`, or `no_trade`.
-16. Decide today's `risk_level`, `risk_multiplier`, `today_watchlist`, `blocked_symbols`, `allowed_actions`, and per-symbol rules.
+15. Select 3-8 symbols for today's dynamic allowlist from `RISK_OVERLAY_PATH.today_watchlist`. Prefer AI, space, defense, nuclear/power, and infrastructure when their precomputed score and data quality justify it. Include broad ETFs only when single-name quality is weak or market risk is elevated.
+16. Copy today's `market_regime`, `risk_level`, `risk_multiplier`, `today_watchlist`, `blocked_symbols`, `allowed_actions`, max notionals, and baseline per-symbol rules from `RISK_OVERLAY_PATH`; only enrich their written explanations.
 17. Write `TODAY_ALLOWLIST_PATH` with today's selected symbols, one symbol per line. Include comments only after `#`.
-18. Write `DYNAMIC_ALLOWLIST_PATH` with scores and reasons.
+18. Write `DYNAMIC_ALLOWLIST_PATH` with scores and reasons from `CANDIDATE_SCORES_PATH`, enriched with concise narrative reasons.
 19. Write `DAILY_PLAN_PATH` with the exact JSON schema below.
 20. Write `DAILY_PLAN_MARKDOWN_PATH` with a concise human-readable summary. Include both `Paper buying power` and `Robinhood Agentic account buying power` in the Account Fit section.
 21. Initialize or reset `DAILY_USAGE_PATH` for the current date, preserving no old usage if the date changed.
