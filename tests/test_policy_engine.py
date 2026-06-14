@@ -36,6 +36,7 @@ def base_inputs(*, trading_mode: str = "paper") -> PolicyInputs:
             },
         },
         daily_usage={"date": "2026-06-14", "used_notional": 0},
+        account={"buying_power": 25.0},
         quotes={"NVDA": Quote(symbol="NVDA", price=100.0, previous_close=101.0, timestamp="2026-06-14T09:45:00-07:00")},
     )
 
@@ -59,6 +60,16 @@ class PolicyEngineTests(unittest.TestCase):
         self.assertEqual(decision.intent.symbol, "NVDA")
         self.assertEqual(decision.intent.side, "buy")
         self.assertEqual(decision.action_taken, "none")
+
+    def test_missing_account_data_blocks_decision(self) -> None:
+        inputs = base_inputs()
+        inputs.account = {}
+
+        decision = generate_order_intent(inputs)
+
+        self.assertEqual(decision.decision, "blocked")
+        self.assertIn("missing_account", decision.blocked_reasons)
+        self.assertIsNone(decision.intent)
 
     def test_review_mode_blocks_execution_when_unwired(self) -> None:
         decision = generate_order_intent(base_inputs(trading_mode="review"))

@@ -4,6 +4,7 @@ from dataclasses import dataclass, field
 
 from trading_agent.policy.models import OrderIntent, PolicyInputs
 from trading_agent.policy.risk import (
+    buying_power_remaining,
     daily_notional_remaining,
     eligible_symbols,
     has_open_order,
@@ -52,7 +53,10 @@ def evaluate_buy(inputs: PolicyInputs) -> BuyEvaluation:
         if remaining <= 0:
             first_blocked = first_blocked or ["daily_notional_exhausted"]
             continue
+        buying_power = buying_power_remaining(inputs)
         notional = min(single_order_cap(inputs, symbol), remaining)
+        if buying_power is not None:
+            notional = min(notional, buying_power)
         if notional <= 0:
             first_blocked = first_blocked or ["single_order_notional_exhausted"]
             continue

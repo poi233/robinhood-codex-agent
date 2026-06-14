@@ -30,6 +30,12 @@ def daily_notional_remaining(inputs: PolicyInputs) -> float:
     return max(0.0, max_daily - used)
 
 
+def buying_power_remaining(inputs: PolicyInputs) -> float | None:
+    if "buying_power" not in inputs.account:
+        return None
+    return max(0.0, float(inputs.account.get("buying_power") or 0))
+
+
 def single_order_cap(inputs: PolicyInputs, symbol: str) -> float:
     cap = float(inputs.risk_caps.get("max_single_order_notional", 0) or 0)
     if inputs.daily_plan:

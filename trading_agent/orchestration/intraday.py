@@ -65,6 +65,7 @@ def run_intraday_pipeline(*, dry_run: bool) -> int:
         run_date=pt_date_string(),
         trading_mode=runtime.trading_mode,
         risk_tier=runtime.risk_tier,
+        robinhood_gateway=None,
     )
     decision = generate_order_intent(inputs)
     _append_policy_decision(agent_root, decision)

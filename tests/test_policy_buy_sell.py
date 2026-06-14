@@ -30,6 +30,7 @@ def base_inputs() -> PolicyInputs:
             },
         },
         daily_usage={"date": "2026-06-14", "used_notional": 0},
+        account={"buying_power": 25.0},
         quotes={
             "NVDA": Quote(symbol="NVDA", price=100.0, previous_close=101.0, timestamp="2026-06-14T09:45:00-07:00"),
             "SMH": Quote(symbol="SMH", price=200.0, previous_close=201.0, timestamp="2026-06-14T09:45:00-07:00"),
@@ -75,6 +76,16 @@ class PolicyBuySellTests(unittest.TestCase):
 
         self.assertEqual(decision.decision, "blocked")
         self.assertIn("daily_notional_exhausted", decision.blocked_reasons)
+
+    def test_buy_notional_is_capped_by_account_buying_power(self) -> None:
+        inputs = base_inputs()
+        inputs.account = {"buying_power": 4.25}
+
+        decision = generate_order_intent(inputs)
+
+        self.assertEqual(decision.decision, "would_trade")
+        self.assertIsNotNone(decision.intent)
+        self.assertEqual(decision.intent.estimated_notional, 4.25)
 
     def test_losing_position_blocks_average_down_buy(self) -> None:
         inputs = base_inputs()

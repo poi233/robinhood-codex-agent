@@ -79,6 +79,7 @@ class PolicyInputs:
     kronos_signals: dict[str, Any] = field(default_factory=dict)
     technical_signals: dict[str, Any] = field(default_factory=dict)
     research_reports: dict[str, Any] = field(default_factory=dict)
+    account: dict[str, Any] = field(default_factory=dict)
     quotes: dict[str, Quote] = field(default_factory=dict)
     positions: dict[str, Position] = field(default_factory=dict)
     open_orders: list[OpenOrder] = field(default_factory=list)

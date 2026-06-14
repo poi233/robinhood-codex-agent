@@ -76,6 +76,102 @@ class PolicyLoaderTests(unittest.TestCase):
         self.assertEqual(inputs.dynamic_allowlist, {})
         self.assertEqual(inputs.daily_usage, {})
 
+    def test_load_policy_inputs_hydrates_robinhood_account_state(self) -> None:
+        class FakeRobinhoodGateway:
+            def get_account(self) -> dict[str, object]:
+                return {"buying_power": "42.50", "account_type": "agentic"}
+
+            def list_positions(self) -> list[dict[str, object]]:
+                return [
+                    {
+                        "symbol": "nvda",
+                        "quantity": "1.5",
+                        "average_cost": "100.00",
+                        "market_price": "104.00",
+                    }
+                ]
+
+            def list_open_orders(self) -> list[dict[str, object]]:
+                return [
+                    {
+                        "symbol": "SMH",
+                        "side": "buy",
+                        "quantity": "0.25",
+                        "notional": "12.00",
+                        "status": "queued",
+                    }
+                ]
+
+            def get_quotes(self, symbols: list[str]) -> list[dict[str, object]]:
+                self.requested_symbols = symbols
+                return [
+                    {
+                        "symbol": "NVDA",
+                        "price": "104.25",
+                        "previous_close": "102.00",
+                        "timestamp": "2026-06-14T09:45:00-07:00",
+                        "is_fresh": True,
+                    },
+                    {"symbol": "SMH", "last_trade_price": "260.10", "previous_close": "259.00"},
+                ]
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            (root / "config").mkdir()
+            (root / "state").mkdir()
+            (root / "config" / "universe.txt").write_text("NVDA\nSMH\n", encoding="utf-8")
+            (root / "state" / "today_allowlist.txt").write_text("NVDA\nSMH\n", encoding="utf-8")
+            write_json(
+                root / "config" / "risk_tiers.json",
+                {"0": {"max_single_order_notional": 10, "max_daily_notional": 25}},
+            )
+            write_json(
+                root / "state" / "daily_plan.json",
+                {"date": "2026-06-14", "today_watchlist": ["NVDA", "SMH"], "allowed_actions": []},
+            )
+            gateway = FakeRobinhoodGateway()
+
+            inputs = load_policy_inputs(
+                root,
+                run_date="2026-06-14",
+                trading_mode="paper",
+                risk_tier=0,
+                robinhood_gateway=gateway,
+            )
+
+        self.assertEqual(gateway.requested_symbols, ["NVDA", "SMH"])
+        self.assertEqual(inputs.account["buying_power"], 42.5)
+        self.assertEqual(inputs.positions["NVDA"].quantity, 1.5)
+        self.assertEqual(inputs.positions["NVDA"].market_price, 104.0)
+        self.assertEqual(inputs.open_orders[0].symbol, "SMH")
+        self.assertEqual(inputs.open_orders[0].status, "queued")
+        self.assertEqual(inputs.quotes["NVDA"].price, 104.25)
+        self.assertEqual(inputs.quotes["SMH"].price, 260.10)
+
+    def test_robinhood_gateway_failure_keeps_inputs_fail_closed(self) -> None:
+        class FailingRobinhoodGateway:
+            def get_account(self) -> dict[str, object]:
+                raise RuntimeError("auth expired")
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            (root / "config").mkdir()
+            (root / "state").mkdir()
+            (root / "config" / "universe.txt").write_text("NVDA\n", encoding="utf-8")
+
+            inputs = load_policy_inputs(
+                root,
+                run_date="2026-06-14",
+                trading_mode="paper",
+                risk_tier=0,
+                robinhood_gateway=FailingRobinhoodGateway(),
+            )
+
+        self.assertEqual(inputs.account, {})
+        self.assertEqual(inputs.quotes, {})
+        self.assertEqual(inputs.positions, {})
+        self.assertEqual(inputs.open_orders, [])
+
 
 if __name__ == "__main__":
     unittest.main()

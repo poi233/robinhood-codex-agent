@@ -26,6 +26,7 @@ def policy_ready_inputs(*, trading_mode: str = "paper") -> PolicyInputs:
         },
         dynamic_allowlist={"date": "2026-06-14", "symbol_scores": {"NVDA": {"score": 85}}},
         daily_usage={"date": "2026-06-14", "used_notional": 0},
+        account={"buying_power": 25.0},
         quotes={"NVDA": Quote(symbol="NVDA", price=100.0, previous_close=101.0, timestamp="2026-06-14T09:45:00-07:00")},
     )
 

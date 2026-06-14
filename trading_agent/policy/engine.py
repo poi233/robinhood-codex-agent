@@ -16,6 +16,7 @@ def generate_order_intent(inputs: PolicyInputs) -> PolicyDecision:
     risk_checks: dict[str, bool | None] = {
         "daily_plan": inputs.daily_plan is not None,
         "trading_mode": inputs.trading_mode in {"paper", "review", "live"},
+        "account_data": "buying_power" in inputs.account,
     }
     if inputs.daily_plan is None:
         return PolicyDecision(
@@ -25,6 +26,15 @@ def generate_order_intent(inputs: PolicyInputs) -> PolicyDecision:
             reason="missing daily plan",
             risk_checks=risk_checks,
             blocked_reasons=["missing_daily_plan"],
+        )
+    if "buying_power" not in inputs.account:
+        return PolicyDecision(
+            trading_mode=inputs.trading_mode,
+            checked_symbols=checked_symbols,
+            decision="blocked",
+            reason="missing account data",
+            risk_checks=risk_checks,
+            blocked_reasons=["missing_account"],
         )
 
     intent: OrderIntent | None = evaluate_sell(inputs)
