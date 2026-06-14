@@ -3,6 +3,8 @@
 set -euo pipefail
 
 AGENT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# Shell wrappers still source runtime.env and runtime.env.local directly.
+# The Python package consumes the fully resolved environment after shell export.
 CONFIG_ENV="$AGENT_ROOT/config/runtime.env"
 CONFIG_ENV_LOCAL="$AGENT_ROOT/config/runtime.env.local"
 RUN_LOG="$AGENT_ROOT/logs/codex_runs.log"

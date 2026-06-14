@@ -8,6 +8,14 @@ This project is designed to run Codex on a schedule:
 - Intraday: check every 30 minutes and optionally act when all gates pass.
 - Postmarket: reconcile, summarize, and recommend tomorrow's mode.
 
+Primary runtime entrypoints:
+
+```bash
+python3 -m trading_agent premarket
+python3 -m trading_agent intraday
+python3 -m trading_agent postmarket
+```
+
 Default state is deliberately safe:
 
 - `TRADING_MODE=paper`
@@ -254,7 +262,7 @@ chmod +x scripts/*.sh
 ./scripts/verify_kronos_env.sh
 ./scripts/check_safety.sh
 ALLOW_WEEKEND_RUN=1 KRONOS_USE_MOCK=1 ./scripts/run_kronos_premarket_scan.sh
-ALLOW_WEEKEND_RUN=1 KRONOS_USE_MOCK=1 CODEX_EXEC_DRY_RUN=1 ./scripts/run_premarket.sh
+ALLOW_WEEKEND_RUN=1 CODEX_EXEC_DRY_RUN=1 ./scripts/run_premarket.sh
 ```
 
 For a clean rebuild of the portable Kronos environment:
@@ -287,6 +295,12 @@ CODEX_EXEC_DRY_RUN=1 ./scripts/run_postmarket.sh
 ```
 
 Because `KILL_SWITCH` exists by default, intraday should skip safely.
+
+For a live-data premarket run without order placement, leave `CODEX_EXEC_DRY_RUN` unset:
+
+```bash
+ALLOW_WEEKEND_RUN=1 ./scripts/run_premarket.sh
+```
 
 ## Paper Test
 

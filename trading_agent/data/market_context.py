@@ -1,0 +1,279 @@
+from __future__ import annotations
+
+import shutil
+from dataclasses import dataclass
+from datetime import date, datetime, time, timedelta, timezone
+from pathlib import Path
+from typing import Any
+
+from trading_agent.core.io import ensure_dir, write_json
+from trading_agent.data.charts import write_chart
+from trading_agent.data.providers.yfinance_provider import jsonable, normalize_news_item
+from trading_agent.data.universe import parse_universe
+
+TIMEFRAME_MAP = {
+    "1w": {"label": "weekly", "days": 180, "step_days": 7},
+    "1d": {"label": "daily", "days": 120, "step_days": 1},
+    "1h": {"label": "hourly", "days": 20, "step_days": 1},
+    "15m": {"label": "intraday_15m", "days": 10, "step_days": 1},
+}
+
+
+@dataclass
+class SymbolArtifacts:
+    ohlcv: str
+    charts: str
+    news: str
+    earnings: str
+    filings: str
+    notes: str = ""
+
+
+def build_mock_rows(run_date: date, timeframe: str) -> list[dict[str, object]]:
+    config = TIMEFRAME_MAP[timeframe]
+    periods = 40
+    start = run_date - timedelta(days=config["days"])
+    rows: list[dict[str, object]] = []
+    price = 100.0
+
+    for index in range(periods):
+        current_day = start + timedelta(days=index * config["step_days"])
+        if timeframe in {"1h", "15m"}:
+            timestamp = datetime.combine(current_day, time(9, 30), tzinfo=timezone.utc) + timedelta(minutes=index * 15)
+        else:
+            timestamp = datetime.combine(current_day, time(0, 0), tzinfo=timezone.utc)
+
+        open_price = price + (index % 3) * 0.4
+        close_price = open_price + 0.6
+        high_price = close_price + 0.5
+        low_price = open_price - 0.7
+        volume = 1_000_000 + index * 5_000
+        rows.append(
+            {
+                "timestamp": timestamp.isoformat(),
+                "open": round(open_price, 2),
+                "high": round(high_price, 2),
+                "low": round(low_price, 2),
+                "close": round(close_price, 2),
+                "volume": volume,
+            }
+        )
+        price += 0.8
+
+    return rows
+
+
+def fetch_live_rows(symbol: str, timeframe: str) -> list[dict[str, object]]:
+    try:
+        import yfinance as yf
+    except Exception as exc:
+        raise RuntimeError(f"yfinance import failed: {exc}") from exc
+
+    interval = {"1w": "1wk", "1d": "1d", "1h": "60m", "15m": "15m"}[timeframe]
+    period = {"1w": "3y", "1d": "1y", "1h": "60d", "15m": "30d"}[timeframe]
+    frame = yf.Ticker(symbol).history(period=period, interval=interval, auto_adjust=False)
+    if frame.empty:
+        raise RuntimeError(f"empty history for {symbol} {timeframe}")
+
+    rows: list[dict[str, object]] = []
+    for idx, row in frame.iterrows():
+        rows.append(
+            {
+                "timestamp": idx.isoformat() if hasattr(idx, "isoformat") else str(idx),
+                "open": round(float(row["Open"]), 4),
+                "high": round(float(row["High"]), 4),
+                "low": round(float(row["Low"]), 4),
+                "close": round(float(row["Close"]), 4),
+                "volume": int(row["Volume"]),
+            }
+        )
+    return rows
+
+
+def build_mock_news_payload(symbol: str, run_date: str, limit: int) -> dict[str, object]:
+    return {
+        "symbol": symbol,
+        "date": run_date,
+        "headlines": [
+            {
+                "title": f"Mock catalyst item {index + 1} for {symbol}",
+                "source": "mock_source",
+                "published_at": f"{run_date}T06:{index:02d}:00-0700",
+            }
+            for index in range(limit)
+        ],
+        "earnings": {"status": "ok", "next_event": None},
+        "filings": {"status": "ok", "items": []},
+    }
+
+
+def build_live_news_payload(symbol: str, run_date: str, limit: int) -> dict[str, object]:
+    try:
+        import yfinance as yf
+    except Exception as exc:
+        raise RuntimeError(f"yfinance import failed: {exc}") from exc
+
+    ticker = yf.Ticker(symbol)
+    try:
+        raw_news = ticker.news or []
+        news_status = "ok"
+        news_error = ""
+    except Exception as exc:
+        raw_news = []
+        news_status = "failed"
+        news_error = str(exc)
+    headlines = []
+    for item in raw_news[:limit]:
+        normalized = normalize_news_item(item)
+        if normalized:
+            headlines.append(normalized)
+
+    try:
+        calendar = jsonable(ticker.calendar or {})
+    except Exception as exc:
+        calendar = {"status": "failed", "error": str(exc)}
+
+    try:
+        filings = jsonable(ticker.sec_filings or [])
+        filing_status = "ok"
+    except Exception as exc:
+        filings = []
+        filing_status = "failed"
+        filing_error = str(exc)
+    else:
+        filing_error = ""
+
+    return {
+        "symbol": symbol,
+        "date": run_date,
+        "headlines": headlines,
+        "news": {"status": news_status, "error": news_error},
+        "earnings": {"status": "ok", "calendar": calendar},
+        "filings": {"status": filing_status, "items": filings[:limit], "error": filing_error},
+    }
+
+
+def build_news_payload(symbol: str, run_date: str, limit: int, mock: bool) -> dict[str, object]:
+    if mock:
+        return build_mock_news_payload(symbol, run_date, limit)
+    return build_live_news_payload(symbol, run_date, limit)
+
+
+def collect_market_context(
+    universe_file: Path,
+    output_dir: Path,
+    run_date: str,
+    timeframes: list[str],
+    news_limit: int,
+    mock: bool,
+) -> dict[str, object]:
+    date_value = date.fromisoformat(run_date)
+    requested_symbols = parse_universe(universe_file)
+
+    if output_dir.exists():
+        shutil.rmtree(output_dir)
+    ensure_dir(output_dir)
+    ensure_dir(output_dir / "charts")
+    ensure_dir(output_dir / "ohlcv")
+    ensure_dir(output_dir / "news")
+
+    completed_symbols: list[str] = []
+    failed_symbols: list[str] = []
+    symbol_status: dict[str, dict[str, str]] = {}
+
+    for symbol in requested_symbols:
+        notes: list[str] = []
+        ohlcv_status = "ok"
+        chart_status = "ok"
+        news_status = "ok"
+        earnings_status = "ok"
+        filings_status = "ok"
+
+        try:
+            for timeframe in timeframes:
+                label = TIMEFRAME_MAP[timeframe]["label"]
+                rows = build_mock_rows(date_value, timeframe) if mock else fetch_live_rows(symbol, timeframe)
+                write_json(output_dir / "ohlcv" / symbol / f"{label}.json", rows)
+                write_chart(rows, output_dir / "charts" / symbol / f"{label}.png", f"{symbol} {label}")
+        except Exception as exc:
+            ohlcv_status = "failed"
+            chart_status = "failed"
+            notes.append(str(exc))
+
+        try:
+            news_payload = build_news_payload(symbol, run_date, news_limit, mock)
+            write_json(output_dir / "news" / f"{symbol}.json", news_payload)
+            if not mock:
+                news_status = str((news_payload.get("news") or {}).get("status", "ok"))
+                earnings_status = str((news_payload.get("earnings") or {}).get("status", "ok"))
+                filings_status = str((news_payload.get("filings") or {}).get("status", "ok"))
+                if news_status != "ok":
+                    notes.append(str((news_payload.get("news") or {}).get("error", "news fetch failed")))
+                if earnings_status != "ok":
+                    notes.append(str((news_payload.get("earnings") or {}).get("error", "earnings fetch failed")))
+                if filings_status != "ok":
+                    notes.append(str((news_payload.get("filings") or {}).get("error", "filings fetch failed")))
+        except Exception as exc:
+            news_status = "failed"
+            earnings_status = "failed"
+            filings_status = "failed"
+            notes.append(str(exc))
+
+        symbol_status[symbol] = SymbolArtifacts(
+            ohlcv_status,
+            chart_status,
+            news_status,
+            earnings_status,
+            filings_status,
+            "; ".join(note for note in notes if note),
+        ).__dict__
+
+        if ohlcv_status == "ok" and chart_status == "ok":
+            completed_symbols.append(symbol)
+        else:
+            failed_symbols.append(symbol)
+
+    market_summary = {
+        "date": run_date,
+        "requested_symbols": requested_symbols,
+        "completed_symbols": completed_symbols,
+        "failed_symbols": failed_symbols,
+        "summary": "mock market summary" if mock else "public market summary",
+    }
+    write_json(output_dir / "news" / "market_summary.json", market_summary)
+
+    manifest = {
+        "date": run_date,
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "run_mode": "manual" if mock else "scheduled",
+        "source_universe": str(universe_file),
+        "requested_symbols": requested_symbols,
+        "completed_symbols": completed_symbols,
+        "failed_symbols": failed_symbols,
+        "timeframes": timeframes,
+        "sources": {
+            "ohlcv": "mock" if mock else "yfinance",
+            "news": "mock" if mock else "yfinance",
+            "earnings": "mock" if mock else "yfinance",
+            "filings": "mock" if mock else "yfinance",
+        },
+        "data_status": (
+            "failed"
+            if not completed_symbols
+            else (
+                "partial"
+                if failed_symbols
+                or any(status != "ok" for item in symbol_status.values() for key, status in item.items() if key != "notes")
+                else "ok"
+            )
+        ),
+        "artifacts": {
+            "charts_root": str(output_dir / "charts"),
+            "ohlcv_root": str(output_dir / "ohlcv"),
+            "news_root": str(output_dir / "news"),
+        },
+        "symbol_status": symbol_status,
+        "notes": "mock artifact bundle" if mock else "live artifact bundle",
+    }
+    write_json(output_dir / "manifest.json", manifest)
+    return manifest

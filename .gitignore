@@ -25,6 +25,8 @@ state/*
 !state/.gitkeep
 logs/*
 !logs/.gitkeep
+reports/*
+!reports/.gitkeep
 
 # Script/runtime scratch files
 *.tmp

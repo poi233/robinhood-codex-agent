@@ -5,25 +5,18 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=scripts/common.sh
 source "$SCRIPT_DIR/common.sh"
+cd "$AGENT_ROOT"
 
-acquire_lock "intraday"
-
-if ! is_weekday_pt && [[ "${ALLOW_WEEKEND_RUN:-0}" != "1" ]]; then
-  log_line "intraday weekend skip."
-  append_local_decision "intraday" "calendar_skip" "not_a_weekday_pt"
-  exit 0
+args=()
+if [[ "$#" -gt 0 ]]; then
+  args=("$@")
+fi
+if [[ "${CODEX_EXEC_DRY_RUN:-0}" == "1" ]]; then
+  args+=(--dry-run)
 fi
 
-if ! is_intraday_window_pt && [[ "${ALLOW_OUTSIDE_MARKET_TEST:-0}" != "1" ]]; then
-  log_line "intraday outside configured PT window, skipping."
-  append_local_decision "intraday" "time_window_skip" "outside_intraday_window_pt"
-  exit 0
+if [[ "${#args[@]}" -gt 0 ]]; then
+  python3 -m trading_agent intraday "${args[@]}"
+else
+  python3 -m trading_agent intraday
 fi
-
-if [[ "$(kill_switch_status)" == "present" && "${ALLOW_KILL_SWITCH_PAPER_TEST:-0}" != "1" ]]; then
-  log_line "KILL_SWITCH exists, skipping intraday run."
-  append_local_decision "intraday" "kill_switch_skip" "KILL_SWITCH_present"
-  exit 0
-fi
-
-run_codex_prompt "intraday" "$AGENT_ROOT/prompts/intraday_check.txt"

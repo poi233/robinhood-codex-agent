@@ -1,5 +1,6 @@
 import json
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -68,6 +69,7 @@ class MarketFeedCollectorTests(unittest.TestCase):
                 COLLECTOR.read_text(encoding="utf-8"),
                 encoding="utf-8",
             )
+            shutil.copytree(REPO_ROOT / "trading_agent", tmp / "trading_agent")
 
             result = subprocess.run(
                 ["bash", "scripts/run_market_feed_collection.sh"],

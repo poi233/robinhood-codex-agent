@@ -35,6 +35,7 @@ echo "Safety checks:"
 
 PROJECT_CODEX_CONFIG="$AGENT_ROOT/.codex/config.toml"
 PREMARKET_SCRIPT="$AGENT_ROOT/scripts/run_premarket.sh"
+PREMARKET_PIPELINE="$AGENT_ROOT/trading_agent/orchestration/premarket.py"
 READ_APPROVED_TOOLS=(
   get_accounts
   get_portfolio
@@ -142,10 +143,11 @@ else
 fi
 
 if [[ -f "$AGENT_ROOT/scripts/kronos_generate_signals.py" ]] \
-  && [[ -f "$AGENT_ROOT/scripts/run_kronos_premarket_scan.sh" ]] \
+  && [[ -f "$PREMARKET_PIPELINE" ]] \
   && [[ -f "$PREMARKET_SCRIPT" ]] \
-  && file_has_pattern 'ENABLE_KRONOS_SIGNAL_LAYER' "$PREMARKET_SCRIPT" \
-  && file_has_pattern 'run_kronos_premarket_scan\.sh' "$PREMARKET_SCRIPT" \
+  && file_has_pattern '-m trading_agent premarket' "$PREMARKET_SCRIPT" \
+  && file_has_pattern 'ENABLE_KRONOS_SIGNAL_LAYER' "$PREMARKET_PIPELINE" \
+  && file_has_pattern '_write_kronos_signals' "$PREMARKET_PIPELINE" \
   && file_has_pattern 'state/kronos_signals.json' "$AGENT_ROOT/prompts/premarket_research.txt"; then
   echo "  - Kronos signal layer is configured and wired into premarket: ok"
 else
@@ -153,9 +155,11 @@ else
 fi
 
 if [[ -f "$AGENT_ROOT/prompts/technical_research.txt" ]] \
+  && [[ -f "$PREMARKET_PIPELINE" ]] \
   && [[ -f "$PREMARKET_SCRIPT" ]] \
-  && file_has_pattern 'run_market_feed_collection\.sh' "$PREMARKET_SCRIPT" \
-  && file_has_pattern 'run_technical_research\.sh' "$PREMARKET_SCRIPT" \
+  && file_has_pattern '-m trading_agent premarket' "$PREMARKET_SCRIPT" \
+  && file_has_pattern 'collect_market_context' "$PREMARKET_PIPELINE" \
+  && file_has_pattern 'technical_research\.txt' "$PREMARKET_PIPELINE" \
   && file_has_pattern 'state/technical_signals.json' "$AGENT_ROOT/prompts/premarket_research.txt" \
   && file_has_pattern 'state/technical_signals.json' "$AGENT_ROOT/prompts/intraday_check.txt"; then
   echo "  - Technical signal layer is configured and wired into premarket/intraday: ok"

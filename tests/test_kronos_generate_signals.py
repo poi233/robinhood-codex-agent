@@ -3,6 +3,7 @@ import io
 import importlib
 import json
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -10,6 +11,8 @@ import types
 import unittest
 from pathlib import Path
 from unittest import mock
+
+from trading_agent.signals.kronos import build_mock_kronos_payload
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 SCRIPT_PATH = REPO_ROOT / "scripts" / "kronos_generate_signals.py"
@@ -106,7 +109,7 @@ class PortableArtifactTests(unittest.TestCase):
         self.assertIn("./scripts/check_safety.sh", readme)
         self.assertIn("ALLOW_WEEKEND_RUN=1 KRONOS_USE_MOCK=1 ./scripts/run_kronos_premarket_scan.sh", readme)
         self.assertIn(
-            "ALLOW_WEEKEND_RUN=1 KRONOS_USE_MOCK=1 CODEX_EXEC_DRY_RUN=1 ./scripts/run_premarket.sh",
+            "ALLOW_WEEKEND_RUN=1 CODEX_EXEC_DRY_RUN=1 ./scripts/run_premarket.sh",
             readme,
         )
         self.assertIn("KRONOS_BOOTSTRAP_PYTHON", readme)
@@ -144,7 +147,7 @@ class PortableArtifactTests(unittest.TestCase):
         self.assertIn("./scripts/check_safety.sh", contents)
         self.assertIn("ALLOW_WEEKEND_RUN=1 KRONOS_USE_MOCK=1 ./scripts/run_kronos_premarket_scan.sh", contents)
         self.assertIn(
-            "ALLOW_WEEKEND_RUN=1 KRONOS_USE_MOCK=1 CODEX_EXEC_DRY_RUN=1 ./scripts/run_premarket.sh",
+            "ALLOW_WEEKEND_RUN=1 CODEX_EXEC_DRY_RUN=1 ./scripts/run_premarket.sh",
             contents,
         )
         self.assertIn("KRONOS_BOOTSTRAP_PYTHON", contents)
@@ -306,7 +309,7 @@ class SafetyWiringTests(unittest.TestCase):
 
         self.assertIn('ENABLE_KRONOS_SIGNAL_LAYER', contents)
         self.assertIn('scripts/run_premarket.sh', contents)
-        self.assertIn('run_kronos_premarket_scan.sh', contents)
+        self.assertIn('trading_agent/orchestration/premarket.py', contents)
 
     def test_check_safety_verifies_portable_kronos_artifacts(self) -> None:
         contents = (REPO_ROOT / "scripts" / "check_safety.sh").read_text(encoding="utf-8")
@@ -340,7 +343,10 @@ class SafetyWiringTests(unittest.TestCase):
                 encoding="utf-8",
             )
 
-            (config_dir / "runtime.env").write_text("TRADING_MODE=paper\nRISK_TIER=0\n", encoding="utf-8")
+            (config_dir / "runtime.env").write_text(
+                "TRADING_MODE=paper\nRISK_TIER=0\nENABLE_KRONOS_SIGNAL_LAYER=1\n",
+                encoding="utf-8",
+            )
             (config_dir / "allowlist.txt").write_text("SPY\n", encoding="utf-8")
             (config_dir / "universe.txt").write_text("NVDA\n", encoding="utf-8")
             (config_dir / "risk.md").write_text("Only use limit orders\n", encoding="utf-8")
@@ -348,7 +354,7 @@ class SafetyWiringTests(unittest.TestCase):
             (config_dir / "runtime.env.local.example").write_text("TRADING_MODE=paper\n", encoding="utf-8")
 
             (prompts_dir / "premarket_research.txt").write_text(
-                "Do not call place_equity_order\nstate/dsa_signals.json\nstate/kronos_signals.json\n",
+                "Do not call place_equity_order\nstate/dsa_signals.json\nstate/kronos_signals.json\nstate/technical_signals.json\n",
                 encoding="utf-8",
             )
             (prompts_dir / "postmarket_summary.txt").write_text(
@@ -359,21 +365,33 @@ class SafetyWiringTests(unittest.TestCase):
                 "never place, review, cancel, or modify orders\n",
                 encoding="utf-8",
             )
+            (prompts_dir / "technical_research.txt").write_text("state/technical_signals.json\n", encoding="utf-8")
             (prompts_dir / "intraday_check.txt").write_text(
-                "Runtime mode behavior\nstate/dsa_signals.json\n",
+                "Runtime mode behavior\nstate/dsa_signals.json\nstate/technical_signals.json\n",
                 encoding="utf-8",
             )
 
             for filename in (
                 "kronos_generate_signals.py",
-                "run_kronos_premarket_scan.sh",
                 "setup_kronos_env.sh",
                 "verify_kronos_env.sh",
                 "run_premarket.sh",
             ):
                 (scripts_dir / filename).write_text("", encoding="utf-8")
             (scripts_dir / "run_premarket.sh").write_text(
-                'ENABLE_KRONOS_SIGNAL_LAYER=1\nrun_kronos_premarket_scan.sh\n',
+                'python3 -m trading_agent premarket\n',
+                encoding="utf-8",
+            )
+            (tmp / "trading_agent" / "orchestration").mkdir(parents=True)
+            (tmp / "trading_agent" / "__init__.py").write_text("", encoding="utf-8")
+            (tmp / "trading_agent" / "orchestration" / "__init__.py").write_text("", encoding="utf-8")
+            (tmp / "trading_agent" / "orchestration" / "premarket.py").write_text(
+                'ENABLE_KRONOS_SIGNAL_LAYER = "1"\n'
+                "def _write_kronos_signals():\n"
+                "    pass\n"
+                "def collect_market_context():\n"
+                "    pass\n"
+                'TECHNICAL_PROMPT = "technical_research.txt"\n',
                 encoding="utf-8",
             )
 
@@ -394,6 +412,7 @@ class SafetyWiringTests(unittest.TestCase):
             self.assertEqual(result.returncode, 0, msg=result.stderr)
             self.assertIn("Safety checks:", result.stdout)
             self.assertIn("Kronos signal layer is configured and wired into premarket: ok", result.stdout)
+            self.assertIn("Technical signal layer is configured and wired into premarket/intraday: ok", result.stdout)
 
 
 class KronosGenerateSignalsTests(unittest.TestCase):
@@ -533,53 +552,58 @@ class KronosPredictor:
             self.assertIn("boom", payload["notes"])
 
 
+class KronosPackageApiTests(unittest.TestCase):
+    def test_build_mock_kronos_payload_returns_expected_symbols(self) -> None:
+        payload = build_mock_kronos_payload(["NVDA", "PLTR"], "2026-06-14", "config/universe.txt")
+        self.assertEqual(payload["date"], "2026-06-14")
+        self.assertEqual(sorted(payload["symbols"].keys()), ["NVDA", "PLTR"])
+
+
 class KronosRunnerTests(unittest.TestCase):
+    def build_temp_runtime_repo(self, tmp: Path) -> None:
+        shutil.copytree(REPO_ROOT / "trading_agent", tmp / "trading_agent")
+        (tmp / "scripts").mkdir()
+        (tmp / "config").mkdir()
+        (tmp / "prompts").mkdir()
+        (tmp / "state").mkdir()
+        (tmp / "logs").mkdir()
+
+        for filename in ("run_premarket.sh", "common.sh"):
+            (tmp / "scripts" / filename).write_text(
+                (REPO_ROOT / "scripts" / filename).read_text(encoding="utf-8"),
+                encoding="utf-8",
+            )
+
+        (tmp / "config" / "runtime.env").write_text(
+            "\n".join(
+                [
+                    "TRADING_MODE=paper",
+                    "CODEX_MODEL=gpt-5.5",
+                    "ENABLE_DSA_SIGNAL_LAYER=0",
+                    "ENABLE_KRONOS_SIGNAL_LAYER=1",
+                    "ENABLE_MARKET_FEED_LAYER=0",
+                    "ENABLE_TECHNICAL_SIGNAL_LAYER=0",
+                ]
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        (tmp / "config" / "universe.txt").write_text("NVDA\nPLTR\n", encoding="utf-8")
+        (tmp / "prompts" / "premarket_research.txt").write_text("prompt\n", encoding="utf-8")
+
     def test_premarket_runner_invokes_kronos_when_enabled(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             tmp = Path(tmpdir)
-            scripts_dir = tmp / "scripts"
-            prompts_dir = tmp / "prompts"
-            scripts_dir.mkdir()
-            prompts_dir.mkdir()
-
-            (scripts_dir / "run_premarket.sh").write_text(
-                (REPO_ROOT / "scripts" / "run_premarket.sh").read_text(encoding="utf-8"),
-                encoding="utf-8",
-            )
-            (scripts_dir / "common.sh").write_text(
-                """
-#!/usr/bin/env bash
-set -euo pipefail
-AGENT_ROOT="$(pwd)"
-acquire_lock() { :; }
-is_weekday_pt() { return 0; }
-log_line() { printf 'log:%s\\n' "$*" >> "$AGENT_ROOT/calls.log"; }
-run_codex_prompt() { printf 'prompt:%s:%s\\n' "$1" "$2" >> "$AGENT_ROOT/calls.log"; }
-""".strip()
-                + "\n",
-                encoding="utf-8",
-            )
-            (scripts_dir / "run_kronos_premarket_scan.sh").write_text(
-                """
-#!/usr/bin/env bash
-set -euo pipefail
-printf 'kronos\\n' >> "$(pwd)/calls.log"
-""".strip()
-                + "\n",
-                encoding="utf-8",
-            )
-            (prompts_dir / "premarket_research.txt").write_text("prompt\n", encoding="utf-8")
-            os.chmod(scripts_dir / "run_kronos_premarket_scan.sh", 0o755)
+            self.build_temp_runtime_repo(tmp)
 
             env = dict(
                 os.environ,
-                ENABLE_DSA_SIGNAL_LAYER="0",
-                ENABLE_KRONOS_SIGNAL_LAYER="1",
-                ENABLE_MARKET_FEED_LAYER="0",
-                ENABLE_TECHNICAL_SIGNAL_LAYER="0",
+                ALLOW_WEEKEND_RUN="1",
+                CODEX_EXEC_DRY_RUN="1",
+                KRONOS_USE_MOCK="1",
             )
             result = subprocess.run(
-                ["bash", str(scripts_dir / "run_premarket.sh")],
+                ["bash", str(tmp / "scripts" / "run_premarket.sh")],
                 capture_output=True,
                 text=True,
                 check=False,
@@ -588,58 +612,35 @@ printf 'kronos\\n' >> "$(pwd)/calls.log"
             )
 
             self.assertEqual(result.returncode, 0)
-            calls = (tmp / "calls.log").read_text(encoding="utf-8").splitlines()
-            self.assertEqual(calls[0], "kronos")
-            self.assertEqual(len(calls), 2)
-            self.assertTrue(calls[1].startswith("prompt:premarket:"))
-            self.assertTrue(calls[1].endswith("/prompts/premarket_research.txt"))
+            payload = json.loads((tmp / "state" / "kronos_signals.json").read_text(encoding="utf-8"))
+            self.assertEqual(payload["data_status"], "ok")
+            self.assertIn("NVDA", payload["symbols"])
 
     def test_premarket_runner_skips_kronos_when_disabled(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             tmp = Path(tmpdir)
-            scripts_dir = tmp / "scripts"
-            prompts_dir = tmp / "prompts"
-            scripts_dir.mkdir()
-            prompts_dir.mkdir()
-
-            (scripts_dir / "run_premarket.sh").write_text(
-                (REPO_ROOT / "scripts" / "run_premarket.sh").read_text(encoding="utf-8"),
-                encoding="utf-8",
-            )
-            (scripts_dir / "common.sh").write_text(
-                """
-#!/usr/bin/env bash
-set -euo pipefail
-AGENT_ROOT="$(pwd)"
-acquire_lock() { :; }
-is_weekday_pt() { return 0; }
-log_line() { printf 'log:%s\\n' "$*" >> "$AGENT_ROOT/calls.log"; }
-run_codex_prompt() { printf 'prompt:%s:%s\\n' "$1" "$2" >> "$AGENT_ROOT/calls.log"; }
-""".strip()
+            self.build_temp_runtime_repo(tmp)
+            (tmp / "config" / "runtime.env").write_text(
+                "\n".join(
+                    [
+                        "TRADING_MODE=paper",
+                        "ENABLE_DSA_SIGNAL_LAYER=0",
+                        "ENABLE_KRONOS_SIGNAL_LAYER=0",
+                        "ENABLE_MARKET_FEED_LAYER=0",
+                        "ENABLE_TECHNICAL_SIGNAL_LAYER=0",
+                    ]
+                )
                 + "\n",
                 encoding="utf-8",
             )
-            (scripts_dir / "run_kronos_premarket_scan.sh").write_text(
-                """
-#!/usr/bin/env bash
-set -euo pipefail
-printf 'kronos\\n' >> "$(pwd)/calls.log"
-""".strip()
-                + "\n",
-                encoding="utf-8",
-            )
-            (prompts_dir / "premarket_research.txt").write_text("prompt\n", encoding="utf-8")
-            os.chmod(scripts_dir / "run_kronos_premarket_scan.sh", 0o755)
 
             env = dict(
                 os.environ,
-                ENABLE_DSA_SIGNAL_LAYER="0",
-                ENABLE_KRONOS_SIGNAL_LAYER="0",
-                ENABLE_MARKET_FEED_LAYER="0",
-                ENABLE_TECHNICAL_SIGNAL_LAYER="0",
+                ALLOW_WEEKEND_RUN="1",
+                CODEX_EXEC_DRY_RUN="1",
             )
             result = subprocess.run(
-                ["bash", str(scripts_dir / "run_premarket.sh")],
+                ["bash", str(tmp / "scripts" / "run_premarket.sh")],
                 capture_output=True,
                 text=True,
                 check=False,
@@ -648,58 +649,21 @@ printf 'kronos\\n' >> "$(pwd)/calls.log"
             )
 
             self.assertEqual(result.returncode, 0)
-            calls = (tmp / "calls.log").read_text(encoding="utf-8").splitlines()
-            self.assertEqual(len(calls), 1)
-            self.assertTrue(calls[0].startswith("prompt:premarket:"))
-            self.assertTrue(calls[0].endswith("/prompts/premarket_research.txt"))
+            self.assertFalse((tmp / "state" / "kronos_signals.json").exists())
 
     def test_premarket_runner_continues_when_kronos_fails(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             tmp = Path(tmpdir)
-            scripts_dir = tmp / "scripts"
-            prompts_dir = tmp / "prompts"
-            scripts_dir.mkdir()
-            prompts_dir.mkdir()
-
-            (scripts_dir / "run_premarket.sh").write_text(
-                (REPO_ROOT / "scripts" / "run_premarket.sh").read_text(encoding="utf-8"),
-                encoding="utf-8",
-            )
-            (scripts_dir / "common.sh").write_text(
-                """
-#!/usr/bin/env bash
-set -euo pipefail
-AGENT_ROOT="$(pwd)"
-acquire_lock() { :; }
-is_weekday_pt() { return 0; }
-log_line() { printf 'log:%s\\n' "$*" >> "$AGENT_ROOT/calls.log"; }
-run_codex_prompt() { printf 'prompt:%s:%s\\n' "$1" "$2" >> "$AGENT_ROOT/calls.log"; }
-""".strip()
-                + "\n",
-                encoding="utf-8",
-            )
-            (scripts_dir / "run_kronos_premarket_scan.sh").write_text(
-                """
-#!/usr/bin/env bash
-set -euo pipefail
-printf 'kronos\\n' >> "$(pwd)/calls.log"
-exit 7
-""".strip()
-                + "\n",
-                encoding="utf-8",
-            )
-            (prompts_dir / "premarket_research.txt").write_text("prompt\n", encoding="utf-8")
-            os.chmod(scripts_dir / "run_kronos_premarket_scan.sh", 0o755)
+            self.build_temp_runtime_repo(tmp)
 
             env = dict(
                 os.environ,
-                ENABLE_DSA_SIGNAL_LAYER="0",
-                ENABLE_KRONOS_SIGNAL_LAYER="1",
-                ENABLE_MARKET_FEED_LAYER="0",
-                ENABLE_TECHNICAL_SIGNAL_LAYER="0",
+                ALLOW_WEEKEND_RUN="1",
+                CODEX_EXEC_DRY_RUN="1",
+                KRONOS_PROJECT_ROOT=str(tmp / "missing-kronos-project"),
             )
             result = subprocess.run(
-                ["bash", str(scripts_dir / "run_premarket.sh")],
+                ["bash", str(tmp / "scripts" / "run_premarket.sh")],
                 capture_output=True,
                 text=True,
                 check=False,
@@ -708,15 +672,8 @@ exit 7
             )
 
             self.assertEqual(result.returncode, 0)
-            calls = (tmp / "calls.log").read_text(encoding="utf-8").splitlines()
-            self.assertEqual(calls[0], "kronos")
-            self.assertEqual(
-                calls[1],
-                "log:kronos_premarket_scan failed; continuing with main premarket research.",
-            )
-            self.assertEqual(len(calls), 3)
-            self.assertTrue(calls[2].startswith("prompt:premarket:"))
-            self.assertTrue(calls[2].endswith("/prompts/premarket_research.txt"))
+            payload = json.loads((tmp / "state" / "kronos_signals.json").read_text(encoding="utf-8"))
+            self.assertEqual(payload["data_status"], "failed")
 
     def test_mock_runner_writes_repo_state_file(self) -> None:
         state_file = REPO_ROOT / "state" / "kronos_signals.json"

@@ -5,12 +5,18 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=scripts/common.sh
 source "$SCRIPT_DIR/common.sh"
+cd "$AGENT_ROOT"
 
-acquire_lock "postmarket"
-
-if ! is_weekday_pt && [[ "${ALLOW_WEEKEND_RUN:-0}" != "1" ]]; then
-  log_line "postmarket weekend skip."
-  exit 0
+args=()
+if [[ "$#" -gt 0 ]]; then
+  args=("$@")
+fi
+if [[ "${CODEX_EXEC_DRY_RUN:-0}" == "1" ]]; then
+  args+=(--dry-run)
 fi
 
-run_codex_prompt "postmarket" "$AGENT_ROOT/prompts/postmarket_summary.txt"
+if [[ "${#args[@]}" -gt 0 ]]; then
+  python3 -m trading_agent postmarket "${args[@]}"
+else
+  python3 -m trading_agent postmarket
+fi
