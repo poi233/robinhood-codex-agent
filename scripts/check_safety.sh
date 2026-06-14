@@ -152,6 +152,17 @@ else
   echo "  - WARNING: Kronos signal layer is incomplete or not wired into premarket."
 fi
 
+if [[ -f "$AGENT_ROOT/prompts/technical_research.txt" ]] \
+  && [[ -f "$PREMARKET_SCRIPT" ]] \
+  && file_has_pattern 'run_market_feed_collection\.sh' "$PREMARKET_SCRIPT" \
+  && file_has_pattern 'run_technical_research\.sh' "$PREMARKET_SCRIPT" \
+  && file_has_pattern 'state/technical_signals.json' "$AGENT_ROOT/prompts/premarket_research.txt" \
+  && file_has_pattern 'state/technical_signals.json' "$AGENT_ROOT/prompts/intraday_check.txt"; then
+  echo "  - Technical signal layer is configured and wired into premarket/intraday: ok"
+else
+  echo "  - WARNING: technical signal layer is incomplete or not wired into prompts."
+fi
+
 if [[ -f "$AGENT_ROOT/config/runtime.env.local.example" ]] \
   && [[ -f "$AGENT_ROOT/requirements-kronos-extra.txt" ]] \
   && [[ -f "$AGENT_ROOT/scripts/setup_kronos_env.sh" ]] \

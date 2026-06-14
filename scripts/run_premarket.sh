@@ -25,4 +25,16 @@ if [[ "${ENABLE_KRONOS_SIGNAL_LAYER:-1}" == "1" ]]; then
   fi
 fi
 
+if [[ "${ENABLE_MARKET_FEED_LAYER:-1}" == "1" ]]; then
+  if ! "$SCRIPT_DIR/run_market_feed_collection.sh"; then
+    log_line "market_feed_collection failed; continuing with main premarket research."
+  fi
+fi
+
+if [[ "${ENABLE_TECHNICAL_SIGNAL_LAYER:-1}" == "1" ]]; then
+  if ! "$SCRIPT_DIR/run_technical_research.sh"; then
+    log_line "technical_research failed; continuing with main premarket research."
+  fi
+fi
+
 run_codex_prompt "premarket" "$AGENT_ROOT/prompts/premarket_research.txt"

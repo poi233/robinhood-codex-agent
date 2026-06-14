@@ -13,6 +13,7 @@ Read these local files first:
 - `state/daily_plan.json`
 - `state/dynamic_allowlist.json`
 - `state/dsa_signals.json` if it exists
+- `state/technical_signals.json` if it exists and is for today
 - `state/today_allowlist.txt`
 - `state/daily_usage.json`
 - `logs/decisions.jsonl`
@@ -66,6 +67,8 @@ Decision logic:
   - symbol is in today's dynamic allowlist and daily watchlist;
   - the candidate's score in `state/dynamic_allowlist.json` is at least 80, or at least 75 for a broad ETF defensive deployment;
   - if same-day `state/dsa_signals.json` exists, the symbol is not marked `blocked`, `suggested_premarket_use="block"`, or carrying unresolved high-confidence risk flags;
+  - if same-day `state/technical_signals.json` exists, current price is not inside `no_trade_zone`, and either current price is above `long_setup.trigger_above` or inside `long_setup.entry_zone`;
+  - if same-day `state/technical_signals.json` exists, current price is not above `long_setup.do_not_chase_above`;
   - for pullback setups, current price is down at least 0.5%-1.0% from prior close or matches the per-symbol entry condition;
   - for breakout/reclaim setups, `daily_plan.symbol_trade_rules[symbol].breakout_allowed=true` and the per-symbol entry condition is met;
   - quote is current and internally consistent;
@@ -75,9 +78,11 @@ Decision logic:
 - Sell candidate only if:
   - `daily_plan.allowed_actions` includes `partial_take_profit`;
   - the Agentic Account already has a long position;
+  - if same-day `state/technical_signals.json` exists, `short_setup.status` is `active` or `watch`, and current price is below `short_setup.trigger_below` or otherwise supports risk reduction;
   - the position is up more than 2.5% from cost basis;
   - no open order exists for that symbol;
   - the sell is partial and never short.
+- Never interpret `short_setup` as permission to open a short position.
 - If no candidate passes, append `decision="no_action"`.
 
 Output and logging:

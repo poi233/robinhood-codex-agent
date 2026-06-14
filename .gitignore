@@ -18,6 +18,7 @@ config/runtime.env.local
 # Codex / automation runtime artifacts
 .codex/session*
 .codex/tmp/
+.superpowers/
 *.lock
 state/*
 !state/.gitkeep
