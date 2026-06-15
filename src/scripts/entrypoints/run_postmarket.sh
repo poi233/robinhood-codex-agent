@@ -6,6 +6,11 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=src/scripts/lib/common.sh
 source "$SCRIPT_DIR/../lib/common.sh"
 cd "$AGENT_ROOT"
+python_bin="$(resolve_runtime_python_bin)" || {
+  log_line "postmarket failed: no Python 3.11+ interpreter found"
+  printf '%s no Python 3.11+ interpreter found for postmarket\n' "$(pt_now)" >> "$ERROR_LOG"
+  exit 1
+}
 
 args=()
 if [[ "$#" -gt 0 ]]; then
@@ -16,7 +21,7 @@ if [[ "${CODEX_EXEC_DRY_RUN:-0}" == "1" ]]; then
 fi
 
 if [[ "${#args[@]}" -gt 0 ]]; then
-  python3 -m trading_agent postmarket "${args[@]}"
+  "$python_bin" -m trading_agent postmarket "${args[@]}"
 else
-  python3 -m trading_agent postmarket
+  "$python_bin" -m trading_agent postmarket
 fi

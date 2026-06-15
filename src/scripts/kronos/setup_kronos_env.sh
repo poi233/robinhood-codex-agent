@@ -3,18 +3,37 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 KRONOS_REPO_URL="https://github.com/shiyu-coder/Kronos.git"
 KRONOS_COMMIT_SHA="67b630e67f6a18c9e9be918d9b4337c960db1e9a"
+
+err() {
+  printf '%s\n' "$*" >&2
+}
+
+resolve_repo_root() {
+  local current="$SCRIPT_DIR"
+
+  while [[ "$current" != "/" ]]; do
+    if [[ -f "$current/requirements-kronos-extra.txt" && -d "$current/src/config" ]]; then
+      printf '%s\n' "$current"
+      return 0
+    fi
+    current="$(cd "$current/.." && pwd)"
+  done
+
+  return 1
+}
+
+REPO_ROOT="$(resolve_repo_root)" || {
+  err "Unable to resolve repository root from $SCRIPT_DIR."
+  err "Expected to find requirements-kronos-extra.txt and src/config."
+  exit 1
+}
 VENV_DIR="$REPO_ROOT/.venv-kronos"
 VENDOR_DIR="$REPO_ROOT/.vendor"
 KRONOS_DIR="$VENDOR_DIR/kronos"
 LOCAL_ENV_EXAMPLE="$REPO_ROOT/src/config/runtime.env.local.example"
 LOCAL_ENV_FILE="$REPO_ROOT/src/config/runtime.env.local"
-
-err() {
-  printf '%s\n' "$*" >&2
-}
 
 resolve_python_command() {
   local candidate="$1"

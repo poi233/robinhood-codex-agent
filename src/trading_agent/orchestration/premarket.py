@@ -107,8 +107,8 @@ def _write_kronos_signals(agent_root: Path) -> None:
     run_date = paths.run_date
     kronos_python = os.environ.get("KRONOS_PYTHON_BIN")
     if kronos_python and Path(kronos_python).exists():
-        current_python = Path(sys.executable).resolve()
-        requested_python = Path(kronos_python).resolve()
+        current_python = Path(sys.executable).absolute()
+        requested_python = Path(kronos_python).absolute()
         if requested_python != current_python:
             cmd = [
                 kronos_python,

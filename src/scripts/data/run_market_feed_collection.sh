@@ -23,13 +23,18 @@ collector_args=(
 
 if [[ "${CODEX_EXEC_DRY_RUN:-0}" == "1" ]]; then
   collector_args+=(--mock)
+  resolved_python="$(resolve_runtime_python_bin)" || {
+    log_line "market_feed failed: no Python 3.11+ interpreter found"
+    printf '%s no Python 3.11+ interpreter found for market feed dry-run\n' "$(pt_now)" >> "$ERROR_LOG"
+    exit 1
+  }
+else
+  resolved_python="$(resolve_market_feed_python_bin)" || {
+    log_line "market_feed failed: no Python 3.11+ interpreter with yfinance found"
+    printf '%s no Python 3.11+ interpreter with yfinance found for market feed collection\n' "$(pt_now)" >> "$ERROR_LOG"
+    exit 1
+  }
 fi
-
-resolved_python="$(resolve_market_feed_python_bin)" || {
-  log_line "market_feed failed: no Python interpreter with yfinance found"
-  printf '%s no Python interpreter with yfinance found for market feed collection\n' "$(pt_now)" >> "$ERROR_LOG"
-  exit 1
-}
 
 "$resolved_python" "$SRC_ROOT/scripts/data/collect_market_feed.py" \
   "${collector_args[@]}"

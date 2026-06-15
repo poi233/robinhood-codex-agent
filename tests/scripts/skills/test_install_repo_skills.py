@@ -116,7 +116,7 @@ class CommonRuntimeSkillFeedTests(unittest.TestCase):
             )
             fake_python.write_text(
                 "#!/usr/bin/env bash\n"
-                "if [[ \"$1\" == \"-c\" && \"$2\" == \"import yfinance\" ]]; then exit 0; fi\n"
+                "if [[ \"$1\" == \"-c\" ]]; then exit 0; fi\n"
                 "exit 1\n",
                 encoding="utf-8",
             )

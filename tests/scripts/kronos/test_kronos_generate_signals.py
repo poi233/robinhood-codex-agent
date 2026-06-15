@@ -193,6 +193,8 @@ class PortableArtifactTests(unittest.TestCase):
             repo = tmp / "repo"
             fake_bin = tmp / "bin"
             (repo / "scripts" / "kronos").mkdir(parents=True)
+            (repo / "src" / "config").mkdir(parents=True)
+            (repo / "requirements-kronos-extra.txt").write_text("yfinance\n", encoding="utf-8")
             fake_bin.mkdir(parents=True)
 
             (repo / "scripts" / "kronos" / "setup_kronos_env.sh").write_text(
@@ -212,13 +214,14 @@ class PortableArtifactTests(unittest.TestCase):
             os.chmod(fake_bin / "git", 0o755)
             os.chmod(fake_bin / "python3", 0o755)
 
+            isolated_path = f"{fake_bin}:/usr/bin:/bin:/usr/sbin:/sbin"
             result = subprocess.run(
                 ["/bin/bash", str(repo / "scripts" / "kronos" / "setup_kronos_env.sh")],
                 cwd=repo,
                 capture_output=True,
                 text=True,
                 check=False,
-                env={**os.environ, "PATH": f"{fake_bin}:{os.environ.get('PATH', '')}"},
+                env={**os.environ, "PATH": isolated_path},
             )
 
             self.assertNotEqual(result.returncode, 0)
@@ -298,6 +301,7 @@ class PortableArtifactTests(unittest.TestCase):
             for path in (fake_bin / "git", fake_bin / "python3", fake_bin / "python3.11"):
                 os.chmod(path, 0o755)
 
+            isolated_path = f"{fake_bin}:/usr/bin:/bin:/usr/sbin:/sbin"
             result = subprocess.run(
                 ["/bin/bash", str(repo / "scripts" / "kronos" / "setup_kronos_env.sh")],
                 cwd=repo,
@@ -306,7 +310,7 @@ class PortableArtifactTests(unittest.TestCase):
                 check=False,
                 env={
                     **os.environ,
-                    "PATH": f"{fake_bin}:{os.environ.get('PATH', '')}",
+                    "PATH": isolated_path,
                     "GIT_LOG": str(git_log),
                     "VENV_PYTHON_LOG": str(venv_python_log),
                     "PIP_LOG": str(pip_log),

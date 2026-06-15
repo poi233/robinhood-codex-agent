@@ -6,7 +6,11 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=src/scripts/lib/common.sh
 source "$SCRIPT_DIR/../lib/common.sh"
 cd "$AGENT_ROOT"
-python_bin="$(resolve_market_feed_python_bin)"
+python_bin="$(resolve_runtime_python_bin)" || {
+  log_line "premarket failed: no Python 3.11+ interpreter found"
+  printf '%s no Python 3.11+ interpreter found for premarket\n' "$(pt_now)" >> "$ERROR_LOG"
+  exit 1
+}
 
 args=()
 if [[ "$#" -gt 0 ]]; then

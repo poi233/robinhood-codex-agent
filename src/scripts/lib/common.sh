@@ -7,7 +7,7 @@ SRC_ROOT="$AGENT_ROOT/src"
 CONFIG_ENV="$SRC_ROOT/config/runtime.env"
 CONFIG_ENV_LOCAL="$SRC_ROOT/config/runtime.env.local"
 
-export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:${PATH:-}"
+export PATH="$AGENT_ROOT/.venv/bin:/opt/homebrew/opt/python@3.12/libexec/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:${PATH:-}"
 export PYTHONPATH="$SRC_ROOT:$AGENT_ROOT:${PYTHONPATH:-}"
 
 mkdir -p "$AGENT_ROOT/runtime/logs" "$AGENT_ROOT/runtime/state" "$AGENT_ROOT/runtime/reports"
@@ -286,9 +286,44 @@ append_local_decision() {
     "$(pt_now)" "$run_kind" "$TRADING_MODE" "$decision" "$reason" >> "$DECISIONS_LOG"
 }
 
+python_has_supported_version() {
+  local python_bin="$1"
+  "$python_bin" -c 'import sys; raise SystemExit(0 if sys.version_info >= (3, 11) else 1)' >/dev/null 2>&1
+}
+
+resolve_runtime_python_bin() {
+  local candidate resolved
+
+  for candidate in \
+    "${TRADING_AGENT_PYTHON_BIN:-}" \
+    "$AGENT_ROOT/.venv/bin/python" \
+    python3 \
+    python \
+    /opt/homebrew/opt/python@3.12/libexec/bin/python3 \
+    /opt/homebrew/bin/python3.12 \
+    /opt/homebrew/bin/python3 \
+    /usr/local/bin/python3 \
+    /usr/bin/python3; do
+    [[ -n "$candidate" ]] || continue
+    if [[ "$candidate" == */* ]]; then
+      [[ -x "$candidate" ]] || continue
+      resolved="$candidate"
+    else
+      resolved="$(command -v "$candidate" 2>/dev/null || true)"
+      [[ -n "$resolved" ]] || continue
+    fi
+    if python_has_supported_version "$resolved"; then
+      printf '%s\n' "$resolved"
+      return 0
+    fi
+  done
+
+  return 1
+}
+
 market_feed_python_has_deps() {
   local python_bin="$1"
-  "$python_bin" -c 'import yfinance' >/dev/null 2>&1
+  "$python_bin" -c 'import sys; import yfinance; raise SystemExit(0 if sys.version_info >= (3, 11) else 1)' >/dev/null 2>&1
 }
 
 resolve_market_feed_python_bin() {
