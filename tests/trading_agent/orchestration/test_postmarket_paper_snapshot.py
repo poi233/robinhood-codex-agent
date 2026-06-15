@@ -30,7 +30,8 @@ class PostmarketPaperSnapshotTests(unittest.TestCase):
             try:
                 with mock.patch.object(postmarket_module, "_is_weekday_pt", return_value=True), \
                     mock.patch.dict(os.environ, {"RUN_DATE_PT": "2026-06-14"}, clear=False), \
-                    mock.patch.object(postmarket_module, "run_codex_prompt", return_value=0):
+                    mock.patch.object(postmarket_module, "run_codex_prompt", return_value=0), \
+                    mock.patch.object(postmarket_module, "send_trade_email_notification") as notify:
                     status = postmarket_module.run_postmarket_pipeline(dry_run=False)
 
                 day_end = json.loads((paper_dir / "day_end.json").read_text(encoding="utf-8"))
@@ -43,6 +44,8 @@ class PostmarketPaperSnapshotTests(unittest.TestCase):
         self.assertEqual(day_end["positions_market_value"], 10.0)
         self.assertEqual(day_end["total_equity"], 25.0)
         self.assertEqual(curve[-1]["event"], "day_end")
+        notify.assert_called_once()
+        self.assertEqual(notify.call_args.kwargs["event_tag"], "POSTMARKET_DONE")
 
     def test_postmarket_writes_paper_summary_before_codex_prompt(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

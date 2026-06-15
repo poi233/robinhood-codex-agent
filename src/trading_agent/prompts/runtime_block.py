@@ -41,6 +41,8 @@ def build_runtime_block(run_kind: str, agent_root: Path, *, overrides: Mapping[s
         "ENABLE_DSA_SIGNAL_LAYER": env.get("ENABLE_DSA_SIGNAL_LAYER", "1"),
         "DSA_MAX_WORKERS": env.get("DSA_MAX_WORKERS", "4"),
         "DSA_BATCH_SIZE": env.get("DSA_BATCH_SIZE", "8"),
+        "ENABLE_TRADE_EMAIL_NOTIFICATIONS": env.get("ENABLE_TRADE_EMAIL_NOTIFICATIONS", "1"),
+        "TRADE_NOTIFY_EMAIL": env.get("TRADE_NOTIFY_EMAIL", ""),
         "ENABLE_MARKET_FEED_LAYER": env.get("ENABLE_MARKET_FEED_LAYER", "1"),
         "ENABLE_TECHNICAL_SIGNAL_LAYER": env.get("ENABLE_TECHNICAL_SIGNAL_LAYER", "1"),
         "MARKET_FEED_DIR": str(paths.market_feed_dir),

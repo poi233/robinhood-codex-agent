@@ -8,6 +8,7 @@ from trading_agent.core.context import build_runtime_paths
 from trading_agent.core.io import write_json
 from trading_agent.core.time import PT
 from trading_agent.core.config import load_runtime_config
+from trading_agent.notifications.email import send_trade_email_notification
 from trading_agent.paper.broker import record_paper_day_end
 from trading_agent.prompts.codex import run_codex_prompt
 from trading_agent.reporting.postmarket import build_paper_postmarket_summary
@@ -37,4 +38,18 @@ def run_postmarket_pipeline(*, dry_run: bool) -> int:
             ),
         )
     status = run_codex_prompt("postmarket", agent_root, paths.prompts_dir / "postmarket" / "summary.txt")
+    if status == 0:
+        send_trade_email_notification(
+            agent_root,
+            event_tag="POSTMARKET_DONE",
+            title="盘后复盘完成",
+            summary="盘后账户快照、模拟盘绩效汇总和复盘摘要流程已完成。",
+            artifacts=[
+                paths.paper_postmarket_summary_path,
+                paths.postmarket_summary_path,
+                paths.paper_day_end_path,
+                paths.paper_orders_log_path,
+            ],
+            details={"postmarket_prompt_status": status, "trading_mode": runtime.trading_mode},
+        )
     return status

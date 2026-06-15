@@ -152,7 +152,8 @@ class PremarketOrchestrationTests(unittest.TestCase):
             with mock.patch.object(premarket_module, "_is_weekday_pt", return_value=True), \
                 mock.patch.object(premarket_module, "collect_market_context"), \
                 mock.patch.object(premarket_module, "run_codex_prompt", return_value=0) as run_codex_prompt, \
-                mock.patch.object(premarket_module, "_write_kronos_signals"):
+                mock.patch.object(premarket_module, "_write_kronos_signals"), \
+                mock.patch.object(premarket_module, "send_trade_email_notification") as notify:
                 original_cwd = os.getcwd()
                 os.chdir(root)
                 try:
@@ -173,6 +174,8 @@ class PremarketOrchestrationTests(unittest.TestCase):
         run_kinds = [call.args[0] for call in run_codex_prompt.call_args_list]
         self.assertNotIn("quote_snapshot_candidates", run_kinds)
         self.assertNotIn("tradability_candidates", run_kinds)
+        notify.assert_called_once()
+        self.assertEqual(notify.call_args.kwargs["event_tag"], "PREMARKET_DONE")
 
     def test_explicit_dry_run_uses_mock_market_feed(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

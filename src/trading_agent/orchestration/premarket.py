@@ -15,6 +15,7 @@ from trading_agent.core.run_history import append_stage_log, snapshot_stage_arti
 from trading_agent.core.time import PT, pt_date_string
 from trading_agent.data.market_context import collect_market_context
 from trading_agent.data.universe import parse_universe
+from trading_agent.notifications.email import send_trade_email_notification
 from trading_agent.planner.candidates import build_candidate_snapshot
 from trading_agent.planner.data_status import build_data_status_summary_from_paths
 from trading_agent.planner.quote_snapshot import build_candidate_quote_snapshot_from_paths
@@ -380,4 +381,22 @@ def run_premarket_pipeline(*, dry_run: bool) -> int:
         append_stage_log(agent_root, run_date, "pipeline", "failed", f"premarket pipeline failed: {exc}")
         raise
     append_stage_log(agent_root, run_date, "pipeline", "completed", "premarket pipeline completed")
+    send_trade_email_notification(
+        agent_root,
+        event_tag="PREMARKET_DONE",
+        title="盘前流程完成",
+        summary="盘前扫描、信号层、候选合并、风险覆盖和最终计划流程已完成。",
+        artifacts=[
+            paths.daily_plan_path,
+            paths.daily_plan_zh_markdown_path,
+            paths.candidate_scores_path,
+            paths.risk_overlay_path,
+        ],
+        details={
+            "market_feed_enabled": os.environ.get("ENABLE_MARKET_FEED_LAYER", "1"),
+            "dsa_enabled": os.environ.get("ENABLE_DSA_SIGNAL_LAYER", "1"),
+            "kronos_enabled": os.environ.get("ENABLE_KRONOS_SIGNAL_LAYER", "1"),
+            "technical_enabled": os.environ.get("ENABLE_TECHNICAL_SIGNAL_LAYER", "1"),
+        },
+    )
     return 0
