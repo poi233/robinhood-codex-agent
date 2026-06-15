@@ -4,6 +4,8 @@ import tempfile
 from pathlib import Path
 import os
 
+from trading_agent.core.context import build_runtime_paths
+from trading_agent.core.io import read_json, write_json
 from trading_agent.orchestration.premarket import PremarketPipeline
 from trading_agent.orchestration import premarket as premarket_module
 
@@ -240,3 +242,141 @@ class PremarketOrchestrationTests(unittest.TestCase):
 
             self.assertEqual(seen["project_root"], str(root / ".vendor" / "kronos"))
             self.assertEqual(seen["python_bin"], str(root / ".venv-kronos" / "bin" / "python"))
+
+    def test_run_premarket_pipeline_writes_diagnostics_after_daily_plan_exists(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            (root / "src" / "config").mkdir(parents=True)
+            (root / "src" / "config" / "universe.txt").write_text("NVDA\n", encoding="utf-8")
+            run_date = "2026-06-14"
+            paths = build_runtime_paths(root, run_date=run_date)
+            paths.market_feed_dir.mkdir(parents=True, exist_ok=True)
+            write_json(paths.market_feed_dir / "manifest.json", {"data_status": "ok"})
+
+            def fake_prompt(run_kind, agent_root, prompt_file):
+                if run_kind == "account_snapshot":
+                    write_json(
+                        paths.account_snapshot_path,
+                        {
+                            "date": run_date,
+                            "agentic_account_identified": True,
+                            "data_status": "ok",
+                            "buying_power": 400000,
+                        },
+                    )
+                elif run_kind == "market_calendar":
+                    write_json(paths.market_calendar_path, {"date": run_date, "is_trading_day": True})
+                elif run_kind == "quote_snapshot_core":
+                    write_json(paths.quote_snapshot_core_path, {"date": run_date, "symbols": {"NVDA": {"last_price": 100, "previous_close": 99, "timestamp": "2026-06-14T09:45:00-07:00", "is_fresh": True}}})
+                elif run_kind == "technical_research":
+                    write_json(
+                        paths.technical_signals_path,
+                        {
+                            "date": run_date,
+                            "symbols": {
+                                "NVDA": {
+                                    "technical_action": "promote",
+                                    "long_setup": {
+                                        "status": "active",
+                                        "trigger_above": 100.5,
+                                        "entry_zone": {"low": 99.5, "high": 100.5},
+                                        "invalidation_below": 99.0,
+                                        "target_1": 103.0,
+                                        "target_2": 105.0,
+                                        "do_not_chase_above": 102.0,
+                                    },
+                                }
+                            },
+                        },
+                    )
+                elif run_kind == "catalyst_enrichment":
+                    write_json(paths.catalyst_snapshot_path, {"date": run_date, "symbols": {"NVDA": {"status": "completed"}}})
+                elif run_kind == "final_premarket":
+                    write_json(
+                        paths.daily_plan_path,
+                        {
+                            "date": run_date,
+                            "market_regime": "no_trade",
+                            "allowed_actions": [],
+                            "today_watchlist": [],
+                            "no_trade_reasons": ["placeholder"],
+                        },
+                    )
+                    write_json(paths.daily_plan_markdown_path, {"note": "ok"})
+                    write_json(paths.daily_plan_zh_markdown_path, {"note": "ok"})
+                    write_json(paths.dynamic_allowlist_path, {"date": run_date, "symbol_scores": {"NVDA": {"score": 72.0}}})
+                    paths.today_allowlist_path.write_text("NVDA\n", encoding="utf-8")
+                    write_json(paths.daily_usage_path, {"date": run_date, "used_notional": 0})
+                return 0
+
+            def fake_candidate_scores(agent_root, effective_run_date):
+                write_json(
+                    paths.candidate_scores_path,
+                    {
+                        "date": run_date,
+                        "symbols": {
+                            "NVDA": {
+                                "score": 72.0,
+                                "score_status": "scored",
+                                "blocked": False,
+                                "warnings": [],
+                                "diagnostics": {
+                                    "dsa": {"available": True},
+                                    "technical": {"available": True},
+                                    "kronos": {"available": True},
+                                    "quote": {"available": True},
+                                    "catalyst": {"available": True, "missing_numeric_score": True},
+                                },
+                            }
+                        },
+                    },
+                )
+
+            def fake_risk_overlay(agent_root, effective_run_date, *, trading_mode, risk_tier):
+                write_json(
+                    paths.risk_overlay_path,
+                    {
+                        "date": run_date,
+                        "watchlist_score_threshold": 35.0,
+                        "trade_score_threshold": 50.0,
+                        "market_regime": "normal",
+                        "risk_level": "normal",
+                        "risk_multiplier": 1.0,
+                        "watchlist_candidates": ["NVDA"],
+                        "tradable_candidates": ["NVDA"],
+                        "today_watchlist": ["NVDA"],
+                        "allowed_actions": ["small_limit_buy"],
+                        "no_trade_reasons": [],
+                        "symbol_trade_rules": {"NVDA": {"allow_buy": True}},
+                    },
+                )
+
+            with mock.patch.object(premarket_module, "_is_weekday_pt", return_value=True), \
+                mock.patch.object(premarket_module, "collect_market_context"), \
+                mock.patch.object(premarket_module, "run_codex_prompt", side_effect=fake_prompt), \
+                mock.patch.object(premarket_module, "_write_kronos_signals", side_effect=lambda agent_root: write_json(paths.kronos_signals_path, {"date": run_date, "symbols": {"NVDA": {"score": 50}}})), \
+                mock.patch.object(premarket_module, "run_dsa_scan", side_effect=lambda agent_root, prompt_runner: write_json(paths.dsa_signals_path, {"date": run_date, "symbol_signals": {"NVDA": {"dsa_score": 70, "suggested_premarket_use": "promote"}}})), \
+                mock.patch.object(premarket_module, "build_candidate_scores_from_paths", side_effect=fake_candidate_scores), \
+                mock.patch.object(premarket_module, "build_risk_overlay_from_paths", side_effect=fake_risk_overlay), \
+                mock.patch.object(premarket_module, "send_trade_email_notification"):
+                original_cwd = os.getcwd()
+                os.chdir(root)
+                try:
+                    with mock.patch.dict(
+                        premarket_module.os.environ,
+                        {
+                            "ALLOW_WEEKEND_RUN": "1",
+                            "RISK_TIER": "3",
+                            "TRADING_MODE": "paper",
+                            "RUN_DATE_PT": run_date,
+                        },
+                        clear=False,
+                    ):
+                        status = premarket_module.run_premarket_pipeline(dry_run=False)
+                        diagnostics = read_json(paths.premarket_diagnostics_path)
+                finally:
+                    os.chdir(original_cwd)
+
+        self.assertEqual(status, 0)
+        self.assertEqual(diagnostics["final_daily_plan_state"]["plan_state"], "trade_ready")
+        self.assertEqual(diagnostics["final_risk_overlay_state"]["tradable_candidates"], ["NVDA"])

@@ -339,6 +339,9 @@ Premarket does the following:
 10. Writes `planner/candidate_scores.json` and `planner/risk_overlay.json` with deterministic
    ranking and risk gates.
 11. Runs the final premarket planner prompt to write the final files and human narrative.
+11.5. Normalizes `daily_plan.json.plan_state` from `risk_overlay.json` and then writes
+   `planner/premarket_diagnostics.json` so diagnostics reflect the final planner output rather than
+   an earlier intermediate overlay state.
 12. Archives `archive/premarket_report.json`.
 13. Logs stage status to `runtime/logs/runs/YYYY-MM-DD/pipeline.jsonl`.
 
