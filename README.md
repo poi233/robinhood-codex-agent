@@ -304,6 +304,11 @@ python3 -m trading_agent premarket
 ./src/scripts/entrypoints/run_premarket.sh
 ```
 
+For full repo-local execution, prefer `./src/scripts/entrypoints/run_premarket.sh`. It exports the
+same runtime defaults used by cron and launchd, including local Kronos paths. The Python module
+entrypoint now falls back to repo-local `.vendor/kronos` and `.venv-kronos` defaults when those
+environment variables are unset, but the shell entrypoint remains the canonical operational path.
+
 Premarket does the following:
 
 1. Writes `planner/account_snapshot.json` with Robinhood account, positions, and open orders.

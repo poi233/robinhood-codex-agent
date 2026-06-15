@@ -102,7 +102,21 @@ def _is_weekday_pt() -> bool:
     return __import__("datetime").datetime.now(tz=PT).weekday() < 5
 
 
+def _ensure_kronos_env_defaults(agent_root: Path) -> None:
+    project_root = os.environ.get("KRONOS_PROJECT_ROOT")
+    if not project_root:
+        default_project_root = agent_root / ".vendor" / "kronos"
+        if default_project_root.exists():
+            os.environ["KRONOS_PROJECT_ROOT"] = str(default_project_root)
+    python_bin = os.environ.get("KRONOS_PYTHON_BIN")
+    if not python_bin:
+        default_python = agent_root / ".venv-kronos" / "bin" / "python"
+        if default_python.exists():
+            os.environ["KRONOS_PYTHON_BIN"] = str(default_python)
+
+
 def _write_kronos_signals(agent_root: Path) -> None:
+    _ensure_kronos_env_defaults(agent_root)
     paths = build_runtime_paths(agent_root)
     universe_file = paths.config_dir / "universe.txt"
     output_file = paths.kronos_signals_path

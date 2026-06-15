@@ -214,3 +214,29 @@ class PremarketOrchestrationTests(unittest.TestCase):
 
         self.assertEqual(collect_market_context.call_count, 1)
         self.assertTrue(collect_market_context.call_args.kwargs["mock"])
+
+    def test_write_kronos_signals_uses_repo_defaults_when_env_is_missing(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            (root / "src" / "config").mkdir(parents=True)
+            (root / "src" / "config" / "universe.txt").write_text("NVDA\n", encoding="utf-8")
+            (root / ".vendor" / "kronos").mkdir(parents=True)
+            (root / ".venv-kronos" / "bin").mkdir(parents=True)
+            (root / ".venv-kronos" / "bin" / "python").write_text("", encoding="utf-8")
+
+            seen: dict[str, str] = {}
+
+            def fake_run(cmd, check, capture_output, text, env):
+                seen["project_root"] = env.get("KRONOS_PROJECT_ROOT", "")
+                seen["python_bin"] = env.get("KRONOS_PYTHON_BIN", "")
+                return mock.Mock(returncode=0, stderr="", stdout="")
+
+            with mock.patch.dict(
+                premarket_module.os.environ,
+                {"KRONOS_PROJECT_ROOT": "", "KRONOS_PYTHON_BIN": ""},
+                clear=False,
+            ), mock.patch.object(premarket_module.subprocess, "run", side_effect=fake_run):
+                premarket_module._write_kronos_signals(root)
+
+            self.assertEqual(seen["project_root"], str(root / ".vendor" / "kronos"))
+            self.assertEqual(seen["python_bin"], str(root / ".venv-kronos" / "bin" / "python"))
