@@ -438,6 +438,21 @@ Intraday does not call Robinhood MCP directly. If premarket snapshots are missin
 fails closed with blocked reasons such as `missing_daily_plan`, `missing_account`, or
 `missing_quote`.
 
+Quote sources and execution rules:
+
+- `planner/quote_snapshot_core.json` and `planner/quote_snapshot_candidates.json` are premarket
+  planning context only. They help premarket score symbols and explain the setup, but they are not
+  valid execution prices for intraday.
+- Intraday now refreshes current quotes live on every run through the repo's live-quote provider
+  before buy/sell policy evaluation.
+- Intraday execution does not fall back to premarket snapshot quotes. If live quotes are missing,
+  unparsable, or too old, policy blocks instead of trading on stale planner context.
+- A `stale_quote` block means the symbol price exists but the live quote timestamp is older than
+  `MAX_QUOTE_AGE_SECONDS`.
+- A `missing_quote` block means intraday could not fetch a usable current quote for that symbol.
+- An `outside_entry_zone` block means the live quote is fresh, but the current price is not inside
+  the allowed pullback entry zone and has not satisfied the allowed breakout condition.
+
 Policy behavior:
 
 - Sell evaluation runs before buy evaluation.
