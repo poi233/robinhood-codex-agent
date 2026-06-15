@@ -74,7 +74,7 @@ def test_risk_overlay_uses_capital_snapshot_for_paper_sizing() -> None:
         market_calendar={"data_status": "ok", "is_trading_day": True, "session": "premarket"},
         capital_snapshot={"sizing_buying_power": 400000.0, "sizing_source": "paper_starting_cash"},
         account_snapshot={"agentic_account_identified": True, "data_status": "ok", "buying_power": 100.0},
-        candidate_scores={"symbols": {"SMH": {"score": 82, "blocked": False}}},
+        candidate_scores={"symbols": {"SMH": {"score": 82, "blocked": False, "score_status": "scored"}}},
         data_status_summary={"execution_blocking": False, "reason_codes": []},
     )
 
@@ -84,6 +84,9 @@ def test_risk_overlay_uses_capital_snapshot_for_paper_sizing() -> None:
     assert overlay["max_daily_notional"] == 20000
     assert overlay["capital_snapshot"]["sizing_buying_power"] == 400000.0
     assert overlay["today_watchlist"] == ["SMH"]
+    assert overlay["watchlist_candidates"] == ["SMH"]
+    assert overlay["tradable_candidates"] == ["SMH"]
+    assert overlay["symbol_trade_rules"]["SMH"]["allow_buy"] is True
 
 
 def test_risk_overlay_does_not_block_premarket_when_trading_day_is_true_even_if_session_is_closed() -> None:
@@ -95,9 +98,78 @@ def test_risk_overlay_does_not_block_premarket_when_trading_day_is_true_even_if_
         market_calendar={"data_status": "ok", "is_trading_day": True, "session": "closed"},
         capital_snapshot={"sizing_buying_power": 400000.0, "sizing_source": "paper_starting_cash"},
         account_snapshot={"agentic_account_identified": True, "data_status": "ok", "buying_power": 100.0},
-        candidate_scores={"symbols": {"SMH": {"score": 82, "blocked": False}}},
+        candidate_scores={"symbols": {"SMH": {"score": 82, "blocked": False, "score_status": "scored"}}},
         data_status_summary={"execution_blocking": False, "reason_codes": []},
     )
 
     assert overlay["market_regime"] == "aggressive_ok"
     assert "market_closed" not in overlay["no_trade_reasons"]
+
+
+def test_risk_overlay_distinguishes_no_tradable_candidates_from_no_scored_candidates() -> None:
+    overlay = build_risk_overlay(
+        run_date="2026-06-15",
+        trading_mode="paper",
+        risk_tier=3,
+        risk_caps={"max_single_order_notional": 5000, "max_daily_notional": 20000},
+        market_calendar={"data_status": "ok", "is_trading_day": True, "session": "premarket"},
+        capital_snapshot={"sizing_buying_power": 400000.0, "sizing_source": "paper_starting_cash"},
+        account_snapshot={"agentic_account_identified": True, "data_status": "ok", "buying_power": 100.0},
+        candidate_scores={
+            "symbols": {
+                "AVGO": {"score": 46.48, "blocked": False, "score_status": "scored"},
+                "NVDA": {"score": 41.12, "blocked": False, "score_status": "scored"},
+            }
+        },
+        data_status_summary={"execution_blocking": False, "reason_codes": []},
+    )
+
+    assert overlay["market_regime"] == "observe_only"
+    assert overlay["watchlist_candidates"] == ["AVGO", "NVDA"]
+    assert overlay["tradable_candidates"] == []
+    assert overlay["today_watchlist"] == ["AVGO", "NVDA"]
+    assert overlay["allowed_actions"] == []
+    assert overlay["no_trade_reasons"] == ["no_tradable_candidates_above_threshold"]
+    assert overlay["symbol_trade_rules"]["AVGO"]["allow_buy"] is False
+
+
+def test_risk_overlay_keeps_candidates_above_trade_threshold_as_tradable() -> None:
+    overlay = build_risk_overlay(
+        run_date="2026-06-15",
+        trading_mode="paper",
+        risk_tier=3,
+        risk_caps={"max_single_order_notional": 5000, "max_daily_notional": 20000},
+        market_calendar={"data_status": "ok", "is_trading_day": True, "session": "premarket"},
+        capital_snapshot={"sizing_buying_power": 400000.0, "sizing_source": "paper_starting_cash"},
+        account_snapshot={"agentic_account_identified": True, "data_status": "ok", "buying_power": 100.0},
+        candidate_scores={
+            "symbols": {
+                "AVGO": {"score": 66.1, "blocked": False, "score_status": "scored"},
+                "NVDA": {"score": 41.12, "blocked": False, "score_status": "scored"},
+            }
+        },
+        data_status_summary={"execution_blocking": False, "reason_codes": []},
+    )
+
+    assert overlay["watchlist_candidates"] == ["AVGO", "NVDA"]
+    assert overlay["tradable_candidates"] == ["AVGO"]
+    assert overlay["today_watchlist"] == ["AVGO", "NVDA"]
+    assert overlay["allowed_actions"] == ["small_limit_buy", "partial_take_profit"]
+
+
+def test_risk_overlay_true_empty_candidate_list_still_reports_no_scored_candidates() -> None:
+    overlay = build_risk_overlay(
+        run_date="2026-06-15",
+        trading_mode="paper",
+        risk_tier=3,
+        risk_caps={"max_single_order_notional": 5000, "max_daily_notional": 20000},
+        market_calendar={"data_status": "ok", "is_trading_day": True, "session": "premarket"},
+        capital_snapshot={"sizing_buying_power": 400000.0, "sizing_source": "paper_starting_cash"},
+        account_snapshot={"agentic_account_identified": True, "data_status": "ok", "buying_power": 100.0},
+        candidate_scores={"symbols": {}},
+        data_status_summary={"execution_blocking": False, "reason_codes": []},
+    )
+
+    assert overlay["watchlist_candidates"] == []
+    assert overlay["tradable_candidates"] == []
+    assert overlay["no_trade_reasons"] == ["no_scored_candidates"]

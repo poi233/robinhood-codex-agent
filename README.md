@@ -264,7 +264,9 @@ Important state contracts:
   `status=completed` or `status=partial`, and treats a missing catalyst payload as unavailable/
   neutral rather than bearish.
 - `planner/risk_overlay.json` applies market-calendar, capital, risk-tier, account, and data-status
-  gates before the final prompt writes narrative.
+  gates before the final prompt writes narrative. It keeps `watchlist_candidates` separate from
+  `tradable_candidates`, so observe-only names are preserved even when nothing currently clears the
+  trading threshold.
 - `planner/daily_plan.json` inherits executable gating from `planner/risk_overlay.json`. A
   premarket run before the cash open is still valid; soft research partials lower confidence but do
   not become a standalone `no_trade` reason.
@@ -357,6 +359,10 @@ Deterministic versus reasoning boundaries:
 - Candidate-level diagnostics include `score_status`, `coverage`, `missing_components`, and
   `warnings`. Low effective coverage is marked as `insufficient_data` instead of being treated as a
   bearish read.
+- `risk_overlay.json` uses a lower watchlist threshold than the trade threshold by default
+  (`35` versus `50`). If scored candidates exist but none clear the trade threshold, the overlay
+  keeps them in `today_watchlist`, leaves `allowed_actions=[]`, and records
+  `no_tradable_candidates_above_threshold` instead of `no_scored_candidates`.
 - DSA is intentionally narrowed so it does not duplicate detailed technical levels, stop/target
   ladders, or explicit catalyst scoring already owned by other layers.
 - The final planner preserves `planner/risk_overlay.json` executable actions when

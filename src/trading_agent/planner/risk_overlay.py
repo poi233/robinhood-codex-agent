@@ -8,6 +8,9 @@ from trading_agent.core.context import build_runtime_paths
 from trading_agent.core.io import read_json, write_json
 from trading_agent.core.time import PT
 
+WATCHLIST_SCORE_THRESHOLD = 35.0
+TRADE_SCORE_THRESHOLD = 50.0
+
 
 def _as_float(value: Any) -> float | None:
     try:
@@ -101,6 +104,10 @@ def _is_trading_day(market_calendar: dict[str, Any]) -> bool:
     return _calendar_trading_day_flag(market_calendar) is True
 
 
+def _candidate_score(payload: dict[str, Any]) -> float:
+    return float(payload.get("score", 0) or 0)
+
+
 def build_risk_overlay(
     *,
     run_date: str,
@@ -114,24 +121,36 @@ def build_risk_overlay(
     data_status_summary: dict[str, Any],
 ) -> dict[str, Any]:
     no_trade_reasons: list[str] = []
+    hard_block_reasons: list[str] = []
     if not _is_trading_day(market_calendar):
-        no_trade_reasons.append("market_closed")
+        hard_block_reasons.append("market_closed")
     if account_snapshot.get("agentic_account_identified") is not True or account_snapshot.get("data_status") == "failed":
-        no_trade_reasons.append("account_snapshot_unavailable")
+        hard_block_reasons.append("account_snapshot_unavailable")
     if data_status_summary.get("execution_blocking"):
-        no_trade_reasons.extend(str(reason) for reason in data_status_summary.get("reason_codes", []))
+        hard_block_reasons.extend(str(reason) for reason in data_status_summary.get("reason_codes", []))
 
     symbols_payload = candidate_scores.get("symbols") or {}
-    ranked = [
+    scored_candidates = [
         symbol
         for symbol, payload in sorted(
             symbols_payload.items(),
-            key=lambda item: (-float((item[1] or {}).get("score", 0) or 0), item[0]),
+            key=lambda item: (-_candidate_score(item[1] or {}), item[0]),
         )
-        if isinstance(payload, dict) and not payload.get("blocked") and float(payload.get("score", 0) or 0) >= 50
+        if isinstance(payload, dict) and not payload.get("blocked") and payload.get("score_status") != "blocked"
     ][:8]
-    if not ranked:
+    watchlist_candidates = [symbol for symbol in scored_candidates if _candidate_score(symbols_payload[symbol]) >= WATCHLIST_SCORE_THRESHOLD][:8]
+    tradable_candidates = [
+        symbol
+        for symbol in watchlist_candidates
+        if _candidate_score(symbols_payload[symbol]) >= TRADE_SCORE_THRESHOLD
+        and (symbols_payload[symbol] or {}).get("score_status") == "scored"
+    ][:8]
+
+    if not scored_candidates:
         no_trade_reasons.append("no_scored_candidates")
+    elif not tradable_candidates:
+        no_trade_reasons.append("no_tradable_candidates_above_threshold")
+    no_trade_reasons = hard_block_reasons + no_trade_reasons
 
     max_single = float(risk_caps.get("max_single_order_notional", 0) or 0)
     max_daily = float(risk_caps.get("max_daily_notional", 0) or 0)
@@ -139,29 +158,39 @@ def build_risk_overlay(
     max_single = min(max_single, sizing_buying_power)
     max_daily = min(max_daily, sizing_buying_power)
 
-    if no_trade_reasons:
+    if hard_block_reasons:
         allowed_actions: list[str] = []
         max_single = 0.0
         max_daily = 0.0
         market_regime = "no_trade"
         risk_level = "no_trade"
         risk_multiplier = 0.0
-        today_watchlist: list[str] = []
-    else:
+        today_watchlist = watchlist_candidates
+    elif tradable_candidates:
         allowed_actions = ["small_limit_buy", "partial_take_profit"]
-        market_regime = "aggressive_ok" if any(float((symbols_payload.get(symbol) or {}).get("score", 0) or 0) >= 80 for symbol in ranked) else "normal"
+        market_regime = "aggressive_ok" if any(_candidate_score(symbols_payload.get(symbol) or {}) >= 80 for symbol in tradable_candidates) else "normal"
         risk_level = "aggressive" if market_regime == "aggressive_ok" else "normal"
         risk_multiplier = 1.0
-        today_watchlist = ranked
+        today_watchlist = watchlist_candidates
+    else:
+        allowed_actions = []
+        market_regime = "observe_only"
+        risk_level = "observe_only"
+        risk_multiplier = 0.0
+        today_watchlist = watchlist_candidates
 
     return {
         "date": run_date,
         "generated_at": datetime.now(tz=PT).isoformat(),
         "trading_mode": trading_mode,
         "risk_tier": risk_tier,
+        "watchlist_score_threshold": WATCHLIST_SCORE_THRESHOLD,
+        "trade_score_threshold": TRADE_SCORE_THRESHOLD,
         "market_regime": market_regime,
         "risk_level": risk_level,
         "risk_multiplier": risk_multiplier,
+        "watchlist_candidates": watchlist_candidates,
+        "tradable_candidates": tradable_candidates,
         "allowed_actions": allowed_actions,
         "today_watchlist": today_watchlist,
         "blocked_symbols": [symbol for symbol, payload in symbols_payload.items() if isinstance(payload, dict) and payload.get("blocked")],
@@ -173,8 +202,9 @@ def build_risk_overlay(
             symbol: {
                 "score": symbols_payload[symbol]["score"],
                 "max_notional": round(max_single, 2),
-                "breakout_allowed": True,
-                "pullback_buy_allowed": True,
+                "allow_buy": symbol in tradable_candidates and bool(allowed_actions),
+                "breakout_allowed": symbol in tradable_candidates and bool(allowed_actions),
+                "pullback_buy_allowed": symbol in tradable_candidates and bool(allowed_actions),
                 "setup": "use precomputed technical/catalyst artifacts; final planner writes narrative",
             }
             for symbol in today_watchlist
