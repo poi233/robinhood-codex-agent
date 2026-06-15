@@ -30,6 +30,9 @@ TECHNICAL_ACTION_SCORES = {
     "block": 0.0,
 }
 
+NEGATIVE_CATALYST_BIASES = {"negative", "bearish", "reduce", "sell_bias"}
+BLOCKING_CATALYST_BIASES = {"block", "avoid"}
+
 
 def _read_json_or_empty(path: Path) -> dict[str, Any]:
     if not path.exists():
@@ -41,6 +44,18 @@ def _read_json_or_empty(path: Path) -> dict[str, Any]:
 def _clamp_score(value: Any, default: float = 0.0) -> float:
     try:
         return max(0.0, min(100.0, float(value)))
+    except (TypeError, ValueError):
+        return default
+
+
+def _normalized_confidence(value: Any, default: float = 0.5) -> float:
+    try:
+        if value is None or value == "":
+            return default
+        parsed = float(value)
+        if parsed > 1:
+            parsed = parsed / 100.0
+        return max(0.0, min(1.0, parsed))
     except (TypeError, ValueError):
         return default
 
@@ -162,7 +177,7 @@ def _kronos_component(symbol: str, kronos: dict[str, Any]) -> float:
     payload = ((kronos.get("symbols") or {}).get(symbol) or {})
     if not isinstance(payload, dict):
         return 0.0
-    confidence = _clamp_score(payload.get("confidence"), 0.5) / 100.0 if float(payload.get("confidence", 0) or 0) > 1 else float(payload.get("confidence", 0.5) or 0.5)
+    confidence = _normalized_confidence(payload.get("confidence"), 0.5)
     bias = str(payload.get("signal") or payload.get("direction_bias") or "").lower()
     setup = str(payload.get("setup_bias") or "").lower()
     if bias in {"bullish", "breakout"} or setup in {"breakout", "pullback"}:
@@ -190,8 +205,37 @@ def _quote_component(symbol: str, quote: dict[str, Any]) -> float:
 def _catalyst_component(symbol: str, catalyst: dict[str, Any]) -> float:
     payload = ((catalyst.get("symbols") or {}).get(symbol) or {})
     if not isinstance(payload, dict):
+        return 50.0
+
+    block_reasons = payload.get("block_reasons") or []
+    catalyst_bias = str(payload.get("catalyst_bias") or "").strip().lower()
+    event_risk = str(payload.get("event_risk") or payload.get("earnings_risk") or "").strip().lower()
+    negative_catalysts = payload.get("negative_catalysts") or payload.get("risk_flags") or []
+    positive_catalysts = payload.get("positive_catalysts") or payload.get("catalysts") or []
+    confidence = _normalized_confidence(payload.get("confidence"), 0.5)
+
+    if block_reasons or catalyst_bias in BLOCKING_CATALYST_BIASES or event_risk in {"block", "blocked"}:
         return 0.0
-    return _clamp_score(payload.get("catalyst_score") or payload.get("score"))
+    if catalyst_bias in NEGATIVE_CATALYST_BIASES:
+        return _clamp_score(35 - 20 * (1 - confidence), 25.0)
+
+    explicit_score = payload.get("catalyst_score")
+    if explicit_score is None:
+        explicit_score = payload.get("score")
+    if explicit_score is not None:
+        return _clamp_score(explicit_score, 50.0)
+
+    status = str(payload.get("status") or payload.get("data_quality") or "").strip().lower()
+    if status == "completed":
+        return 50.0
+    if status == "partial":
+        return 50.0
+
+    if positive_catalysts and not negative_catalysts:
+        return _clamp_score(55 + 10 * confidence, 60.0)
+    if negative_catalysts and not positive_catalysts:
+        return _clamp_score(45 - 10 * confidence, 40.0)
+    return 50.0
 
 
 def score_candidate(

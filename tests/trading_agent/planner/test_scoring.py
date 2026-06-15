@@ -134,3 +134,71 @@ def test_score_candidate_unknown_technical_action_warns_and_stays_neutral() -> N
     assert score["diagnostics"]["technical"]["normalized_action"] == "observe"
     assert score["diagnostics"]["technical"]["warning"] == "unmapped_technical_action:moonshot"
     assert "unmapped_technical_action:moonshot" in score["warnings"]
+
+
+def test_score_candidate_completed_catalyst_without_numeric_score_stays_neutral() -> None:
+    score = score_candidate(
+        symbol="AVGO",
+        dsa={"selected_candidates": [{"symbol": "AVGO", "score": 70}]},
+        kronos={"symbols": {"AVGO": {"signal": "neutral", "confidence": 0.5}}},
+        technical={"symbols": {"AVGO": {"technical_action": "promote"}}},
+        quote={"symbols": {"AVGO": {"score": 65}}},
+        catalyst={"symbols": {"AVGO": {"status": "completed"}}},
+    )
+
+    assert score["components"]["catalyst"] == 50
+    assert score["score"] > 50
+
+
+def test_score_candidate_partial_catalyst_without_numeric_score_stays_neutral() -> None:
+    score = score_candidate(
+        symbol="NVDA",
+        dsa={"selected_candidates": [{"symbol": "NVDA", "score": 70}]},
+        kronos={"symbols": {"NVDA": {"signal": "neutral", "confidence": 0.5}}},
+        technical={"symbols": {"NVDA": {"technical_action": "promote"}}},
+        quote={"symbols": {"NVDA": {"change_pct": 3.0}}},
+        catalyst={"symbols": {"NVDA": {"status": "partial"}}},
+    )
+
+    assert score["components"]["catalyst"] == 50
+
+
+def test_score_candidate_negative_catalyst_can_reduce_score() -> None:
+    score = score_candidate(
+        symbol="MRVL",
+        dsa={"selected_candidates": [{"symbol": "MRVL", "score": 70}]},
+        kronos={"symbols": {"MRVL": {"signal": "neutral", "confidence": 0.5}}},
+        technical={"symbols": {"MRVL": {"technical_action": "observe"}}},
+        quote={"symbols": {"MRVL": {"change_pct": 0.0}}},
+        catalyst={"symbols": {"MRVL": {"catalyst_bias": "negative", "confidence": 0.8}}},
+    )
+
+    assert score["components"]["catalyst"] < 50
+
+
+def test_score_candidate_missing_catalyst_is_neutral_not_bearish() -> None:
+    score = score_candidate(
+        symbol="SMH",
+        dsa={"selected_candidates": [{"symbol": "SMH", "score": 70}]},
+        kronos={"symbols": {"SMH": {"signal": "neutral", "confidence": 0.5}}},
+        technical={"symbols": {"SMH": {"technical_action": "observe"}}},
+        quote={"symbols": {"SMH": {"change_pct": 1.0}}},
+        catalyst={"symbols": {}},
+    )
+
+    assert score["components"]["catalyst"] == 50
+
+
+def test_score_candidate_avgo_regression_clears_old_broken_threshold() -> None:
+    score = score_candidate(
+        symbol="AVGO",
+        dsa={"selected_candidates": [{"symbol": "AVGO", "score": 70}]},
+        kronos={"symbols": {"AVGO": {"signal": "neutral", "confidence": 0.5}}},
+        technical={"symbols": {"AVGO": {"technical_action": "promote"}}},
+        quote={"symbols": {"AVGO": {"score": 64.77}}},
+        catalyst={"symbols": {"AVGO": {"status": "completed"}}},
+    )
+
+    assert score["components"]["technical"] == 82
+    assert score["components"]["catalyst"] == 50
+    assert score["score"] > 50

@@ -260,6 +260,9 @@ Important state contracts:
   Technical actions are normalized before scoring so prompt-local values such as `strong_promote`,
   `promote`, `buy_bias`, `hold`, `observe`, `neutral`, `reduce`, `sell_bias`, `avoid`, and `block`
   land on one canonical scale instead of silently dropping to zero.
+  Catalyst scoring prefers explicit `catalyst_score` or `score`, falls back to neutral `50` for
+  `status=completed` or `status=partial`, and treats a missing catalyst payload as unavailable/
+  neutral rather than bearish.
 - `planner/risk_overlay.json` applies market-calendar, capital, risk-tier, account, and data-status
   gates before the final prompt writes narrative.
 - `planner/daily_plan.json` inherits executable gating from `planner/risk_overlay.json`. A
@@ -345,6 +348,8 @@ Deterministic versus reasoning boundaries:
   component score, base weight, weighted contribution, and an unmapped-action warning when the
   prompt emits a non-canonical value. Unknown technical actions fall back to neutral `observe`
   semantics rather than bullish scoring.
+- Catalyst fallback is intentionally neutral unless the payload is explicitly negative or blocking.
+  Prompt completion status means collection quality only; it does not imply a bullish catalyst.
 - DSA is intentionally narrowed so it does not duplicate detailed technical levels, stop/target
   ladders, or explicit catalyst scoring already owned by other layers.
 - The final planner preserves `planner/risk_overlay.json` executable actions when
