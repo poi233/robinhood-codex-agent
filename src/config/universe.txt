@@ -5,70 +5,120 @@
 # Rules:
 # - Long equities/ETFs only.
 # - No leveraged ETFs, inverse ETFs, options, crypto, futures, margin, or shorts.
-# - Prefer liquid U.S.-listed names that Robinhood confirms tradable/fractional when needed.
+# - Prefer liquid Robinhood-tradable names; keep low-liquidity/new-issue items watch-only unless confirmed.
+# - Growth tags are for screening priority, not permission to trade.
 
-# Core index / liquidity anchors
+# Core index / liquidity anchors - lower-growth / broad beta
 SPY
 QQQ
 SMH
 VOO
+IWM
 
-# AI semiconductors / compute
+# High-growth quality - AI semiconductors / compute / advanced packaging
 NVDA
 AVGO
 AMD
 TSM
-ASML
-MU
 MRVL
-QCOM
-ARM
+MU
 ALAB
+CRDO
+RMBS
+AMKR
+TTMI
+SNDK
+QCOM
 
-# AI infrastructure / data center / networking / power
+# High-growth narrow gate - photonics / interconnect / components
+COHR
+AAOI
+GLW
+
+# High-growth AI infrastructure - data center / networking / power
 VRT
 DELL
-CLS
-FN
 ANET
-CEG
-VST
-ETN
-GEV
+EQIX
+NBIS
+IREN
+BE
+FLNC
 
-# CPO / photonics / interconnect / narrow-gate candidates
-COHR
-LITE
-AAOI
-AXTI
-AEHR
-ACLS
-CAMT
-
-# Space / defense / autonomy
-RKLB
-ASTS
-LUNR
-PL
-AVAV
-KTOS
-LMT
-NOC
+# High-growth platforms / AI software / fintech
 PLTR
+NET
+SNOW
+CRM
+AMZN
+GOOGL
+META
+MSFT
+HOOD
+SOFI
+UBER
+NFLX
+TSLA
 
-# Nuclear / uranium / energy transition
-OKLO
+# High-growth speculative - space / defense / quantum / autonomy
+ASTS
+RKLB
+FLY
+RDW
+IONQ
+QBTS
+KTOS
+AVAV
+AXON
+ONDS
+CBRS
+
+# High-growth speculative - nuclear / energy transition / critical materials
 LEU
 UUUU
-CCJ
-NXE
+MP
+XE
+TE
+SOLS
 
-# High-beta software / AI data
-SNOW
-NET
-CRWD
-DDOG
-MDB
+# High-growth theme ETFs - optional basket exposure
+ARKK
+ARKW
+ARKG
+QTUM
+DRAM
+FOTO
+NASA
+AIPO
 
-# Optional cash deployment / broad beta
-IWM
+# Lower-growth quality / cyclical / defensive watch
+AAPL
+INTC
+CSCO
+IBM
+GE
+BA
+LMT
+XOM
+JPM
+GS
+AXP
+WM
+UPS
+SBUX
+DIS
+F
+VSH
+NOK
+
+# Higher-risk ADR / international growth watch
+BABA
+BILI
+NIO
+
+# Excluded from automated universe for now:
+# - Leveraged or inverse ETFs: SOXL, TQQQ, EWV.
+# - Non-strategy bond/commodity/volatility exposure: BND, USO, VIX.
+# - Meme or hype-heavy manual-only names: GME, AMC, OPEN.
+# - Fractional closing-only, OTC/private-like, or manual-review funds: TCEHY, NTDOY, DFNS, VCX, DXYZ, SPCX.
+# - Low strategy fit despite watchlist presence: LYFT, SCI.
