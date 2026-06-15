@@ -26,6 +26,11 @@ def test_score_candidate_combines_signal_layers_with_transparent_weights() -> No
         "catalyst": 0.2,
     }
     assert "dsa_mentions_technical_trend" not in score["overlap_flags"]
+    assert score["diagnostics"]["technical"]["raw_action"] == "buy_bias"
+    assert score["diagnostics"]["technical"]["normalized_action"] == "buy_bias"
+    assert score["diagnostics"]["technical"]["component_score"] == 82
+    assert score["diagnostics"]["technical"]["component_weight"] == 0.3
+    assert score["diagnostics"]["technical"]["weighted_contribution"] == 24.6
 
 
 def test_score_candidate_marks_dsa_blocks_without_replacing_reasoning() -> None:
@@ -65,3 +70,67 @@ def test_score_candidate_marks_dsa_overlap_flags_for_technical_and_event_signals
 
     assert "dsa_mentions_technical_trend" in score["overlap_flags"]
     assert "dsa_mentions_news_catalyst" in score["overlap_flags"]
+
+
+def test_score_candidate_normalizes_promote_to_high_technical_score() -> None:
+    score = score_candidate(
+        symbol="AVGO",
+        dsa={"selected_candidates": [{"symbol": "AVGO", "score": 70}]},
+        kronos={"symbols": {"AVGO": {"signal": "neutral", "confidence": 0.5}}},
+        technical={"symbols": {"AVGO": {"technical_action": "promote"}}},
+        quote={"symbols": {"AVGO": {"change_pct": 1.0}}},
+        catalyst={"symbols": {"AVGO": {"catalyst_score": 50}}},
+    )
+
+    assert score["components"]["technical"] == 82
+    assert score["diagnostics"]["technical"]["raw_action"] == "promote"
+    assert score["diagnostics"]["technical"]["normalized_action"] == "promote"
+    assert score["diagnostics"]["technical"]["component_score"] == 82
+    assert score["diagnostics"]["technical"]["weighted_contribution"] == 24.6
+
+
+def test_score_candidate_normalizes_reduce_to_low_technical_score() -> None:
+    score = score_candidate(
+        symbol="AMD",
+        dsa={"selected_candidates": [{"symbol": "AMD", "score": 70}]},
+        kronos={"symbols": {"AMD": {"signal": "neutral", "confidence": 0.5}}},
+        technical={"symbols": {"AMD": {"action": "reduce"}}},
+        quote={"symbols": {"AMD": {"change_pct": 1.0}}},
+        catalyst={"symbols": {"AMD": {"catalyst_score": 50}}},
+    )
+
+    assert score["components"]["technical"] == 30
+    assert score["diagnostics"]["technical"]["raw_action"] == "reduce"
+    assert score["diagnostics"]["technical"]["normalized_action"] == "reduce"
+
+
+def test_score_candidate_maps_observe_to_neutral_technical_score() -> None:
+    score = score_candidate(
+        symbol="SMCI",
+        dsa={"selected_candidates": [{"symbol": "SMCI", "score": 70}]},
+        kronos={"symbols": {"SMCI": {"signal": "neutral", "confidence": 0.5}}},
+        technical={"symbols": {"SMCI": {"recommendation": "observe"}}},
+        quote={"symbols": {"SMCI": {"change_pct": 1.0}}},
+        catalyst={"symbols": {"SMCI": {"catalyst_score": 50}}},
+    )
+
+    assert score["components"]["technical"] == 50
+    assert score["diagnostics"]["technical"]["raw_action"] == "observe"
+    assert score["diagnostics"]["technical"]["normalized_action"] == "observe"
+
+
+def test_score_candidate_unknown_technical_action_warns_and_stays_neutral() -> None:
+    score = score_candidate(
+        symbol="ANET",
+        dsa={"selected_candidates": [{"symbol": "ANET", "score": 70}]},
+        kronos={"symbols": {"ANET": {"signal": "neutral", "confidence": 0.5}}},
+        technical={"symbols": {"ANET": {"bias": "moonshot"}}},
+        quote={"symbols": {"ANET": {"change_pct": 1.0}}},
+        catalyst={"symbols": {"ANET": {"catalyst_score": 50}}},
+    )
+
+    assert score["components"]["technical"] == 50
+    assert score["diagnostics"]["technical"]["raw_action"] == "moonshot"
+    assert score["diagnostics"]["technical"]["normalized_action"] == "observe"
+    assert score["diagnostics"]["technical"]["warning"] == "unmapped_technical_action:moonshot"
+    assert "unmapped_technical_action:moonshot" in score["warnings"]

@@ -17,6 +17,19 @@ WEIGHTS = {
     "catalyst": 0.20,
 }
 
+TECHNICAL_ACTION_SCORES = {
+    "strong_promote": 90.0,
+    "promote": 82.0,
+    "buy_bias": 78.0,
+    "hold": 60.0,
+    "observe": 50.0,
+    "neutral": 50.0,
+    "reduce": 30.0,
+    "sell_bias": 25.0,
+    "avoid": 5.0,
+    "block": 0.0,
+}
+
 
 def _read_json_or_empty(path: Path) -> dict[str, Any]:
     if not path.exists():
@@ -86,20 +99,63 @@ def _dsa_overlap_flags(symbol: str, dsa: dict[str, Any]) -> list[str]:
     return flags
 
 
-def _technical_component(symbol: str, technical: dict[str, Any]) -> float:
+def _technical_action_payload(payload: dict[str, Any]) -> tuple[str, str | None, str | None]:
+    raw_value: str | None = None
+    raw_field: str | None = None
+    for field in ("technical_action", "action", "bias", "recommendation"):
+        value = payload.get(field)
+        if value is None or value == "":
+            continue
+        raw_value = str(value).strip().lower()
+        raw_field = field
+        break
+    if raw_value is None:
+        return "observe", None, None
+    normalized = raw_value if raw_value in TECHNICAL_ACTION_SCORES else "observe"
+    return normalized, raw_value, raw_field
+
+
+def _technical_component(symbol: str, technical: dict[str, Any]) -> tuple[float, dict[str, Any]]:
     payload = ((technical.get("symbols") or {}).get(symbol) or {})
     if not isinstance(payload, dict):
-        return 0.0
+        return 0.0, {
+            "raw_action": None,
+            "normalized_action": None,
+            "component_score": 0.0,
+            "component_weight": WEIGHTS["technical"],
+            "weighted_contribution": 0.0,
+            "action_field": None,
+            "warning": "technical_payload_missing",
+        }
     if "priority_score" in payload:
-        return _clamp_score(payload.get("priority_score"))
-    action = str(payload.get("technical_action") or "").lower()
-    return {
-        "buy_bias": 80.0,
-        "hold": 60.0,
-        "observe": 50.0,
-        "sell_bias": 30.0,
-        "avoid": 20.0,
-    }.get(action, 0.0)
+        score = _clamp_score(payload.get("priority_score"))
+        normalized_action, raw_action, raw_field = _technical_action_payload(payload)
+        warning = None
+        if raw_action and raw_action not in TECHNICAL_ACTION_SCORES:
+            warning = f"unmapped_technical_action:{raw_action}"
+        return score, {
+            "raw_action": raw_action,
+            "normalized_action": normalized_action,
+            "component_score": round(score, 2),
+            "component_weight": WEIGHTS["technical"],
+            "weighted_contribution": round(score * WEIGHTS["technical"], 2),
+            "action_field": raw_field,
+            "warning": warning,
+        }
+    normalized_action, raw_action, raw_field = _technical_action_payload(payload)
+    score = TECHNICAL_ACTION_SCORES[normalized_action]
+    warning = None
+    if raw_action and raw_action not in TECHNICAL_ACTION_SCORES:
+        warning = f"unmapped_technical_action:{raw_action}"
+    return score, {
+        "raw_action": raw_action,
+        "normalized_action": normalized_action,
+        "component_score": round(score, 2),
+        "component_weight": WEIGHTS["technical"],
+        "weighted_contribution": round(score * WEIGHTS["technical"], 2),
+        "action_field": raw_field,
+        "warning": warning,
+    }
 
 
 def _kronos_component(symbol: str, kronos: dict[str, Any]) -> float:
@@ -150,19 +206,26 @@ def score_candidate(
     normalized = symbol.upper()
     dsa_score, blocked, block_reasons = _dsa_component(normalized, dsa)
     overlap_flags = _dsa_overlap_flags(normalized, dsa)
+    technical_score, technical_diagnostics = _technical_component(normalized, technical)
     components = {
         "dsa": round(dsa_score, 2),
-        "technical": round(_technical_component(normalized, technical), 2),
+        "technical": round(technical_score, 2),
         "kronos": round(_kronos_component(normalized, kronos), 2),
         "quote": round(_quote_component(normalized, quote), 2),
         "catalyst": round(_catalyst_component(normalized, catalyst), 2),
     }
     score = sum(components[key] * WEIGHTS[key] for key in WEIGHTS)
+    diagnostics = {
+        "technical": technical_diagnostics,
+    }
+    warnings = [technical_diagnostics["warning"]] if technical_diagnostics.get("warning") else []
     return {
         "symbol": normalized,
         "score": round(score, 2),
         "components": components,
         "weights": dict(WEIGHTS),
+        "diagnostics": diagnostics,
+        "warnings": warnings,
         "blocked": blocked,
         "block_reasons": block_reasons,
         "overlap_flags": overlap_flags,

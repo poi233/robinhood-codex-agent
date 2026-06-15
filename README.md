@@ -257,6 +257,9 @@ Important state contracts:
   `schema_invalid`, and `mcp_unavailable`.
 - `planner/candidate_scores.json` deterministically aggregates existing DSA, Kronos, technical,
   quote, and catalyst outputs with transparent weights. It does not replace those reasoning layers.
+  Technical actions are normalized before scoring so prompt-local values such as `strong_promote`,
+  `promote`, `buy_bias`, `hold`, `observe`, `neutral`, `reduce`, `sell_bias`, `avoid`, and `block`
+  land on one canonical scale instead of silently dropping to zero.
 - `planner/risk_overlay.json` applies market-calendar, capital, risk-tier, account, and data-status
   gates before the final prompt writes narrative.
 - `planner/daily_plan.json` inherits executable gating from `planner/risk_overlay.json`. A
@@ -338,6 +341,10 @@ Deterministic versus reasoning boundaries:
   snapshot prompts, and final narrative writing.
 - Python scoring aggregates existing signal-layer outputs; it does not invent technical setups,
   catalyst judgments, or DSA classifications.
+- `candidate_scores.json` includes per-symbol technical diagnostics: raw action, normalized action,
+  component score, base weight, weighted contribution, and an unmapped-action warning when the
+  prompt emits a non-canonical value. Unknown technical actions fall back to neutral `observe`
+  semantics rather than bullish scoring.
 - DSA is intentionally narrowed so it does not duplicate detailed technical levels, stop/target
   ladders, or explicit catalyst scoring already owned by other layers.
 - The final planner preserves `planner/risk_overlay.json` executable actions when
