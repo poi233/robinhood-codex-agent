@@ -25,6 +25,7 @@ def send_trade_email_notification(
     event_tag: str,
     title: str,
     summary: str,
+    report_path: Path | None = None,
     artifacts: Sequence[Path] | None = None,
     details: Mapping[str, object] | None = None,
 ) -> bool:
@@ -38,6 +39,9 @@ def send_trade_email_notification(
     safe_tag = "".join(char.lower() if char.isalnum() else "_" for char in event_tag).strip("_") or "event"
     payload_path = paths.run_state_dir / "notifications" / f"{safe_tag}.json"
     artifact_strings = [str(path) for path in artifacts or []]
+    report_body = ""
+    if report_path is not None and report_path.exists():
+        report_body = report_path.read_text(encoding="utf-8")
     subject = f"[Robinhood Codex Agent][{event_tag}][{paths.run_date}] {title}"
     payload = {
         "schema_version": 1,
@@ -49,6 +53,8 @@ def send_trade_email_notification(
         "event_tag": event_tag,
         "title": title,
         "summary": summary,
+        "report_path": str(report_path) if report_path else "",
+        "report_body": report_body,
         "trading_mode": os.environ.get("TRADING_MODE", "paper"),
         "risk_tier": os.environ.get("RISK_TIER", "0"),
         "artifacts": artifact_strings,

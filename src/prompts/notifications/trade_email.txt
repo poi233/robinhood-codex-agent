@@ -11,6 +11,8 @@ Read `TRADE_NOTIFY_PAYLOAD_PATH` first. It contains:
 - `event_tag`
 - `title`
 - `summary`
+- `report_path`
+- `report_body`
 - `trading_mode`
 - `risk_tier`
 - `artifacts`
@@ -37,11 +39,16 @@ Unified body template:
 摘要：
 <summary>
 
+报告正文：
+- If `report_body` is non-empty, paste its full content here, preserving Markdown headings and bullet structure.
+- If `report_body` is empty, write “本次通知没有可嵌入的中文报告正文。”
+
 关键明细：
 - 用简洁中文列出 payload.details 中最重要的非敏感字段。
 - 如果没有关键明细，写“无额外明细”。
 
 本地记录：
+- 如果 `report_path` 非空，先列出 `report_path`。
 - 列出 payload.artifacts 中的路径。
 - 如果没有路径，写“无”。
 

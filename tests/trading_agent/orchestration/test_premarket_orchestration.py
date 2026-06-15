@@ -176,6 +176,10 @@ class PremarketOrchestrationTests(unittest.TestCase):
         self.assertNotIn("tradability_candidates", run_kinds)
         notify.assert_called_once()
         self.assertEqual(notify.call_args.kwargs["event_tag"], "PREMARKET_DONE")
+        self.assertEqual(
+            notify.call_args.kwargs["report_path"].resolve(),
+            (root / "runtime" / "state" / "runs" / "2026-06-14" / "planner" / "daily_plan.zh.md").resolve(),
+        )
 
     def test_explicit_dry_run_uses_mock_market_feed(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

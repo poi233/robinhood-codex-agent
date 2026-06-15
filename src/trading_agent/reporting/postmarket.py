@@ -81,3 +81,52 @@ def build_paper_postmarket_summary(
         "filled_notional": _money(sum(float(order.get("notional", 0) or 0) for order in filled_orders)),
         "daily_usage": daily_usage if isinstance(daily_usage, dict) else {},
     }
+
+
+def build_paper_postmarket_zh_report(summary: dict[str, object]) -> str:
+    open_positions = summary.get("open_positions")
+    if isinstance(open_positions, list) and open_positions:
+        positions_text = "、".join(str(symbol) for symbol in open_positions)
+    else:
+        positions_text = "无"
+    daily_usage = summary.get("daily_usage")
+    usage_used = _money(_field(daily_usage, "used_notional")) if isinstance(daily_usage, dict) else 0.0
+    usage_paper = _money(_field(daily_usage, "paper_filled_notional")) if isinstance(daily_usage, dict) else 0.0
+    usage_orders = int(_field(daily_usage, "paper_order_count")) if isinstance(daily_usage, dict) else 0
+    return "\n".join(
+        [
+            f"# 盘后复盘报告 - {summary.get('date', '')}",
+            "",
+            "## 账户概览",
+            f"- 交易模式：{summary.get('trading_mode', 'paper')}",
+            f"- 期初现金：${_money(summary.get('starting_cash')):,.2f}",
+            f"- 期末现金：${_money(summary.get('ending_cash')):,.2f}",
+            f"- 现金变化：${_money(summary.get('cash_change')):,.2f}",
+            f"- 期初总权益：${_money(summary.get('starting_total_equity')):,.2f}",
+            f"- 期末总权益：${_money(summary.get('ending_total_equity')):,.2f}",
+            f"- 总权益变化：${_money(summary.get('total_equity_change')):,.2f}",
+            f"- 已实现盈亏：${_money(summary.get('realized_pnl')):,.2f}",
+            f"- 持仓市值：${_money(summary.get('positions_market_value')):,.2f}",
+            "",
+            "## 交易执行",
+            f"- 总订单数：{int(summary.get('order_count', 0) or 0)}",
+            f"- 成交订单数：{int(summary.get('filled_order_count', 0) or 0)}",
+            f"- 拒绝/取消订单数：{int(summary.get('rejected_or_canceled_order_count', 0) or 0)}",
+            f"- 成交名义金额：${_money(summary.get('filled_notional')):,.2f}",
+            "",
+            "## 风险与额度",
+            f"- 当日已用名义金额：${usage_used:,.2f}",
+            f"- 模拟盘成交名义金额：${usage_paper:,.2f}",
+            f"- 模拟盘订单计数：{usage_orders}",
+            "",
+            "## 持仓",
+            f"- 持仓数量：{int(summary.get('open_position_count', 0) or 0)}",
+            f"- 持仓标的：{positions_text}",
+            "",
+            "## 复盘提示",
+            "- 若总权益变化与成交记录不一致，先检查 paper/orders.jsonl 与 paper/equity_curve.jsonl。",
+            "- 若成交金额接近当日或单笔上限，明天盘前需要降低候选优先级或收紧下单额度。",
+            "- 这份报告只用于模拟盘/交易流程复盘，最终风控仍以本地日志、计划文件和账户状态为准。",
+            "",
+        ]
+    )

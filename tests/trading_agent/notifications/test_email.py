@@ -26,6 +26,8 @@ def test_email_notification_writes_payload_and_runs_prompt(tmp_path: Path, monke
     prompt_dir = tmp_path / "src" / "prompts" / "notifications"
     prompt_dir.mkdir(parents=True)
     (prompt_dir / "trade_email.txt").write_text("send email\n", encoding="utf-8")
+    report_path = tmp_path / "report.zh.md"
+    report_path.write_text("# 中文报告\n\n详细内容\n", encoding="utf-8")
     calls: list[tuple[str, dict[str, str]]] = []
 
     def fake_runner(run_kind: str, _agent_root: Path, _prompt_file: Path, *, runtime_overrides: dict[str, str] | None = None) -> int:
@@ -40,6 +42,7 @@ def test_email_notification_writes_payload_and_runs_prompt(tmp_path: Path, monke
         event_tag="TRADE_EXECUTED",
         title="模拟盘BUY成交",
         summary="模拟盘已成交。",
+        report_path=report_path,
         artifacts=[tmp_path / "runtime" / "paper" / "orders.jsonl"],
         details={"symbol": "NVDA", "side": "buy"},
     )
@@ -50,5 +53,7 @@ def test_email_notification_writes_payload_and_runs_prompt(tmp_path: Path, monke
     assert payload["recipient"] == "local@example.com"
     assert payload["subject"] == "[Robinhood Codex Agent][TRADE_EXECUTED][2026-06-14] 模拟盘BUY成交"
     assert payload["label"] == "交易系统通知"
+    assert payload["report_path"] == str(report_path)
+    assert payload["report_body"] == "# 中文报告\n\n详细内容\n"
     assert calls[0][0] == "email_notification_trade_executed"
     assert calls[0][1]["TRADE_NOTIFY_EMAIL"] == "local@example.com"

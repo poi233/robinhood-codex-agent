@@ -35,6 +35,7 @@ class PostmarketPaperSnapshotTests(unittest.TestCase):
                     status = postmarket_module.run_postmarket_pipeline(dry_run=False)
 
                 day_end = json.loads((paper_dir / "day_end.json").read_text(encoding="utf-8"))
+                zh_report = (root / "runtime" / "logs" / "runs" / "2026-06-14" / "postmarket_summary.md").read_text(encoding="utf-8")
                 curve = [json.loads(line) for line in (paper_dir / "equity_curve.jsonl").read_text(encoding="utf-8").splitlines()]
             finally:
                 os.chdir(original_cwd)
@@ -44,8 +45,14 @@ class PostmarketPaperSnapshotTests(unittest.TestCase):
         self.assertEqual(day_end["positions_market_value"], 10.0)
         self.assertEqual(day_end["total_equity"], 25.0)
         self.assertEqual(curve[-1]["event"], "day_end")
+        self.assertIn("# 盘后复盘报告 - 2026-06-14", zh_report)
+        self.assertIn("## 账户概览", zh_report)
         notify.assert_called_once()
         self.assertEqual(notify.call_args.kwargs["event_tag"], "POSTMARKET_DONE")
+        self.assertEqual(
+            notify.call_args.kwargs["report_path"].resolve(),
+            (root / "runtime" / "logs" / "runs" / "2026-06-14" / "postmarket_summary.md").resolve(),
+        )
 
     def test_postmarket_writes_paper_summary_before_codex_prompt(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

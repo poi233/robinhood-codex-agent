@@ -386,6 +386,7 @@ def run_premarket_pipeline(*, dry_run: bool) -> int:
         event_tag="PREMARKET_DONE",
         title="盘前流程完成",
         summary="盘前扫描、信号层、候选合并、风险覆盖和最终计划流程已完成。",
+        report_path=paths.daily_plan_zh_markdown_path,
         artifacts=[
             paths.daily_plan_path,
             paths.daily_plan_zh_markdown_path,
