@@ -350,6 +350,13 @@ Deterministic versus reasoning boundaries:
   semantics rather than bullish scoring.
 - Catalyst fallback is intentionally neutral unless the payload is explicitly negative or blocking.
   Prompt completion status means collection quality only; it does not imply a bullish catalyst.
+- Each candidate score now carries component-level diagnostics for DSA, technical, Kronos, quote,
+  and catalyst with `score`, `available`, `confidence`, `blocked`, `reason`, `weight`,
+  `effective_weight`, and `contribution`. Final candidate scoring is normalized by total effective
+  weight so missing optional components do not automatically drag the symbol bearish.
+- Candidate-level diagnostics include `score_status`, `coverage`, `missing_components`, and
+  `warnings`. Low effective coverage is marked as `insufficient_data` instead of being treated as a
+  bearish read.
 - DSA is intentionally narrowed so it does not duplicate detailed technical levels, stop/target
   ladders, or explicit catalyst scoring already owned by other layers.
 - The final planner preserves `planner/risk_overlay.json` executable actions when

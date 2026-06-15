@@ -31,6 +31,8 @@ def test_score_candidate_combines_signal_layers_with_transparent_weights() -> No
     assert score["diagnostics"]["technical"]["component_score"] == 82
     assert score["diagnostics"]["technical"]["component_weight"] == 0.3
     assert score["diagnostics"]["technical"]["weighted_contribution"] == 24.6
+    assert score["score_status"] == "scored"
+    assert score["coverage"] > 0.5
 
 
 def test_score_candidate_marks_dsa_blocks_without_replacing_reasoning() -> None:
@@ -45,6 +47,7 @@ def test_score_candidate_marks_dsa_blocks_without_replacing_reasoning() -> None:
 
     assert score["blocked"] is True
     assert "dsa_block" in score["block_reasons"]
+    assert score["score_status"] == "blocked"
 
 
 def test_score_candidate_marks_dsa_overlap_flags_for_technical_and_event_signals() -> None:
@@ -148,6 +151,8 @@ def test_score_candidate_completed_catalyst_without_numeric_score_stays_neutral(
 
     assert score["components"]["catalyst"] == 50
     assert score["score"] > 50
+    assert score["diagnostics"]["catalyst"]["reason"] == "completed_without_numeric_score"
+    assert score["diagnostics"]["catalyst"]["confidence"] == 0.5
 
 
 def test_score_candidate_partial_catalyst_without_numeric_score_stays_neutral() -> None:
@@ -161,6 +166,8 @@ def test_score_candidate_partial_catalyst_without_numeric_score_stays_neutral() 
     )
 
     assert score["components"]["catalyst"] == 50
+    assert score["diagnostics"]["catalyst"]["reason"] == "partial_without_numeric_score"
+    assert score["diagnostics"]["catalyst"]["confidence"] == 0.25
 
 
 def test_score_candidate_negative_catalyst_can_reduce_score() -> None:
@@ -174,6 +181,7 @@ def test_score_candidate_negative_catalyst_can_reduce_score() -> None:
     )
 
     assert score["components"]["catalyst"] < 50
+    assert score["diagnostics"]["catalyst"]["reason"] == "explicit_negative_catalyst"
 
 
 def test_score_candidate_missing_catalyst_is_neutral_not_bearish() -> None:
@@ -187,6 +195,8 @@ def test_score_candidate_missing_catalyst_is_neutral_not_bearish() -> None:
     )
 
     assert score["components"]["catalyst"] == 50
+    assert score["missing_components"] == ["catalyst"]
+    assert "missing_component:catalyst" in score["warnings"]
 
 
 def test_score_candidate_avgo_regression_clears_old_broken_threshold() -> None:
@@ -202,3 +212,50 @@ def test_score_candidate_avgo_regression_clears_old_broken_threshold() -> None:
     assert score["components"]["technical"] == 82
     assert score["components"]["catalyst"] == 50
     assert score["score"] > 50
+
+
+def test_score_candidate_low_confidence_component_reduces_effective_weight() -> None:
+    score = score_candidate(
+        symbol="NBIS",
+        dsa={"selected_candidates": [{"symbol": "NBIS", "score": 80}]},
+        kronos={"symbols": {"NBIS": {"signal": "neutral", "confidence": 0.2}}},
+        technical={"symbols": {"NBIS": {"technical_action": "promote"}}},
+        quote={"symbols": {"NBIS": {"change_pct": 2.0}}},
+        catalyst={"symbols": {"NBIS": {"status": "partial"}}},
+    )
+
+    assert score["diagnostics"]["kronos"]["effective_weight"] == 0.03
+    assert score["diagnostics"]["catalyst"]["effective_weight"] == 0.05
+
+
+def test_score_candidate_blocked_component_blocks_candidate() -> None:
+    score = score_candidate(
+        symbol="TSLA",
+        dsa={"selected_candidates": [{"symbol": "TSLA", "score": 70}]},
+        kronos={"symbols": {"TSLA": {"signal": "neutral", "confidence": 0.5}}},
+        technical={"symbols": {"TSLA": {"technical_action": "promote"}}},
+        quote={"symbols": {"TSLA": {"change_pct": 1.0}}},
+        catalyst={"symbols": {"TSLA": {"catalyst_bias": "block", "block_reasons": ["event_risk"]}}},
+    )
+
+    assert score["blocked"] is True
+    assert "catalyst:catalyst_blocked" in score["block_reasons"]
+    assert score["diagnostics"]["catalyst"]["blocked"] is True
+
+
+def test_score_candidate_marks_insufficient_data_when_effective_coverage_is_low() -> None:
+    score = score_candidate(
+        symbol="QQQ",
+        dsa={},
+        kronos={},
+        technical={},
+        quote={"symbols": {"QQQ": {"change_pct": 1.0}}},
+        catalyst={},
+    )
+
+    assert score["score_status"] == "insufficient_data"
+    assert score["coverage"] < 0.5
+    assert "missing_component:dsa" in score["warnings"]
+    assert "missing_component:technical" in score["warnings"]
+    assert "missing_component:kronos" in score["warnings"]
+    assert "missing_component:catalyst" in score["warnings"]

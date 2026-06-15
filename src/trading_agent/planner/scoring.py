@@ -32,6 +32,7 @@ TECHNICAL_ACTION_SCORES = {
 
 NEGATIVE_CATALYST_BIASES = {"negative", "bearish", "reduce", "sell_bias"}
 BLOCKING_CATALYST_BIASES = {"block", "avoid"}
+MIN_EFFECTIVE_COVERAGE = 0.5
 
 
 def _read_json_or_empty(path: Path) -> dict[str, Any]:
@@ -82,11 +83,73 @@ def _dsa_component(symbol: str, dsa: dict[str, Any]) -> tuple[float, bool, list[
         if str(value or "").upper() == symbol:
             return 70.0, False, []
     signal = ((dsa.get("symbol_signals") or {}).get(symbol) or {})
-    if isinstance(signal, dict):
+    if isinstance(signal, dict) and signal:
         if str(signal.get("action") or signal.get("suggested_premarket_use") or "").lower() == "block":
             return 0.0, True, ["dsa_block"]
         return _clamp_score(signal.get("score"), 50.0), False, []
     return 0.0, False, []
+
+
+def _component_result(
+    *,
+    name: str,
+    score: float,
+    available: bool,
+    confidence: float,
+    blocked: bool = False,
+    reason: str = "ok",
+    weight: float | None = None,
+    extras: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    base_weight = WEIGHTS[name] if weight is None else weight
+    bounded_confidence = max(0.0, min(1.0, confidence))
+    effective_weight = round(base_weight * bounded_confidence, 4) if available else 0.0
+    contribution = round(score * effective_weight, 2)
+    payload = {
+        "score": round(score, 2),
+        "available": available,
+        "confidence": round(bounded_confidence, 4),
+        "blocked": blocked,
+        "reason": reason,
+        "weight": base_weight,
+        "effective_weight": effective_weight,
+        "contribution": contribution,
+        # Backward-compatible aliases used by existing tests and local diagnostics readers.
+        "component_score": round(score, 2),
+        "component_weight": base_weight,
+        "weighted_contribution": contribution,
+    }
+    if extras:
+        payload.update(extras)
+    return payload
+
+
+def _dsa_diagnostic(symbol: str, dsa: dict[str, Any]) -> tuple[float, dict[str, Any], list[str]]:
+    score, blocked, block_reasons = _dsa_component(symbol, dsa)
+    if blocked:
+        return 0.0, _component_result(
+            name="dsa",
+            score=0.0,
+            available=True,
+            confidence=1.0,
+            blocked=True,
+            reason="dsa_block",
+        ), block_reasons
+    if score > 0:
+        return score, _component_result(
+            name="dsa",
+            score=score,
+            available=True,
+            confidence=1.0,
+            reason="ok",
+        ), []
+    return 50.0, _component_result(
+        name="dsa",
+        score=50.0,
+        available=False,
+        confidence=0.0,
+        reason="dsa_unavailable",
+    ), []
 
 
 def _dsa_overlap_flags(symbol: str, dsa: dict[str, Any]) -> list[str]:
@@ -132,65 +195,119 @@ def _technical_action_payload(payload: dict[str, Any]) -> tuple[str, str | None,
 
 def _technical_component(symbol: str, technical: dict[str, Any]) -> tuple[float, dict[str, Any]]:
     payload = ((technical.get("symbols") or {}).get(symbol) or {})
-    if not isinstance(payload, dict):
-        return 0.0, {
-            "raw_action": None,
-            "normalized_action": None,
-            "component_score": 0.0,
-            "component_weight": WEIGHTS["technical"],
-            "weighted_contribution": 0.0,
-            "action_field": None,
-            "warning": "technical_payload_missing",
-        }
+    if not isinstance(payload, dict) or not payload:
+        return 50.0, _component_result(
+            name="technical",
+            score=50.0,
+            available=False,
+            confidence=0.0,
+            reason="technical_payload_missing",
+            extras={
+                "raw_action": None,
+                "normalized_action": None,
+                "action_field": None,
+                "warning": "technical_payload_missing",
+            },
+        )
     if "priority_score" in payload:
         score = _clamp_score(payload.get("priority_score"))
         normalized_action, raw_action, raw_field = _technical_action_payload(payload)
         warning = None
         if raw_action and raw_action not in TECHNICAL_ACTION_SCORES:
             warning = f"unmapped_technical_action:{raw_action}"
-        return score, {
-            "raw_action": raw_action,
-            "normalized_action": normalized_action,
-            "component_score": round(score, 2),
-            "component_weight": WEIGHTS["technical"],
-            "weighted_contribution": round(score * WEIGHTS["technical"], 2),
-            "action_field": raw_field,
-            "warning": warning,
-        }
+        blocked = normalized_action == "block"
+        reason = "technical_block" if blocked else "ok"
+        return score, _component_result(
+            name="technical",
+            score=score,
+            available=True,
+            confidence=1.0,
+            blocked=blocked,
+            reason=reason,
+            extras={
+                "raw_action": raw_action,
+                "normalized_action": normalized_action,
+                "action_field": raw_field,
+                "warning": warning,
+            },
+        )
     normalized_action, raw_action, raw_field = _technical_action_payload(payload)
     score = TECHNICAL_ACTION_SCORES[normalized_action]
     warning = None
     if raw_action and raw_action not in TECHNICAL_ACTION_SCORES:
         warning = f"unmapped_technical_action:{raw_action}"
-    return score, {
-        "raw_action": raw_action,
-        "normalized_action": normalized_action,
-        "component_score": round(score, 2),
-        "component_weight": WEIGHTS["technical"],
-        "weighted_contribution": round(score * WEIGHTS["technical"], 2),
-        "action_field": raw_field,
-        "warning": warning,
-    }
+    blocked = normalized_action == "block"
+    reason = "technical_block" if blocked else "ok"
+    return score, _component_result(
+        name="technical",
+        score=score,
+        available=True,
+        confidence=1.0,
+        blocked=blocked,
+        reason=reason,
+        extras={
+            "raw_action": raw_action,
+            "normalized_action": normalized_action,
+            "action_field": raw_field,
+            "warning": warning,
+        },
+    )
 
 
-def _kronos_component(symbol: str, kronos: dict[str, Any]) -> float:
+def _kronos_component(symbol: str, kronos: dict[str, Any]) -> tuple[float, dict[str, Any]]:
     payload = ((kronos.get("symbols") or {}).get(symbol) or {})
-    if not isinstance(payload, dict):
-        return 0.0
+    if not isinstance(payload, dict) or not payload:
+        return 50.0, _component_result(
+            name="kronos",
+            score=50.0,
+            available=False,
+            confidence=0.0,
+            reason="kronos_unavailable",
+        )
     confidence = _normalized_confidence(payload.get("confidence"), 0.5)
     bias = str(payload.get("signal") or payload.get("direction_bias") or "").lower()
     setup = str(payload.get("setup_bias") or "").lower()
     if bias in {"bullish", "breakout"} or setup in {"breakout", "pullback"}:
-        return _clamp_score(50 + 40 * confidence)
+        score = _clamp_score(50 + 40 * confidence)
+        return score, _component_result(
+            name="kronos",
+            score=score,
+            available=True,
+            confidence=confidence,
+            reason="ok",
+            extras={"bias": bias or None, "setup_bias": setup or None},
+        )
     if bias in {"bearish", "avoid"} or setup == "avoid":
-        return _clamp_score(50 - 40 * confidence)
-    return 50.0
+        score = _clamp_score(50 - 40 * confidence)
+        return score, _component_result(
+            name="kronos",
+            score=score,
+            available=True,
+            confidence=confidence,
+            blocked=False,
+            reason="kronos_bearish" if bias == "bearish" or setup == "avoid" else "ok",
+            extras={"bias": bias or None, "setup_bias": setup or None},
+        )
+    return 50.0, _component_result(
+        name="kronos",
+        score=50.0,
+        available=True,
+        confidence=confidence,
+        reason="ok",
+        extras={"bias": bias or None, "setup_bias": setup or None},
+    )
 
 
-def _quote_component(symbol: str, quote: dict[str, Any]) -> float:
+def _quote_component(symbol: str, quote: dict[str, Any]) -> tuple[float, dict[str, Any]]:
     payload = ((quote.get("symbols") or {}).get(symbol) or {})
     if not isinstance(payload, dict):
-        return 0.0
+        return 50.0, _component_result(
+            name="quote",
+            score=50.0,
+            available=False,
+            confidence=0.0,
+            reason="quote_unavailable",
+        )
     change_pct = payload.get("change_pct")
     if change_pct is None and payload.get("last_price") is not None and payload.get("previous_close") is not None:
         try:
@@ -199,13 +316,30 @@ def _quote_component(symbol: str, quote: dict[str, Any]) -> float:
             change_pct = ((last - previous) / previous) * 100 if previous else 0
         except (TypeError, ValueError):
             change_pct = 0
-    return _clamp_score(50 + float(change_pct or 0) * 5)
+    score = _clamp_score(payload.get("score"), None)
+    if score is None:
+        score = _clamp_score(50 + float(change_pct or 0) * 5)
+    return score, _component_result(
+        name="quote",
+        score=score,
+        available=True,
+        confidence=1.0,
+        reason="ok",
+        extras={"change_pct": _clamp_score(change_pct, 0.0) if change_pct is not None else None},
+    )
 
 
 def _catalyst_component(symbol: str, catalyst: dict[str, Any]) -> float:
     payload = ((catalyst.get("symbols") or {}).get(symbol) or {})
     if not isinstance(payload, dict):
-        return 50.0
+        return 50.0, _component_result(
+            name="catalyst",
+            score=50.0,
+            available=False,
+            confidence=0.0,
+            reason="catalyst_unavailable",
+            extras={"status": None, "catalyst_bias": None, "missing_numeric_score": False},
+        )
 
     block_reasons = payload.get("block_reasons") or []
     catalyst_bias = str(payload.get("catalyst_bias") or "").strip().lower()
@@ -213,29 +347,90 @@ def _catalyst_component(symbol: str, catalyst: dict[str, Any]) -> float:
     negative_catalysts = payload.get("negative_catalysts") or payload.get("risk_flags") or []
     positive_catalysts = payload.get("positive_catalysts") or payload.get("catalysts") or []
     confidence = _normalized_confidence(payload.get("confidence"), 0.5)
+    status = str(payload.get("status") or payload.get("data_quality") or "").strip().lower() or None
 
     if block_reasons or catalyst_bias in BLOCKING_CATALYST_BIASES or event_risk in {"block", "blocked"}:
-        return 0.0
+        return 0.0, _component_result(
+            name="catalyst",
+            score=0.0,
+            available=True,
+            confidence=max(confidence, 0.75),
+            blocked=True,
+            reason="catalyst_blocked",
+            extras={"status": status, "catalyst_bias": catalyst_bias or None, "missing_numeric_score": False},
+        )
     if catalyst_bias in NEGATIVE_CATALYST_BIASES:
-        return _clamp_score(35 - 20 * (1 - confidence), 25.0)
+        score = _clamp_score(35 - 20 * (1 - confidence), 25.0)
+        return score, _component_result(
+            name="catalyst",
+            score=score,
+            available=True,
+            confidence=max(confidence, 0.5),
+            reason="explicit_negative_catalyst",
+            extras={"status": status, "catalyst_bias": catalyst_bias or None, "missing_numeric_score": False},
+        )
 
     explicit_score = payload.get("catalyst_score")
     if explicit_score is None:
         explicit_score = payload.get("score")
     if explicit_score is not None:
-        return _clamp_score(explicit_score, 50.0)
+        score = _clamp_score(explicit_score, 50.0)
+        return score, _component_result(
+            name="catalyst",
+            score=score,
+            available=True,
+            confidence=confidence,
+            reason="ok",
+            extras={"status": status, "catalyst_bias": catalyst_bias or None, "missing_numeric_score": False},
+        )
 
-    status = str(payload.get("status") or payload.get("data_quality") or "").strip().lower()
     if status == "completed":
-        return 50.0
+        return 50.0, _component_result(
+            name="catalyst",
+            score=50.0,
+            available=True,
+            confidence=0.5,
+            reason="completed_without_numeric_score",
+            extras={"status": status, "catalyst_bias": catalyst_bias or None, "missing_numeric_score": True},
+        )
     if status == "partial":
-        return 50.0
+        return 50.0, _component_result(
+            name="catalyst",
+            score=50.0,
+            available=True,
+            confidence=0.25,
+            reason="partial_without_numeric_score",
+            extras={"status": status, "catalyst_bias": catalyst_bias or None, "missing_numeric_score": True},
+        )
 
     if positive_catalysts and not negative_catalysts:
-        return _clamp_score(55 + 10 * confidence, 60.0)
+        score = _clamp_score(55 + 10 * confidence, 60.0)
+        return score, _component_result(
+            name="catalyst",
+            score=score,
+            available=True,
+            confidence=confidence,
+            reason="positive_catalyst_context",
+            extras={"status": status, "catalyst_bias": catalyst_bias or None, "missing_numeric_score": True},
+        )
     if negative_catalysts and not positive_catalysts:
-        return _clamp_score(45 - 10 * confidence, 40.0)
-    return 50.0
+        score = _clamp_score(45 - 10 * confidence, 40.0)
+        return score, _component_result(
+            name="catalyst",
+            score=score,
+            available=True,
+            confidence=confidence,
+            reason="negative_catalyst_context",
+            extras={"status": status, "catalyst_bias": catalyst_bias or None, "missing_numeric_score": True},
+        )
+    return 50.0, _component_result(
+        name="catalyst",
+        score=50.0,
+        available=False,
+        confidence=0.0,
+        reason="catalyst_unavailable",
+        extras={"status": status, "catalyst_bias": catalyst_bias or None, "missing_numeric_score": True},
+    )
 
 
 def score_candidate(
@@ -248,30 +443,58 @@ def score_candidate(
     catalyst: dict[str, Any],
 ) -> dict[str, Any]:
     normalized = symbol.upper()
-    dsa_score, blocked, block_reasons = _dsa_component(normalized, dsa)
+    dsa_score, dsa_diagnostics, block_reasons = _dsa_diagnostic(normalized, dsa)
     overlap_flags = _dsa_overlap_flags(normalized, dsa)
     technical_score, technical_diagnostics = _technical_component(normalized, technical)
+    kronos_score, kronos_diagnostics = _kronos_component(normalized, kronos)
+    quote_score, quote_diagnostics = _quote_component(normalized, quote)
+    catalyst_score, catalyst_diagnostics = _catalyst_component(normalized, catalyst)
     components = {
         "dsa": round(dsa_score, 2),
         "technical": round(technical_score, 2),
-        "kronos": round(_kronos_component(normalized, kronos), 2),
-        "quote": round(_quote_component(normalized, quote), 2),
-        "catalyst": round(_catalyst_component(normalized, catalyst), 2),
+        "kronos": round(kronos_score, 2),
+        "quote": round(quote_score, 2),
+        "catalyst": round(catalyst_score, 2),
     }
-    score = sum(components[key] * WEIGHTS[key] for key in WEIGHTS)
     diagnostics = {
+        "dsa": dsa_diagnostics,
         "technical": technical_diagnostics,
+        "kronos": kronos_diagnostics,
+        "quote": quote_diagnostics,
+        "catalyst": catalyst_diagnostics,
     }
-    warnings = [technical_diagnostics["warning"]] if technical_diagnostics.get("warning") else []
+    effective_weight_total = round(sum(float(payload.get("effective_weight", 0.0) or 0.0) for payload in diagnostics.values()), 4)
+    weighted_total = sum(float(payload.get("contribution", 0.0) or 0.0) for payload in diagnostics.values())
+    score = round(weighted_total / effective_weight_total, 2) if effective_weight_total > 0 else 50.0
+    coverage = round(effective_weight_total / sum(WEIGHTS.values()), 4) if WEIGHTS else 0.0
+    missing_components = [name for name, payload in diagnostics.items() if not payload.get("available")]
+    warnings: list[str] = []
+    if coverage < MIN_EFFECTIVE_COVERAGE:
+        warnings.append("low_effective_coverage")
+    for name, payload in diagnostics.items():
+        if not payload.get("available"):
+            warnings.append(f"missing_component:{name}")
+        if payload.get("warning"):
+            warnings.append(str(payload["warning"]))
+    warnings = list(dict.fromkeys(warnings))
+    blocked_reasons = list(block_reasons)
+    component_block_reasons = [f"{name}:{payload.get('reason')}" for name, payload in diagnostics.items() if payload.get("blocked")]
+    blocked_reasons.extend(component_block_reasons)
+    blocked = bool(blocked_reasons)
+    score_status = "blocked" if blocked else "insufficient_data" if coverage < MIN_EFFECTIVE_COVERAGE else "scored"
     return {
         "symbol": normalized,
         "score": round(score, 2),
+        "total_score": round(score, 2),
+        "score_status": score_status,
+        "coverage": coverage,
+        "missing_components": missing_components,
         "components": components,
         "weights": dict(WEIGHTS),
         "diagnostics": diagnostics,
         "warnings": warnings,
         "blocked": blocked,
-        "block_reasons": block_reasons,
+        "block_reasons": list(dict.fromkeys(blocked_reasons)),
         "overlap_flags": overlap_flags,
     }
 
