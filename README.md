@@ -271,9 +271,10 @@ Important state contracts:
   `tradable_candidates`, so observe-only names are preserved even when nothing currently clears the
   trading threshold.
 - `planner/premarket_diagnostics.json` is the deterministic debug summary for the run: candidate
-  counts, watchlist/tradable counts, top score, score distribution, thresholds, component coverage,
-  unmapped technical actions, missing catalyst-score counts, final overlay state, final plan state,
-  and concise warnings.
+  counts, scored-candidate counts, watchlist/tradable counts, top score, score distribution,
+  thresholds, component coverage, score-status counts, unmapped technical actions, missing
+  catalyst-score counts, missing-component warnings, final overlay state, final plan state, and
+  concise warnings.
 - `planner/daily_plan.json` inherits executable gating from `planner/risk_overlay.json`. A
   premarket run before the cash open is still valid; soft research partials lower confidence but do
   not become a standalone `no_trade` reason. Its deterministic `plan_state` distinguishes
@@ -386,6 +387,11 @@ Deterministic versus reasoning boundaries:
 - `observe_only` usually means scored candidates exist and remain on the watchlist, but none cleared
   the tradable threshold. Check `planner/premarket_diagnostics.json` for the top score, threshold
   gap, missing catalyst scores, and component-coverage warnings.
+- `planner/premarket_diagnostics.json` warnings are designed to explain mismatch states directly:
+  `technical_actions_unmapped:<actions>`, `catalyst_scores_missing_for_all_symbols`,
+  `top_score_below_trade_threshold_by:<delta>`, `scored_candidates_exist_but_none_tradable`,
+  `watchlist_candidates_exist_but_daily_plan_no_trade`, and
+  `high_score_but_insufficient_data:<symbols>`.
 - `no_trade` should now mean a real market/account/capital/data blocker or a true absence of scored
   candidates, not a schema mismatch between technical/catalyst payloads and candidate scoring.
 - DSA is intentionally narrowed so it does not duplicate detailed technical levels, stop/target
