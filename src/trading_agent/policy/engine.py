@@ -45,15 +45,24 @@ def generate_order_intent(inputs: PolicyInputs) -> PolicyDecision:
         buy_blocked_reasons = buy_evaluation.blocked_reasons
     if intent is None:
         hard_block_reasons = {
-            "score_below_threshold",
             "missing_quote",
             "open_order_exists",
-            "daily_notional_exhausted",
-            "single_order_notional_exhausted",
             "average_down_blocked",
             "allowlist_intersection_empty",
-            "technical_entry_not_ready",
-            "technical_size_too_small",
+            "missing_daily_plan",
+            "data_status_blocked",
+            "risk_overlay_blocks_buy",
+            "research_invalid_condition",
+            "missing_technical_levels",
+            "no_trade_zone",
+            "chase_blocked",
+            "outside_entry_zone",
+            "invalid_price_map",
+            "reward_risk_too_low",
+            "minimum_trade_notional_blocked",
+            "risk_budget_exhausted",
+            "profile_multiplier_blocked",
+            "size_too_small",
         }
         if any(reason in hard_block_reasons for reason in buy_blocked_reasons):
             return PolicyDecision(

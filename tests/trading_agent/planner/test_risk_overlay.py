@@ -51,7 +51,7 @@ def test_risk_overlay_blocks_execution_when_market_is_closed() -> None:
         trading_mode="paper",
         risk_tier=3,
         risk_caps={"max_single_order_notional": 5000, "max_daily_notional": 20000},
-        market_calendar={"data_status": "ok", "trading_day": False, "session": "closed"},
+        market_calendar={"data_status": "ok", "is_trading_day": False, "session": "closed"},
         capital_snapshot={"sizing_buying_power": 400000.0, "sizing_source": "paper_starting_cash"},
         account_snapshot={"agentic_account_identified": True, "data_status": "ok"},
         candidate_scores={"symbols": {"SMH": {"score": 82, "blocked": False}}},
@@ -71,7 +71,7 @@ def test_risk_overlay_uses_capital_snapshot_for_paper_sizing() -> None:
         trading_mode="paper",
         risk_tier=3,
         risk_caps={"max_single_order_notional": 5000, "max_daily_notional": 20000},
-        market_calendar={"data_status": "ok", "trading_day": True, "session": "premarket"},
+        market_calendar={"data_status": "ok", "is_trading_day": True, "session": "premarket"},
         capital_snapshot={"sizing_buying_power": 400000.0, "sizing_source": "paper_starting_cash"},
         account_snapshot={"agentic_account_identified": True, "data_status": "ok", "buying_power": 100.0},
         candidate_scores={"symbols": {"SMH": {"score": 82, "blocked": False}}},
@@ -84,3 +84,20 @@ def test_risk_overlay_uses_capital_snapshot_for_paper_sizing() -> None:
     assert overlay["max_daily_notional"] == 20000
     assert overlay["capital_snapshot"]["sizing_buying_power"] == 400000.0
     assert overlay["today_watchlist"] == ["SMH"]
+
+
+def test_risk_overlay_does_not_block_premarket_when_trading_day_is_true_even_if_session_is_closed() -> None:
+    overlay = build_risk_overlay(
+        run_date="2026-06-15",
+        trading_mode="paper",
+        risk_tier=3,
+        risk_caps={"max_single_order_notional": 5000, "max_daily_notional": 20000},
+        market_calendar={"data_status": "ok", "is_trading_day": True, "session": "closed"},
+        capital_snapshot={"sizing_buying_power": 400000.0, "sizing_source": "paper_starting_cash"},
+        account_snapshot={"agentic_account_identified": True, "data_status": "ok", "buying_power": 100.0},
+        candidate_scores={"symbols": {"SMH": {"score": 82, "blocked": False}}},
+        data_status_summary={"execution_blocking": False, "reason_codes": []},
+    )
+
+    assert overlay["market_regime"] == "aggressive_ok"
+    assert "market_closed" not in overlay["no_trade_reasons"]

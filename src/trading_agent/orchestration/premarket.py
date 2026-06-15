@@ -70,9 +70,9 @@ class PremarketPipeline:
             wait(futures)
         self.run_trader_watch_levels()
         self.run_candidate_merge()
-        with ThreadPoolExecutor(max_workers=3) as executor:
+        self.run_quote_snapshot_candidates()
+        with ThreadPoolExecutor(max_workers=2) as executor:
             futures = [
-                executor.submit(self._run_advisory, self.run_quote_snapshot_candidates),
                 executor.submit(self._run_advisory, self.run_tradability_candidates),
                 executor.submit(self._run_advisory, self.run_catalyst_enrichment),
             ]

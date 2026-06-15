@@ -7,6 +7,7 @@ from typing import Any, Protocol
 from trading_agent.core.context import build_runtime_paths
 from trading_agent.data.universe import parse_universe
 from trading_agent.policy.models import OpenOrder, PolicyInputs, Position, Quote
+from trading_agent.policy.profiles import load_policy_profile
 
 
 class RobinhoodPolicyGateway(Protocol):
@@ -27,6 +28,22 @@ def _read_json_if_exists(path: Path) -> dict[str, Any]:
     if not path.exists():
         return {}
     return json.loads(path.read_text(encoding="utf-8"))
+
+
+def _dated_payload_is_fresh(payload: dict[str, Any], run_date: str) -> bool:
+    for key in ("date", "as_of"):
+        value = payload.get(key)
+        if value is None:
+            continue
+        return str(value) == run_date
+    return True
+
+
+def _read_json_if_fresh(path: Path, run_date: str) -> dict[str, Any]:
+    payload = _read_json_if_exists(path)
+    if not payload:
+        return {}
+    return payload if _dated_payload_is_fresh(payload, run_date) else {}
 
 
 def _read_allowlist(path: Path) -> list[str]:
@@ -256,7 +273,7 @@ def load_policy_inputs(
     config_dir = paths.config_dir
     risk_tiers = _read_json_if_exists(config_dir / "risk_tiers.json")
     risk_caps = risk_tiers.get(str(risk_tier), {}) if isinstance(risk_tiers, dict) else {}
-    daily_plan = _read_json_if_exists(paths.daily_plan_path) or None
+    daily_plan = _read_json_if_fresh(paths.daily_plan_path, run_date) or None
 
     inputs = PolicyInputs(
         run_date=run_date,
@@ -266,11 +283,18 @@ def load_policy_inputs(
         universe=parse_universe(config_dir / "universe.txt") if (config_dir / "universe.txt").exists() else [],
         today_allowlist=_read_allowlist(paths.today_allowlist_path),
         daily_plan=daily_plan,
-        dynamic_allowlist=_read_json_if_exists(paths.dynamic_allowlist_path),
-        daily_usage=_read_json_if_exists(paths.daily_usage_path),
-        dsa_signals=_read_json_if_exists(paths.dsa_signals_path),
-        kronos_signals=_read_json_if_exists(paths.kronos_signals_path),
-        technical_signals=_read_json_if_exists(paths.technical_signals_path),
+        dynamic_allowlist=_read_json_if_fresh(paths.dynamic_allowlist_path, run_date),
+        candidate_scores=_read_json_if_fresh(paths.candidate_scores_path, run_date),
+        risk_overlay=_read_json_if_fresh(paths.risk_overlay_path, run_date),
+        trader_watch_levels=_read_json_if_exists(paths.trader_watch_levels_path),
+        data_status_summary=_read_json_if_fresh(paths.data_status_summary_path, run_date),
+        capital_snapshot=_read_json_if_fresh(paths.capital_snapshot_path, run_date),
+        catalyst_snapshot=_read_json_if_fresh(paths.catalyst_snapshot_path, run_date),
+        policy_profile=load_policy_profile(agent_root),
+        daily_usage=_read_json_if_fresh(paths.daily_usage_path, run_date),
+        dsa_signals=_read_json_if_fresh(paths.dsa_signals_path, run_date),
+        kronos_signals=_read_json_if_fresh(paths.kronos_signals_path, run_date),
+        technical_signals=_read_json_if_fresh(paths.technical_signals_path, run_date),
         research_reports=_load_research_reports(agent_root, run_date),
         kill_switch_present=(agent_root / "KILL_SWITCH").exists(),
     )

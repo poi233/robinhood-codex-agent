@@ -47,6 +47,11 @@ class OrderIntent:
     limit_price: float
     estimated_notional: float
     quantity: float
+    setup_type: str = ""
+    stop_price: float | None = None
+    target_1: float | None = None
+    target_2: float | None = None
+    reward_risk: float | None = None
     reason_codes: list[str] = field(default_factory=list)
     confidence: float = 0.0
 
@@ -56,9 +61,14 @@ class OrderIntent:
             "side": self.side,
             "order_type": self.order_type,
             "time_in_force": "day",
+            "setup_type": self.setup_type,
             "limit_price": self.limit_price,
             "estimated_notional": self.estimated_notional,
             "quantity": self.quantity,
+            "stop_price": self.stop_price,
+            "target_1": self.target_1,
+            "target_2": self.target_2,
+            "reward_risk": self.reward_risk,
             "reason_codes": list(self.reason_codes),
             "confidence": self.confidence,
         }
@@ -74,6 +84,13 @@ class PolicyInputs:
     today_allowlist: list[str] = field(default_factory=list)
     daily_plan: dict[str, Any] | None = None
     dynamic_allowlist: dict[str, Any] = field(default_factory=dict)
+    candidate_scores: dict[str, Any] = field(default_factory=dict)
+    risk_overlay: dict[str, Any] = field(default_factory=dict)
+    trader_watch_levels: dict[str, Any] = field(default_factory=dict)
+    data_status_summary: dict[str, Any] = field(default_factory=dict)
+    capital_snapshot: dict[str, Any] = field(default_factory=dict)
+    catalyst_snapshot: dict[str, Any] = field(default_factory=dict)
+    policy_profile: dict[str, Any] = field(default_factory=dict)
     daily_usage: dict[str, Any] = field(default_factory=dict)
     dsa_signals: dict[str, Any] = field(default_factory=dict)
     kronos_signals: dict[str, Any] = field(default_factory=dict)

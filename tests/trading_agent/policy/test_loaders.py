@@ -38,6 +38,30 @@ class PolicyLoaderTests(unittest.TestCase):
                 {"date": "2026-06-14", "symbol_scores": {"NVDA": {"score": 88}}},
             )
             write_json(
+                root / "runtime" / "state" / "runs" / "2026-06-14" / "planner" / "candidate_scores.json",
+                {"date": "2026-06-14", "symbols": {"NVDA": {"total_score": 88, "components": {"technical": 80}}}},
+            )
+            write_json(
+                root / "runtime" / "state" / "runs" / "2026-06-14" / "planner" / "risk_overlay.json",
+                {"date": "2026-06-14", "market_regime": "aggressive_ok", "symbol_trade_rules": {"NVDA": {"allow_buy": True}}},
+            )
+            write_json(
+                root / "runtime" / "state" / "runs" / "2026-06-14" / "planner" / "trader_watch_levels.json",
+                {"symbols": {"NVDA": {"entry_low": 99.5, "entry_high": 100.5}}},
+            )
+            write_json(
+                root / "runtime" / "state" / "runs" / "2026-06-14" / "planner" / "data_status_summary.json",
+                {"date": "2026-06-14", "execution_blocking": False, "reason_codes": []},
+            )
+            write_json(
+                root / "runtime" / "state" / "runs" / "2026-06-14" / "planner" / "capital_snapshot.json",
+                {"date": "2026-06-14", "sizing_buying_power": 25.0},
+            )
+            write_json(
+                root / "runtime" / "state" / "runs" / "2026-06-14" / "planner" / "catalyst_snapshot.json",
+                {"date": "2026-06-14", "symbols": {"NVDA": {"score": 72}}},
+            )
+            write_json(
                 root / "runtime" / "state" / "runs" / "2026-06-14" / "signals" / "technical_signals.json",
                 {
                     "date": "2026-06-14",
@@ -76,6 +100,13 @@ class PolicyLoaderTests(unittest.TestCase):
         self.assertEqual(inputs.risk_caps["max_single_order_notional"], 10)
         self.assertEqual(inputs.daily_plan["date"], "2026-06-14")
         self.assertEqual(inputs.dynamic_allowlist["symbol_scores"]["NVDA"]["score"], 88)
+        self.assertEqual(inputs.candidate_scores["symbols"]["NVDA"]["total_score"], 88)
+        self.assertEqual(inputs.risk_overlay["market_regime"], "aggressive_ok")
+        self.assertEqual(inputs.trader_watch_levels["symbols"]["NVDA"]["entry_low"], 99.5)
+        self.assertEqual(inputs.data_status_summary["execution_blocking"], False)
+        self.assertEqual(inputs.capital_snapshot["sizing_buying_power"], 25.0)
+        self.assertEqual(inputs.catalyst_snapshot["symbols"]["NVDA"]["score"], 72)
+        self.assertEqual(inputs.policy_profile["name"], "aggressive_growth")
         self.assertEqual(inputs.technical_signals["symbols"]["NVDA"]["long_setup"]["status"], "active")
         self.assertEqual(inputs.daily_usage["used_notional"], 5)
         self.assertEqual(inputs.research_reports["NVDA"]["research_bias"], "bullish")

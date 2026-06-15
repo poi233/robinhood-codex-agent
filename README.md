@@ -78,9 +78,9 @@ flowchart TD
     G1 --> TraderLevels["local trader watch levels"]
     TraderLevels --> CandidateMerge["local candidate merge"]
 
-    CandidateMerge --> G2
-    subgraph G2["parallel candidate enrichment"]
-        CandidateQuotes["local candidate quotes"]
+    CandidateMerge --> CandidateQuotes["local candidate quotes"]
+    CandidateQuotes --> G2
+    subgraph G2["parallel candidate enrichment after quotes"]
         Tradability["local candidate tradability"]
         Catalysts["Codex prompt: catalysts / news"]
     end
@@ -123,6 +123,7 @@ then call the Python package.
 ```text
 src/config/
   allowlist.txt                  emergency fallback symbols
+  policy_profiles.json           deterministic intraday policy profiles
   risk.md                        human-readable hard risk rules
   risk_tiers.json                machine-readable notional caps by tier
   runtime.env                    default mode, model, tier, layer flags
@@ -258,6 +259,9 @@ Important state contracts:
   quote, and catalyst outputs with transparent weights. It does not replace those reasoning layers.
 - `planner/risk_overlay.json` applies market-calendar, capital, risk-tier, account, and data-status
   gates before the final prompt writes narrative.
+- `planner/daily_plan.json` inherits executable gating from `planner/risk_overlay.json`. A
+  premarket run before the cash open is still valid; soft research partials lower confidence but do
+  not become a standalone `no_trade` reason.
 - `planner/daily_usage.json` starts from the final premarket planner and is updated by paper fills.
 - `planner/daily_plan.zh.md` is the Chinese human-readable version of the premarket report.
 - `paper/day_start.json`, `paper/day_end.json`, `paper/equity_curve.jsonl`, and
@@ -306,14 +310,15 @@ Premarket does the following:
    normalization step only; it does not create new technical opinions.
 6. Builds `planner/candidate_snapshot.json` locally from account holdings, open orders, and advisory
    signals.
-7. Runs deterministic candidate quote and tradability builders in parallel with the catalyst
-   enrichment prompt.
-8. Writes `planner/data_status_summary.json` with structured status reason codes.
-9. Writes `planner/candidate_scores.json` and `planner/risk_overlay.json` with deterministic
+7. Writes `planner/quote_snapshot_candidates.json` before downstream candidate gating so
+   tradability always reads a completed candidate quote snapshot.
+8. Runs deterministic tradability plus the catalyst enrichment prompt in parallel.
+9. Writes `planner/data_status_summary.json` with structured status reason codes.
+10. Writes `planner/candidate_scores.json` and `planner/risk_overlay.json` with deterministic
    ranking and risk gates.
-10. Runs the final premarket planner prompt to write the final files and human narrative.
-11. Archives `archive/premarket_report.json`.
-12. Logs stage status to `runtime/logs/runs/YYYY-MM-DD/pipeline.jsonl`.
+11. Runs the final premarket planner prompt to write the final files and human narrative.
+12. Archives `archive/premarket_report.json`.
+13. Logs stage status to `runtime/logs/runs/YYYY-MM-DD/pipeline.jsonl`.
 
 The final planner writes:
 
@@ -335,6 +340,9 @@ Deterministic versus reasoning boundaries:
   catalyst judgments, or DSA classifications.
 - DSA is intentionally narrowed so it does not duplicate detailed technical levels, stop/target
   ladders, or explicit catalyst scoring already owned by other layers.
+- The final planner preserves `planner/risk_overlay.json` executable actions when
+  `planner/data_status_summary.json.execution_blocking` is false. Soft partial research layers are
+  explanatory, not hard execution stops.
 
 Layer flags:
 
@@ -386,8 +394,17 @@ Policy behavior:
 - Sell can generate partial take-profit or risk-exit intents when the daily plan allows them.
 - Buy requires the intersection of `universe.txt`, `today_allowlist.txt`, and
   `daily_plan.today_watchlist`.
+- Buy ranks candidates deterministically from `candidate_scores`, `risk_overlay`,
+  `trader_watch_levels`, catalyst context, and the default `aggressive_growth` profile in
+  `src/config/policy_profiles.json`.
+- Buy price selection respects technical entry zones, breakout triggers, no-trade zones, chase
+  limits, and minimum reward/risk before an order intent is allowed.
+- Buy size selection uses stop distance, capital buffers, profile caps, and setup-quality
+  multipliers instead of flat notional sizing.
+- Sell logic uses technical targets, invalidation levels, and risk-reduction triggers to decide
+  partial take-profit versus defensive exit.
 - Buy requires a score of at least 80, a fresh quote, no open order, no average-down into a losing
-  position, daily cap room, single-order cap room, and buying power.
+  position, daily cap room, single-order cap room, buying power, and a technically valid entry.
 - Review/live currently block with `execution_not_wired`.
 
 ### Paper Mode

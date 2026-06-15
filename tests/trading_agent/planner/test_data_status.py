@@ -7,7 +7,7 @@ def test_market_closed_partial_is_not_provider_failure() -> None:
     result = normalize_layer_status(
         layer="dsa",
         raw_status={"quotes": "partial", "news": "ok", "historicals": "ok"},
-        market_calendar={"trading_day": False, "session": "closed"},
+        market_calendar={"is_trading_day": False, "session": "closed"},
     )
 
     assert result["status"] == "partial"
@@ -20,7 +20,7 @@ def test_failed_raw_status_is_provider_failure() -> None:
     result = normalize_layer_status(
         layer="technical",
         raw_status={"data_status": "failed"},
-        market_calendar={"trading_day": True, "session": "premarket"},
+        market_calendar={"is_trading_day": True, "session": "premarket"},
     )
 
     assert result["status"] == "failed"
@@ -32,7 +32,7 @@ def test_failed_raw_status_is_provider_failure() -> None:
 def test_build_data_status_summary_collects_layer_reason_codes() -> None:
     summary = build_data_status_summary(
         run_date="2026-06-14",
-        market_calendar={"data_status": "ok", "trading_day": False, "session": "closed"},
+        market_calendar={"data_status": "ok", "is_trading_day": False, "session": "closed"},
         layers={
             "dsa": {"quotes": "partial", "news": "ok", "historicals": "ok"},
             "kronos": {"data_status": "ok"},
@@ -46,3 +46,29 @@ def test_build_data_status_summary_collects_layer_reason_codes() -> None:
     assert summary["layers"]["technical"]["reason_code"] == "ok"
     assert summary["execution_blocking"] is True
     assert "dsa:market_closed" in summary["reason_codes"]
+
+
+def test_partial_layer_during_premarket_is_not_execution_blocking() -> None:
+    result = normalize_layer_status(
+        layer="tradability",
+        raw_status={"data_status": "partial"},
+        market_calendar={"is_trading_day": True, "session": "closed"},
+    )
+
+    assert result["status"] == "partial"
+    assert result["reason_code"] == "provider_partial"
+    assert result["execution_blocking"] is False
+    assert result["research_blocking"] is False
+
+
+def test_missing_catalyst_layer_is_soft_optional() -> None:
+    result = normalize_layer_status(
+        layer="catalyst",
+        raw_status=None,
+        market_calendar={"is_trading_day": True, "session": "closed"},
+    )
+
+    assert result["status"] == "partial"
+    assert result["reason_code"] == "provider_partial"
+    assert result["execution_blocking"] is False
+    assert result["research_blocking"] is False

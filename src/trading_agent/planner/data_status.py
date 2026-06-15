@@ -19,10 +19,10 @@ def _read_json_or_none(path: Path) -> dict[str, Any] | None:
 def _is_market_closed(market_calendar: dict[str, Any] | None) -> bool:
     if not isinstance(market_calendar, dict):
         return False
-    if market_calendar.get("trading_day") is False:
+    if market_calendar.get("is_trading_day") is False or market_calendar.get("trading_day") is False:
         return True
     session = str(market_calendar.get("session") or "").lower()
-    return session in {"closed", "holiday", "weekend"}
+    return session in {"holiday", "weekend"}
 
 
 def _raw_status_values(raw_status: dict[str, Any]) -> list[str]:
@@ -42,7 +42,16 @@ def normalize_layer_status(
     raw_status: dict[str, Any] | None,
     market_calendar: dict[str, Any] | None,
 ) -> dict[str, Any]:
+    soft_optional_layers = {"catalyst"}
     if raw_status is None:
+        if layer in soft_optional_layers:
+            return {
+                "layer": layer,
+                "status": "partial",
+                "reason_code": "provider_partial",
+                "execution_blocking": False,
+                "research_blocking": False,
+            }
         return {
             "layer": layer,
             "status": "missing",
@@ -144,4 +153,3 @@ def build_data_status_summary_from_paths(agent_root: Path, run_date: str) -> dic
     )
     write_json(paths.data_status_summary_path, summary)
     return summary
-

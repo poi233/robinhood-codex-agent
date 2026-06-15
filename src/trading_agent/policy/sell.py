@@ -22,15 +22,16 @@ def evaluate_sell(inputs: PolicyInputs) -> OrderIntent | None:
         if not quote or not quote.is_fresh or quote.price <= 0:
             continue
 
+        watch = ((inputs.trader_watch_levels.get("symbols") or {}).get(symbol) or {})
         technical = technical_symbol_payload(inputs, symbol)
-        if not technical:
+        if not technical and not watch:
             continue
 
         reason_codes: list[str] = []
         long_setup = technical.get("long_setup") or {}
         short_setup = technical.get("short_setup") or {}
-        partial_target_1 = as_float(long_setup.get("target_1"))
-        partial_target_2 = as_float(long_setup.get("target_2"))
+        partial_target_1 = as_float(watch.get("target_1")) or as_float(long_setup.get("target_1"))
+        partial_target_2 = as_float(watch.get("target_2")) or as_float(long_setup.get("target_2"))
         if (
             "partial_take_profit" in allowed_actions
             and position.unrealized_return >= 0.025
@@ -41,9 +42,10 @@ def evaluate_sell(inputs: PolicyInputs) -> OrderIntent | None:
         ):
             reason_codes.append("partial_take_profit")
 
-        trigger_below = as_float(short_setup.get("trigger_below"))
-        risk_target_1 = as_float(short_setup.get("target_1"))
-        risk_target_2 = as_float(short_setup.get("target_2"))
+        trigger_below = as_float(watch.get("risk_reduction_trigger_below")) or as_float(short_setup.get("trigger_below"))
+        risk_target_1 = as_float(watch.get("risk_reduction_target_1")) or as_float(short_setup.get("target_1"))
+        risk_target_2 = as_float(watch.get("risk_reduction_target_2")) or as_float(short_setup.get("target_2"))
+        invalidation_below = as_float(watch.get("invalidation_below")) or as_float(long_setup.get("invalidation_below"))
         if (
             "risk_exit" in allowed_actions
             and short_setup.get("status") in {"active", "watch"}
@@ -51,6 +53,9 @@ def evaluate_sell(inputs: PolicyInputs) -> OrderIntent | None:
             and quote.price < trigger_below
         ):
             reason_codes.append("risk_exit")
+
+        if invalidation_below is not None and quote.price <= invalidation_below:
+            reason_codes.append("full_invalidation_exit")
 
         if not reason_codes:
             continue
@@ -68,17 +73,24 @@ def evaluate_sell(inputs: PolicyInputs) -> OrderIntent | None:
                 sell_fraction = max(sell_fraction, 0.75)
             else:
                 sell_fraction = max(sell_fraction, 0.5)
+        if "full_invalidation_exit" in reason_codes:
+            sell_fraction = 1.0
 
         quantity = round(max(0.0, min(position.quantity, position.quantity * sell_fraction)), 8)
         if quantity <= 0:
             continue
+        limit_price = round(quote.price * 0.997, 4) if "risk_exit" in reason_codes or "full_invalidation_exit" in reason_codes else quote.price
         return OrderIntent(
             symbol=symbol,
             side="sell",
             order_type="limit",
-            limit_price=quote.price,
-            estimated_notional=round(quantity * quote.price, 2),
+            setup_type="risk_exit" if "risk_exit" in reason_codes or "full_invalidation_exit" in reason_codes else "take_profit",
+            limit_price=limit_price,
+            estimated_notional=round(quantity * limit_price, 2),
             quantity=quantity,
+            stop_price=invalidation_below,
+            target_1=partial_target_1,
+            target_2=partial_target_2,
             reason_codes=reason_codes,
             confidence=0.75,
         )

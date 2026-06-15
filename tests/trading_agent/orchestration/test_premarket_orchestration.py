@@ -42,6 +42,7 @@ class PremarketOrchestrationTests(unittest.TestCase):
         self.assertLess(events.index("candidate_merge"), events.index("quote_snapshot_candidates"))
         self.assertLess(events.index("candidate_merge"), events.index("tradability_candidates"))
         self.assertLess(events.index("candidate_merge"), events.index("catalyst_enrichment"))
+        self.assertLess(events.index("quote_snapshot_candidates"), events.index("tradability_candidates"))
         self.assertLess(events.index("quote_snapshot_candidates"), events.index("data_status_summary"))
         self.assertLess(events.index("tradability_candidates"), events.index("data_status_summary"))
         self.assertLess(events.index("catalyst_enrichment"), events.index("data_status_summary"))
@@ -176,9 +177,10 @@ class PremarketOrchestrationTests(unittest.TestCase):
         self.assertNotIn("tradability_candidates", run_kinds)
         notify.assert_called_once()
         self.assertEqual(notify.call_args.kwargs["event_tag"], "PREMARKET_DONE")
+        run_date = premarket_module.pt_date_string()
         self.assertEqual(
             notify.call_args.kwargs["report_path"].resolve(),
-            (root / "runtime" / "state" / "runs" / "2026-06-14" / "planner" / "daily_plan.zh.md").resolve(),
+            (root / "runtime" / "state" / "runs" / run_date / "planner" / "daily_plan.zh.md").resolve(),
         )
 
     def test_explicit_dry_run_uses_mock_market_feed(self) -> None:

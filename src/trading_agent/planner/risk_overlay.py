@@ -89,8 +89,16 @@ def build_capital_snapshot(
     }
 
 
+def _calendar_trading_day_flag(market_calendar: dict[str, Any]) -> bool | None:
+    if market_calendar.get("is_trading_day") is True or market_calendar.get("trading_day") is True:
+        return True
+    if market_calendar.get("is_trading_day") is False or market_calendar.get("trading_day") is False:
+        return False
+    return None
+
+
 def _is_trading_day(market_calendar: dict[str, Any]) -> bool:
-    return market_calendar.get("trading_day") is True and str(market_calendar.get("session") or "").lower() != "closed"
+    return _calendar_trading_day_flag(market_calendar) is True
 
 
 def build_risk_overlay(
@@ -198,4 +206,3 @@ def build_risk_overlay_from_paths(agent_root: Path, run_date: str, *, trading_mo
     )
     write_json(paths.risk_overlay_path, payload)
     return payload
-

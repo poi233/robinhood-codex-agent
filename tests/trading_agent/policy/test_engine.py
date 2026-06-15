@@ -35,6 +35,51 @@ def base_inputs(*, trading_mode: str = "paper") -> PolicyInputs:
                 }
             },
         },
+        candidate_scores={
+            "date": "2026-06-14",
+            "symbols": {
+                "NVDA": {"score": 85, "total_score": 85, "components": {"technical": 78, "catalyst": 70}}
+            },
+        },
+        risk_overlay={
+            "date": "2026-06-14",
+            "market_regime": "aggressive_ok",
+            "max_single_order_notional": 10,
+            "max_daily_notional": 25,
+            "symbol_trade_rules": {"NVDA": {"max_notional": 10, "allow_buy": True}},
+        },
+        trader_watch_levels={
+            "symbols": {
+                "NVDA": {
+                    "entry_low": 99.5,
+                    "entry_high": 100.5,
+                    "buy_trigger_above": 100.5,
+                    "do_not_chase_above": 102.0,
+                    "no_trade_low": 100.6,
+                    "no_trade_high": 100.9,
+                    "invalidation_below": 99.0,
+                    "risk_reduction_trigger_below": 98.5,
+                    "risk_reduction_target_1": 97.5,
+                    "risk_reduction_target_2": 96.0,
+                    "target_1": 103.0,
+                    "target_2": 105.0,
+                }
+            }
+        },
+        data_status_summary={"execution_blocking": False, "reason_codes": []},
+        capital_snapshot={"sizing_buying_power": 25.0},
+        catalyst_snapshot={"symbols": {"NVDA": {"score": 70}}},
+        policy_profile={
+            "name": "aggressive_growth",
+            "per_trade_risk_pct": 0.005,
+            "cash_buffer_pct": 0.1,
+            "pullback_score_threshold": 82,
+            "breakout_score_threshold": 88,
+            "technical_min_score": 70,
+            "min_reward_risk": 1.5,
+            "breakout_chase_tolerance_pct": 0.002,
+            "minimum_trade_notional": 1.0
+        },
         daily_usage={"date": "2026-06-14", "used_notional": 0},
         account={"buying_power": 25.0},
         quotes={"NVDA": Quote(symbol="NVDA", price=100.0, previous_close=101.0, timestamp="2026-06-14T09:45:00-07:00")},
