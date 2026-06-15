@@ -23,7 +23,7 @@ from trading_agent.planner.risk_overlay import build_capital_snapshot, build_ris
 from trading_agent.planner.scoring import build_candidate_scores_from_paths
 from trading_agent.planner.tradability import build_tradability_snapshot_from_paths
 from trading_agent.prompts.codex import run_codex_prompt
-from trading_agent.reporting.premarket import build_fail_closed_daily_plan, build_premarket_archive_payload
+from trading_agent.reporting.premarket import build_fail_closed_daily_plan, build_premarket_archive_payload, normalize_daily_plan_state
 from trading_agent.reporting.trader_watch_levels import build_trader_watch_levels
 from trading_agent.signals.kronos import (
     build_failed_kronos_payload,
@@ -331,6 +331,11 @@ def run_premarket_pipeline(*, dry_run: bool) -> int:
         status = run_codex_prompt("final_premarket", agent_root, paths.prompts_dir / "premarket" / "final_research.txt")
         if status != 0:
             raise RuntimeError("premarket prompt failed")
+        if paths.daily_plan_path.exists():
+            daily_plan = read_json(paths.daily_plan_path)
+            risk_overlay = read_json(paths.risk_overlay_path) if paths.risk_overlay_path.exists() else {}
+            if isinstance(daily_plan, dict) and isinstance(risk_overlay, dict):
+                write_json(paths.daily_plan_path, normalize_daily_plan_state(run_date, daily_plan, risk_overlay))
 
     def run_archive() -> None:
         technical_path = paths.technical_signals_path

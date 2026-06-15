@@ -269,7 +269,8 @@ Important state contracts:
   trading threshold.
 - `planner/daily_plan.json` inherits executable gating from `planner/risk_overlay.json`. A
   premarket run before the cash open is still valid; soft research partials lower confidence but do
-  not become a standalone `no_trade` reason.
+  not become a standalone `no_trade` reason. Its deterministic `plan_state` distinguishes
+  `no_trade`, `observe_only`, and `trade_ready`.
 - `planner/daily_usage.json` starts from the final premarket planner and is updated by paper fills.
 - `planner/daily_plan.zh.md` is the Chinese human-readable version of the premarket report.
 - `paper/day_start.json`, `paper/day_end.json`, `paper/equity_curve.jsonl`, and
@@ -363,6 +364,10 @@ Deterministic versus reasoning boundaries:
   (`35` versus `50`). If scored candidates exist but none clear the trade threshold, the overlay
   keeps them in `today_watchlist`, leaves `allowed_actions=[]`, and records
   `no_tradable_candidates_above_threshold` instead of `no_scored_candidates`.
+- `daily_plan.json.plan_state` semantics:
+  - `no_trade`: market, account, capital, or execution-blocking data gates are closed.
+  - `observe_only`: watchlist candidates exist, but none are currently tradable.
+  - `trade_ready`: at least one candidate clears the tradable threshold and the global gates are open.
 - DSA is intentionally narrowed so it does not duplicate detailed technical levels, stop/target
   ladders, or explicit catalyst scoring already owned by other layers.
 - The final planner preserves `planner/risk_overlay.json` executable actions when
