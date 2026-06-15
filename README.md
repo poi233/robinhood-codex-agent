@@ -372,6 +372,14 @@ Deterministic versus reasoning boundaries:
   - `no_trade`: market, account, capital, or execution-blocking data gates are closed.
   - `observe_only`: watchlist candidates exist, but none are currently tradable.
   - `trade_ready`: at least one candidate clears the tradable threshold and the global gates are open.
+
+### Troubleshooting premarket outcomes
+
+- `observe_only` usually means scored candidates exist and remain on the watchlist, but none cleared
+  the tradable threshold. Check `planner/premarket_diagnostics.json` for the top score, threshold
+  gap, missing catalyst scores, and component-coverage warnings.
+- `no_trade` should now mean a real market/account/capital/data blocker or a true absence of scored
+  candidates, not a schema mismatch between technical/catalyst payloads and candidate scoring.
 - DSA is intentionally narrowed so it does not duplicate detailed technical levels, stop/target
   ladders, or explicit catalyst scoring already owned by other layers.
 - The final planner preserves `planner/risk_overlay.json` executable actions when
