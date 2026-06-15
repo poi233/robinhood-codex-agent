@@ -38,6 +38,24 @@ class PolicyLoaderTests(unittest.TestCase):
                 {"date": "2026-06-14", "symbol_scores": {"NVDA": {"score": 88}}},
             )
             write_json(
+                root / "runtime" / "state" / "runs" / "2026-06-14" / "signals" / "technical_signals.json",
+                {
+                    "date": "2026-06-14",
+                    "symbols": {
+                        "NVDA": {
+                            "long_setup": {
+                                "status": "active",
+                                "trigger_above": 100.5,
+                                "entry_zone": {"low": 99.5, "high": 100.5},
+                                "invalidation_below": 99.0,
+                            },
+                            "short_setup": {"status": "watch", "trigger_below": 98.5},
+                            "no_trade_zone": {"low": 100.6, "high": 100.9, "reason": "range chop"},
+                        }
+                    },
+                },
+            )
+            write_json(
                 root / "runtime" / "state" / "runs" / "2026-06-14" / "planner" / "daily_usage.json",
                 {"date": "2026-06-14", "used_notional": 5},
             )
@@ -58,6 +76,7 @@ class PolicyLoaderTests(unittest.TestCase):
         self.assertEqual(inputs.risk_caps["max_single_order_notional"], 10)
         self.assertEqual(inputs.daily_plan["date"], "2026-06-14")
         self.assertEqual(inputs.dynamic_allowlist["symbol_scores"]["NVDA"]["score"], 88)
+        self.assertEqual(inputs.technical_signals["symbols"]["NVDA"]["long_setup"]["status"], "active")
         self.assertEqual(inputs.daily_usage["used_notional"], 5)
         self.assertEqual(inputs.research_reports["NVDA"]["research_bias"], "bullish")
 

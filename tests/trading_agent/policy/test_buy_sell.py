@@ -35,6 +35,46 @@ def base_inputs() -> PolicyInputs:
             "NVDA": Quote(symbol="NVDA", price=100.0, previous_close=101.0, timestamp="2026-06-14T09:45:00-07:00"),
             "SMH": Quote(symbol="SMH", price=200.0, previous_close=201.0, timestamp="2026-06-14T09:45:00-07:00"),
         },
+        technical_signals={
+            "symbols": {
+                "NVDA": {
+                    "long_setup": {
+                        "status": "active",
+                        "trigger_above": 100.5,
+                        "entry_zone": {"low": 99.5, "high": 100.5},
+                        "invalidation_below": 99.0,
+                        "target_1": 103.0,
+                        "target_2": 105.0,
+                        "do_not_chase_above": 102.0,
+                    },
+                    "short_setup": {
+                        "status": "watch",
+                        "trigger_below": 98.5,
+                        "target_1": 97.5,
+                        "target_2": 96.0,
+                    },
+                    "no_trade_zone": {"low": 100.6, "high": 100.9, "reason": "range chop"},
+                },
+                "SMH": {
+                    "long_setup": {
+                        "status": "active",
+                        "trigger_above": 201.0,
+                        "entry_zone": {"low": 198.0, "high": 200.5},
+                        "invalidation_below": 196.0,
+                        "target_1": 205.0,
+                        "target_2": 208.0,
+                        "do_not_chase_above": 203.0,
+                    },
+                    "short_setup": {
+                        "status": "watch",
+                        "trigger_below": 197.0,
+                        "target_1": 195.0,
+                        "target_2": 192.0,
+                    },
+                    "no_trade_zone": {"low": 200.6, "high": 200.9, "reason": "range chop"},
+                },
+            }
+        },
     )
 
 
@@ -86,6 +126,7 @@ class PolicyBuySellTests(unittest.TestCase):
         self.assertEqual(decision.decision, "would_trade")
         self.assertIsNotNone(decision.intent)
         self.assertEqual(decision.intent.estimated_notional, 4.25)
+        self.assertAlmostEqual(decision.intent.quantity, 0.0425)
 
     def test_losing_position_blocks_average_down_buy(self) -> None:
         inputs = base_inputs()
@@ -108,7 +149,42 @@ class PolicyBuySellTests(unittest.TestCase):
         self.assertEqual(decision.intent.side, "sell")
         self.assertEqual(decision.intent.symbol, "NVDA")
         self.assertLessEqual(decision.intent.quantity, 2)
+        self.assertEqual(decision.intent.quantity, 0.5)
         self.assertIn("partial_take_profit", decision.intent.reason_codes)
+
+    def test_buy_blocks_when_price_is_in_no_trade_zone(self) -> None:
+        inputs = base_inputs()
+        inputs.quotes["NVDA"] = Quote(symbol="NVDA", price=100.7, previous_close=101.0, timestamp="2026-06-14T09:45:00-07:00")
+
+        decision = generate_order_intent(inputs)
+
+        self.assertEqual(decision.decision, "blocked")
+        self.assertIn("technical_entry_not_ready", decision.blocked_reasons)
+
+    def test_buy_size_is_reduced_when_technical_stop_is_wide(self) -> None:
+        inputs = base_inputs()
+        inputs.technical_signals["symbols"]["NVDA"]["long_setup"]["invalidation_below"] = 96.0
+
+        decision = generate_order_intent(inputs)
+
+        self.assertEqual(decision.decision, "would_trade")
+        self.assertIsNotNone(decision.intent)
+        self.assertLess(decision.intent.estimated_notional, 10.0)
+        self.assertIn("technical_size_reduced", decision.intent.reason_codes)
+
+    def test_risk_exit_uses_technical_trigger_and_scales_sell_quantity(self) -> None:
+        inputs = base_inputs()
+        inputs.positions = {"NVDA": Position(symbol="NVDA", quantity=4, average_cost=100.0, market_price=97.0)}
+        inputs.quotes["NVDA"] = Quote(symbol="NVDA", price=97.0, previous_close=100.0, timestamp="2026-06-14T09:45:00-07:00")
+        inputs.dynamic_allowlist["symbol_scores"]["NVDA"]["score"] = 0
+
+        decision = generate_order_intent(inputs)
+
+        self.assertEqual(decision.decision, "would_trade")
+        self.assertIsNotNone(decision.intent)
+        self.assertEqual(decision.intent.side, "sell")
+        self.assertEqual(decision.intent.quantity, 3.0)
+        self.assertIn("risk_exit", decision.intent.reason_codes)
 
     def test_short_setup_without_long_position_never_opens_short(self) -> None:
         inputs = base_inputs()

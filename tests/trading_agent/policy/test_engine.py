@@ -38,6 +38,28 @@ def base_inputs(*, trading_mode: str = "paper") -> PolicyInputs:
         daily_usage={"date": "2026-06-14", "used_notional": 0},
         account={"buying_power": 25.0},
         quotes={"NVDA": Quote(symbol="NVDA", price=100.0, previous_close=101.0, timestamp="2026-06-14T09:45:00-07:00")},
+        technical_signals={
+            "symbols": {
+                "NVDA": {
+                    "long_setup": {
+                        "status": "active",
+                        "trigger_above": 100.5,
+                        "entry_zone": {"low": 99.5, "high": 100.5},
+                        "invalidation_below": 99.0,
+                        "target_1": 103.0,
+                        "target_2": 105.0,
+                        "do_not_chase_above": 102.0,
+                    },
+                    "short_setup": {
+                        "status": "watch",
+                        "trigger_below": 98.5,
+                        "target_1": 97.5,
+                        "target_2": 96.0,
+                    },
+                    "no_trade_zone": {"low": 100.6, "high": 100.9, "reason": "range chop"},
+                }
+            }
+        },
     )
 
 

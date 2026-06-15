@@ -52,6 +52,8 @@ def generate_order_intent(inputs: PolicyInputs) -> PolicyDecision:
             "single_order_notional_exhausted",
             "average_down_blocked",
             "allowlist_intersection_empty",
+            "technical_entry_not_ready",
+            "technical_size_too_small",
         }
         if any(reason in hard_block_reasons for reason in buy_blocked_reasons):
             return PolicyDecision(
