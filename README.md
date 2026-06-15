@@ -405,6 +405,10 @@ Deterministic versus reasoning boundaries:
   `high_score_but_insufficient_data:<symbols>`.
 - `no_trade` should now mean a real market/account/capital/data blocker or a true absence of scored
   candidates, not a schema mismatch between technical/catalyst payloads and candidate scoring.
+- A missing numeric catalyst score is intentionally neutral by default. `status=completed` or
+  `status=partial` means collection quality, not a bullish or bearish catalyst by itself.
+- An unknown technical action is intentionally mapped back to neutral `observe` semantics with an
+  unmapped-action warning instead of being treated as bullish.
 - DSA is intentionally narrowed so it does not duplicate detailed technical levels, stop/target
   ladders, or explicit catalyst scoring already owned by other layers.
 - The final planner preserves `planner/risk_overlay.json` executable actions when

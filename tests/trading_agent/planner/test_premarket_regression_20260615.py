@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from trading_agent.planner.premarket_diagnostics import build_premarket_diagnostics
 from trading_agent.planner.risk_overlay import build_risk_overlay
 from trading_agent.planner.scoring import score_candidate
 from trading_agent.reporting.premarket import normalize_daily_plan_state
@@ -35,13 +36,25 @@ def test_regression_20260615_avgo_candidate_clears_trade_threshold_after_normali
         data_status_summary={"execution_blocking": False, "reason_codes": []},
     )
     daily_plan = normalize_daily_plan_state("2026-06-15", {"market_regime": "no_trade"}, overlay)
+    diagnostics = build_premarket_diagnostics(
+        run_date="2026-06-15",
+        candidate_scores={"symbols": {"AVGO": avgo, "AMD": amd}},
+        risk_overlay=overlay,
+        daily_plan=daily_plan,
+        data_status_summary={"execution_blocking": False, "reason_codes": []},
+        catalyst_snapshot={"symbols": {"AVGO": {"status": "completed"}, "AMD": {"status": "partial"}}},
+        technical_signals={"symbols": {"AVGO": {"technical_action": "promote"}, "AMD": {"technical_action": "reduce"}}},
+    )
 
     assert avgo["components"]["technical"] == 82
     assert avgo["components"]["catalyst"] == 50
     assert avgo["score"] > 50
     assert "no_scored_candidates" not in overlay["no_trade_reasons"]
+    assert overlay["watchlist_candidates"] == ["AVGO", "AMD"]
     assert overlay["tradable_candidates"] == ["AVGO"]
     assert daily_plan["plan_state"] == "trade_ready"
+    assert diagnostics["top_candidate"] == "AVGO"
+    assert diagnostics["final_risk_overlay_state"]["tradable_candidates"] == ["AVGO"]
 
 
 def test_regression_20260615_preserves_watchlist_when_scores_exist_but_none_tradable() -> None:
@@ -66,9 +79,19 @@ def test_regression_20260615_preserves_watchlist_when_scores_exist_but_none_trad
         data_status_summary={"execution_blocking": False, "reason_codes": []},
     )
     daily_plan = normalize_daily_plan_state("2026-06-15", {"market_regime": "no_trade"}, overlay)
+    diagnostics = build_premarket_diagnostics(
+        run_date="2026-06-15",
+        candidate_scores={"symbols": {"AVGO": avgo}},
+        risk_overlay=overlay,
+        daily_plan=daily_plan,
+        data_status_summary={"execution_blocking": False, "reason_codes": []},
+        catalyst_snapshot={"symbols": {"AVGO": {"status": "completed"}}},
+        technical_signals={"symbols": {"AVGO": {"technical_action": "observe"}}},
+    )
 
     assert overlay["watchlist_candidates"] == ["AVGO"]
     assert overlay["tradable_candidates"] == []
     assert overlay["no_trade_reasons"] == ["no_tradable_candidates_above_threshold"]
     assert daily_plan["plan_state"] == "observe_only"
     assert daily_plan["today_watchlist"] == ["AVGO"]
+    assert "scored_candidates_exist_but_none_tradable" in diagnostics["warnings"]
