@@ -10,11 +10,11 @@ from trading_agent.core.time import PT
 
 
 WEIGHTS = {
-    "dsa": 0.35,
+    "dsa": 0.25,
     "technical": 0.30,
     "kronos": 0.15,
     "quote": 0.10,
-    "catalyst": 0.10,
+    "catalyst": 0.20,
 }
 
 
@@ -59,6 +59,31 @@ def _dsa_component(symbol: str, dsa: dict[str, Any]) -> tuple[float, bool, list[
             return 0.0, True, ["dsa_block"]
         return _clamp_score(signal.get("score"), 50.0), False, []
     return 0.0, False, []
+
+
+def _dsa_overlap_flags(symbol: str, dsa: dict[str, Any]) -> list[str]:
+    flags: list[str] = []
+    signal = ((dsa.get("symbol_signals") or {}).get(symbol) or {})
+    if not isinstance(signal, dict):
+        return flags
+    strategy_matches = {str(value).lower() for value in signal.get("strategy_matches") or []}
+    setup = str(signal.get("setup") or "").lower()
+    combined_text = " ".join(
+        str(value)
+        for value in [
+            signal.get("evidence_summary"),
+            signal.get("relative_strength_context"),
+            *list(signal.get("risk_flags") or []),
+            *list(signal.get("reject_reasons") or []),
+        ]
+        if value
+    ).lower()
+    if setup in {"breakout", "pullback", "reclaim"} or "bull_trend" in strategy_matches or "volume_breakout" in strategy_matches:
+        flags.append("dsa_mentions_technical_trend")
+    catalyst_terms = ("earnings", "guidance", "contract", "launch", "news", "catalyst", "investor day", "regulatory")
+    if "event_driven" in strategy_matches or any(term in combined_text for term in catalyst_terms):
+        flags.append("dsa_mentions_news_catalyst")
+    return flags
 
 
 def _technical_component(symbol: str, technical: dict[str, Any]) -> float:
@@ -124,6 +149,7 @@ def score_candidate(
 ) -> dict[str, Any]:
     normalized = symbol.upper()
     dsa_score, blocked, block_reasons = _dsa_component(normalized, dsa)
+    overlap_flags = _dsa_overlap_flags(normalized, dsa)
     components = {
         "dsa": round(dsa_score, 2),
         "technical": round(_technical_component(normalized, technical), 2),
@@ -139,6 +165,7 @@ def score_candidate(
         "weights": dict(WEIGHTS),
         "blocked": blocked,
         "block_reasons": block_reasons,
+        "overlap_flags": overlap_flags,
     }
 
 
@@ -172,4 +199,3 @@ def build_candidate_scores_from_paths(agent_root: Path, run_date: str) -> dict[s
     }
     write_json(paths.candidate_scores_path, payload)
     return payload
-

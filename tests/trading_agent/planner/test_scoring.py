@@ -19,12 +19,13 @@ def test_score_candidate_combines_signal_layers_with_transparent_weights() -> No
     assert score["components"]["technical"] == 82
     assert score["components"]["kronos"] < 50
     assert score["weights"] == {
-        "dsa": 0.35,
+        "dsa": 0.25,
         "technical": 0.3,
         "kronos": 0.15,
         "quote": 0.1,
-        "catalyst": 0.1,
+        "catalyst": 0.2,
     }
+    assert "dsa_mentions_technical_trend" not in score["overlap_flags"]
 
 
 def test_score_candidate_marks_dsa_blocks_without_replacing_reasoning() -> None:
@@ -39,3 +40,28 @@ def test_score_candidate_marks_dsa_blocks_without_replacing_reasoning() -> None:
 
     assert score["blocked"] is True
     assert "dsa_block" in score["block_reasons"]
+
+
+def test_score_candidate_marks_dsa_overlap_flags_for_technical_and_event_signals() -> None:
+    score = score_candidate(
+        symbol="NVDA",
+        dsa={
+            "symbol_signals": {
+                "NVDA": {
+                    "dsa_score": 78,
+                    "setup": "relative_strength",
+                    "strategy_matches": ["bull_trend", "event_driven"],
+                    "evidence_summary": "News catalyst remains active ahead of earnings.",
+                    "risk_flags": [],
+                    "reject_reasons": [],
+                }
+            }
+        },
+        kronos={"symbols": {}},
+        technical={"symbols": {}},
+        quote={"symbols": {}},
+        catalyst={"symbols": {}},
+    )
+
+    assert "dsa_mentions_technical_trend" in score["overlap_flags"]
+    assert "dsa_mentions_news_catalyst" in score["overlap_flags"]

@@ -6,6 +6,7 @@ Purpose:
 - Analyze only the symbols listed in `DSA_BATCH_SYMBOLS`.
 - Write one batch signal payload to `DSA_BATCH_OUTPUT_PATH`.
 - Do not write `DSA_FINAL_SIGNALS_PATH`, `DSA_SIGNALS_PATH`, or `DECISIONS_LOG_PATH`; the local merge runner owns final output and decision logging.
+- DSA is a theme, priority, crowding, and risk-context layer. It is not the detailed technical, catalyst, or price-forecast layer.
 
 Read these local files first:
 - `src/config/strategy.md`
@@ -31,6 +32,13 @@ Allowed data behavior:
 - You may use read-only Robinhood MCP quote, historical, index, and tradability tools if available.
 - Do not call Robinhood account, portfolio, position, order, review, place, cancel, option, transfer, card, bank, profile, or watchlist-write tools in this run.
 - If live/current data is missing, label the affected symbol `data_quality="partial"` or `failed`; do not invent data.
+
+Boundary rules:
+- Focus DSA on theme strength, cross-symbol priority, relative-strength context, crowding risk, macro sensitivity, and promote/demote/block classification.
+- Do not perform detailed technical analysis. Do not generate entry zones, support/resistance, stop levels, target ladders, RSI, SMA, MACD, or no-trade-zone prices.
+- Do not generate short-term price forecasts. Use Kronos for forecast bias.
+- Do not do full catalyst scoring or deep event writeups. You may only use catalysts as a light credibility/risk context for promote/demote/block decisions.
+- If a bullish or bearish conclusion mainly depends on chart structure, concrete levels, or near-term event details, defer that reasoning to the technical or catalyst layer instead of repeating it here.
 
 Daily Stock Analysis strategy lenses to apply:
 1. `hot_theme`: sector/theme heat, topic stage, real beneficiary versus weak concept link.
@@ -94,10 +102,14 @@ Write `DSA_BATCH_OUTPUT_PATH` with this exact schema:
   "symbol_signals": {
     "TICKER": {
       "dsa_score": 0,
+      "theme_score": 0,
       "bias": "strong_candidate|candidate|watch_only|blocked",
       "primary_theme": "short text",
       "strategy_matches": ["hot_theme"],
-      "setup": "pullback|breakout|reclaim|event_watch|defensive_anchor|watch_only|blocked",
+      "setup": "theme_leader|relative_strength|event_watch|defensive_anchor|watch_only|blocked",
+      "relative_strength_context": "short text",
+      "crowding_risk": "low|medium|high",
+      "macro_sensitivity": "low|medium|high",
       "evidence_summary": "short text",
       "risk_flags": ["short text"],
       "reject_reasons": ["short text"],
@@ -113,6 +125,7 @@ Safety:
 - Never output account numbers, raw MCP JSON, tokens, private profile fields, transfer details, card details, bank details, or sensitive identifiers.
 - If data is too poor to score, write a valid `DSA_BATCH_OUTPUT_PATH` file with all batch symbols marked blocked/partial and `market_phase="unknown"`.
 - Signals are advisory only. The main premarket agent must still enforce Robinhood MCP account checks, risk rules, daily plan schema, and trading mode.
+- When in doubt, prefer under-specifying technical and catalyst details here rather than duplicating the technical, catalyst, or final-planner responsibilities.
 
 Output:
 - Print a short stdout summary.
