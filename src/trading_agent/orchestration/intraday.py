@@ -18,8 +18,8 @@ from trading_agent.policy.models import PolicyDecision
 from trading_agent.prompts.codex import run_codex_prompt
 
 
-def _append_local_decision(agent_root: Path, decision: str, reason: str) -> None:
-    log_path = build_runtime_paths(agent_root).decisions_log_path
+def _append_local_decision(agent_root: Path, decision: str, reason: str, *, run_date: str | None = None) -> None:
+    log_path = build_runtime_paths(agent_root, run_date=run_date).decisions_log_path
     log_path.parent.mkdir(parents=True, exist_ok=True)
     payload = {
         "timestamp": datetime.now(tz=PT).strftime("%Y-%m-%dT%H:%M:%S%z"),
@@ -33,8 +33,8 @@ def _append_local_decision(agent_root: Path, decision: str, reason: str) -> None
         handle.write(json.dumps(payload) + "\n")
 
 
-def _append_policy_decision(agent_root: Path, decision: PolicyDecision) -> None:
-    log_path = build_runtime_paths(agent_root).decisions_log_path
+def _append_policy_decision(agent_root: Path, decision: PolicyDecision, *, run_date: str | None = None) -> None:
+    log_path = build_runtime_paths(agent_root, run_date=run_date).decisions_log_path
     log_path.parent.mkdir(parents=True, exist_ok=True)
     payload = decision.to_json_dict(timestamp=datetime.now(tz=PT).strftime("%Y-%m-%dT%H:%M:%S%z"))
     with log_path.open("a", encoding="utf-8") as handle:
@@ -54,17 +54,17 @@ def _is_intraday_window_pt() -> bool:
 def run_intraday_pipeline(*, dry_run: bool) -> int:
     del dry_run
     agent_root = Path.cwd()
+    run_date = pt_date_string()
     if not _is_weekday_pt() and os.environ.get("ALLOW_WEEKEND_RUN", "0") != "1":
-        _append_local_decision(agent_root, "calendar_skip", "not_a_weekday_pt")
+        _append_local_decision(agent_root, "calendar_skip", "not_a_weekday_pt", run_date=run_date)
         return 0
     if not _is_intraday_window_pt() and os.environ.get("ALLOW_OUTSIDE_MARKET_TEST", "0") != "1":
-        _append_local_decision(agent_root, "time_window_skip", "outside_intraday_window_pt")
+        _append_local_decision(agent_root, "time_window_skip", "outside_intraday_window_pt", run_date=run_date)
         return 0
     if (agent_root / "KILL_SWITCH").exists() and os.environ.get("ALLOW_KILL_SWITCH_PAPER_TEST", "0") != "1":
-        _append_local_decision(agent_root, "kill_switch_skip", "KILL_SWITCH_present")
+        _append_local_decision(agent_root, "kill_switch_skip", "KILL_SWITCH_present", run_date=run_date)
         return 0
     runtime = load_runtime_config(agent_root)
-    run_date = pt_date_string()
     paper_starting_cash = float(os.environ.get("PAPER_STARTING_CASH", "400000"))
     inputs = load_policy_inputs(
         agent_root,
@@ -118,5 +118,5 @@ def run_intraday_pipeline(*, dry_run: bool) -> int:
                 )
         elif paper_result.reason:
             decision.blocked_reasons.append(paper_result.reason)
-    _append_policy_decision(agent_root, decision)
+    _append_policy_decision(agent_root, decision, run_date=run_date)
     return 0

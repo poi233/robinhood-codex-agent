@@ -18,6 +18,18 @@ def daily_logs_run_dir(agent_root: Path, run_date: str) -> Path:
     return build_runtime_paths(agent_root, run_date=run_date).run_logs_dir
 
 
+def _pipeline_log_path(agent_root: Path, run_date: str) -> Path:
+    return daily_logs_run_dir(agent_root, run_date) / "pipeline" / "pipeline.jsonl"
+
+
+def _progress_log_path(agent_root: Path, run_date: str, run_kind: str) -> Path:
+    return daily_logs_run_dir(agent_root, run_date) / "progress" / f"{run_kind}.jsonl"
+
+
+def _output_log_path(agent_root: Path, run_date: str, run_kind: str, stream: str) -> Path:
+    return daily_logs_run_dir(agent_root, run_date) / "outputs" / stream / f"{run_kind}.log"
+
+
 def append_stage_log(
     agent_root: Path,
     run_date: str,
@@ -40,7 +52,7 @@ def append_stage_log(
     if details:
         payload["details"] = details
 
-    output = daily_logs_run_dir(agent_root, run_date) / "pipeline.jsonl"
+    output = _pipeline_log_path(agent_root, run_date)
     ensure_dir(output.parent)
     with output.open("a", encoding="utf-8") as handle:
         handle.write(json.dumps(payload, ensure_ascii=False, sort_keys=True) + "\n")
@@ -55,7 +67,7 @@ def append_run_output_log(
 ) -> None:
     if not content:
         return
-    output = daily_logs_run_dir(agent_root, run_date) / f"{run_kind}.{stream}.log"
+    output = _output_log_path(agent_root, run_date, run_kind, stream)
     ensure_dir(output.parent)
     with output.open("a", encoding="utf-8") as handle:
         handle.write(content)
@@ -81,7 +93,7 @@ def append_prompt_progress_log(
     }
     if details:
         payload["details"] = details
-    output = daily_logs_run_dir(agent_root, run_date) / f"{run_kind}.progress.jsonl"
+    output = _progress_log_path(agent_root, run_date, run_kind)
     ensure_dir(output.parent)
     with output.open("a", encoding="utf-8") as handle:
         handle.write(json.dumps(payload, ensure_ascii=False, sort_keys=True) + "\n")

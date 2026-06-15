@@ -181,6 +181,14 @@ pt_date() {
 RUN_DATE_PT="${RUN_DATE_PT:-$(pt_date)}"
 RUN_STATE_DIR="${AGENT_ROOT}/runtime/state/runs/${RUN_DATE_PT}"
 RUN_LOG_DIR="${AGENT_ROOT}/runtime/logs/runs/${RUN_DATE_PT}"
+PIPELINE_LOG_DIR="${RUN_LOG_DIR}/pipeline"
+PROGRESS_LOG_DIR="${RUN_LOG_DIR}/progress"
+OUTPUT_LOG_DIR="${RUN_LOG_DIR}/outputs"
+STDOUT_LOG_DIR="${OUTPUT_LOG_DIR}/stdout"
+STDERR_LOG_DIR="${OUTPUT_LOG_DIR}/stderr"
+SYSTEM_LOG_DIR="${RUN_LOG_DIR}/system"
+AUDIT_LOG_DIR="${RUN_LOG_DIR}/audit"
+REPORT_LOG_DIR="${RUN_LOG_DIR}/reports"
 SIGNALS_DIR="${RUN_STATE_DIR}/signals"
 PLANNER_DIR="${RUN_STATE_DIR}/planner"
 ARCHIVE_DIR="${RUN_STATE_DIR}/archive"
@@ -206,15 +214,15 @@ TRADABILITY_SNAPSHOT_PATH="${TRADABILITY_SNAPSHOT_PATH:-${PLANNER_DIR}/tradabili
 CATALYST_SNAPSHOT_PATH="${CATALYST_SNAPSHOT_PATH:-${PLANNER_DIR}/catalyst_snapshot.json}"
 DATA_STATUS_SUMMARY_PATH="${DATA_STATUS_SUMMARY_PATH:-${PLANNER_DIR}/data_status_summary.json}"
 RISK_OVERLAY_PATH="${RISK_OVERLAY_PATH:-${PLANNER_DIR}/risk_overlay.json}"
-RUN_LOG="${CODEX_RUN_LOG_PATH:-${RUN_LOG_DIR}/codex_runs.log}"
-ERROR_LOG="${ERROR_LOG_PATH:-${RUN_LOG_DIR}/errors.log}"
-DECISIONS_LOG="${DECISIONS_LOG_PATH:-${RUN_LOG_DIR}/decisions.jsonl}"
-ORDERS_LOG="${ORDERS_LOG_PATH:-${RUN_LOG_DIR}/orders.jsonl}"
-POSTMARKET_SUMMARY_PATH="${POSTMARKET_SUMMARY_PATH:-${RUN_LOG_DIR}/postmarket_summary.md}"
+RUN_LOG="${CODEX_RUN_LOG_PATH:-${OUTPUT_LOG_DIR}/codex_runs.log}"
+ERROR_LOG="${ERROR_LOG_PATH:-${SYSTEM_LOG_DIR}/errors.log}"
+DECISIONS_LOG="${DECISIONS_LOG_PATH:-${AUDIT_LOG_DIR}/decisions.jsonl}"
+ORDERS_LOG="${ORDERS_LOG_PATH:-${AUDIT_LOG_DIR}/orders.jsonl}"
+POSTMARKET_SUMMARY_PATH="${POSTMARKET_SUMMARY_PATH:-${REPORT_LOG_DIR}/postmarket_summary.md}"
 PAPER_POSTMARKET_SUMMARY_PATH="${PAPER_POSTMARKET_SUMMARY_PATH:-${RUN_STATE_DIR}/paper/postmarket_summary.json}"
 PAPER_STARTING_CASH="${PAPER_STARTING_CASH:-400000}"
 
-mkdir -p "$RUN_LOG_DIR" "$RUN_STATE_DIR" "$SIGNALS_DIR" "$PLANNER_DIR" "$ARCHIVE_DIR"
+mkdir -p "$RUN_LOG_DIR" "$PIPELINE_LOG_DIR" "$PROGRESS_LOG_DIR" "$OUTPUT_LOG_DIR" "$STDOUT_LOG_DIR" "$STDERR_LOG_DIR" "$SYSTEM_LOG_DIR" "$AUDIT_LOG_DIR" "$REPORT_LOG_DIR" "$RUN_STATE_DIR" "$SIGNALS_DIR" "$PLANNER_DIR" "$ARCHIVE_DIR"
 : >> "$RUN_LOG"
 : >> "$ERROR_LOG"
 : >> "$DECISIONS_LOG"
@@ -399,7 +407,7 @@ TIMEZONE=America/Los_Angeles
 AGENT_ROOT=$AGENT_ROOT
 RUN_STATE_DIR=$RUN_STATE_DIR
 RUN_LOGS_DIR=$RUN_LOG_DIR
-PROGRESS_LOG_PATH=$RUN_LOG_DIR/${run_kind}.progress.jsonl
+PROGRESS_LOG_PATH=$PROGRESS_LOG_DIR/${run_kind}.jsonl
 SIGNALS_DIR=$SIGNALS_DIR
 PLANNER_DIR=$PLANNER_DIR
 ARCHIVE_DIR=$ARCHIVE_DIR
@@ -460,12 +468,12 @@ run_codex_prompt() {
 
   log_line "$run_kind starting mode=$TRADING_MODE model=$CODEX_MODEL kill_switch=$(kill_switch_status)"
   printf '{"timestamp":"%s","date":"%s","run_kind":"%s","status":"started","message":"prompt started"}\n' \
-    "$(pt_now)" "$RUN_DATE_PT" "$run_kind" >> "$RUN_LOG_DIR/${run_kind}.progress.jsonl"
+    "$(pt_now)" "$RUN_DATE_PT" "$run_kind" >> "$PROGRESS_LOG_DIR/${run_kind}.jsonl"
 
   if [[ "${CODEX_EXEC_DRY_RUN:-0}" == "1" ]]; then
     log_line "$run_kind CODEX_EXEC_DRY_RUN=1, not invoking codex exec."
     printf '{"timestamp":"%s","date":"%s","run_kind":"%s","status":"skipped","message":"CODEX_EXEC_DRY_RUN=1"}\n' \
-      "$(pt_now)" "$RUN_DATE_PT" "$run_kind" >> "$RUN_LOG_DIR/${run_kind}.progress.jsonl"
+      "$(pt_now)" "$RUN_DATE_PT" "$run_kind" >> "$PROGRESS_LOG_DIR/${run_kind}.jsonl"
     printf '%s DRY_RUN %s mode=%s kill_switch=%s prompt=%s\n' \
       "$(pt_now)" "$run_kind" "$TRADING_MODE" "$(kill_switch_status)" "$prompt_file" >> "$RUN_LOG"
     return 0
@@ -513,11 +521,11 @@ run_codex_prompt() {
   if [[ "$status" -ne 0 ]]; then
     log_line "$run_kind failed status=$status"
     printf '{"timestamp":"%s","date":"%s","run_kind":"%s","status":"failed","message":"codex exited with status %s"}\n' \
-      "$(pt_now)" "$RUN_DATE_PT" "$run_kind" "$status" >> "$RUN_LOG_DIR/${run_kind}.progress.jsonl"
+      "$(pt_now)" "$RUN_DATE_PT" "$run_kind" "$status" >> "$PROGRESS_LOG_DIR/${run_kind}.jsonl"
     return "$status"
   fi
 
   log_line "$run_kind completed status=0"
   printf '{"timestamp":"%s","date":"%s","run_kind":"%s","status":"completed","message":"codex completed"}\n' \
-    "$(pt_now)" "$RUN_DATE_PT" "$run_kind" >> "$RUN_LOG_DIR/${run_kind}.progress.jsonl"
+    "$(pt_now)" "$RUN_DATE_PT" "$run_kind" >> "$PROGRESS_LOG_DIR/${run_kind}.jsonl"
 }

@@ -22,6 +22,10 @@ class CoreRuntimeTests(unittest.TestCase):
             self.assertEqual(paths.paper_account_path, root / "runtime" / "state" / "runs" / paths.run_date / "paper" / "account.json")
             self.assertEqual(paths.paper_positions_path, root / "runtime" / "state" / "runs" / paths.run_date / "paper" / "positions.json")
             self.assertEqual(paths.paper_postmarket_summary_path, root / "runtime" / "state" / "runs" / paths.run_date / "paper" / "postmarket_summary.json")
+            self.assertEqual(paths.decisions_log_path, root / "runtime" / "logs" / "runs" / paths.run_date / "audit" / "decisions.jsonl")
+            self.assertEqual(paths.codex_run_log_path, root / "runtime" / "logs" / "runs" / paths.run_date / "outputs" / "codex_runs.log")
+            self.assertEqual(paths.error_log_path, root / "runtime" / "logs" / "runs" / paths.run_date / "system" / "errors.log")
+            self.assertEqual(paths.postmarket_summary_path, root / "runtime" / "logs" / "runs" / paths.run_date / "reports" / "postmarket_summary.md")
 
     def test_runtime_paths_are_dataclass_like(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

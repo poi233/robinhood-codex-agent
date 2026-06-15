@@ -32,7 +32,7 @@ def policy_ready_inputs(*, trading_mode: str = "paper") -> PolicyInputs:
 
 
 def read_decisions(root: Path) -> list[dict[str, object]]:
-    path = root / "runtime" / "logs" / "runs" / "2026-06-14" / "decisions.jsonl"
+    path = root / "runtime" / "logs" / "runs" / "2026-06-14" / "audit" / "decisions.jsonl"
     return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()]
 
 
