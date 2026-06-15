@@ -40,6 +40,7 @@ def build_runtime_block(run_kind: str, agent_root: Path, *, overrides: Mapping[s
         "CODEX_EXEC_DRY_RUN": env.get("CODEX_EXEC_DRY_RUN", "0"),
         "ENABLE_DSA_SIGNAL_LAYER": env.get("ENABLE_DSA_SIGNAL_LAYER", "1"),
         "DSA_MAX_SUBAGENTS": env.get("DSA_MAX_SUBAGENTS", "10"),
+        "TECHNICAL_MAX_SUBAGENTS": env.get("TECHNICAL_MAX_SUBAGENTS", "10"),
         "ENABLE_TRADE_EMAIL_NOTIFICATIONS": env.get("ENABLE_TRADE_EMAIL_NOTIFICATIONS", "1"),
         "TRADE_NOTIFY_EMAIL": env.get("TRADE_NOTIFY_EMAIL", ""),
         "ENABLE_MARKET_FEED_LAYER": env.get("ENABLE_MARKET_FEED_LAYER", "1"),

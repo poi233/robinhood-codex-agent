@@ -37,6 +37,13 @@ Progress logging:
   `{"timestamp":"ISO-8601","run_kind":"technical_research","symbol":"SMH","status":"completed","message":"technical levels generated"}`.
 - If a symbol cannot be analyzed, use `status="partial"` or `status="failed"` and include the reason in `message`.
 
+Parallel execution:
+- Prefer one main technical prompt run, not multiple outer prompt files.
+- If a subagent/task delegation tool is available, split the symbol universe into non-overlapping groups and launch up to `TECHNICAL_MAX_SUBAGENTS` read-only subagents.
+- Each subagent should analyze only its assigned symbols and return structured technical notes back to the main technical agent.
+- Only the main technical agent may write `TECHNICAL_SIGNALS_PATH`.
+- If subagent/task delegation is unavailable, continue sequentially in small symbol groups and log progress after each group.
+
 Rules:
 - `short_setup` is only for managing an existing long position. It is never permission to short.
 - If structure is ambiguous, use `technical_action="observe"` or `technical_action="avoid"`.

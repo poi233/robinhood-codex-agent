@@ -19,6 +19,7 @@ def test_runtime_block_exposes_progress_log_path(tmp_path: Path, monkeypatch) ->
 def test_runtime_block_allows_prompt_specific_overrides(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setenv("RUN_DATE_PT", "2026-06-14")
     monkeypatch.setenv("DSA_MAX_SUBAGENTS", "10")
+    monkeypatch.setenv("TECHNICAL_MAX_SUBAGENTS", "6")
 
     block = build_runtime_block(
         "dsa_premarket_scan_batch_001",
@@ -27,6 +28,7 @@ def test_runtime_block_allows_prompt_specific_overrides(tmp_path: Path, monkeypa
     )
 
     assert "DSA_MAX_SUBAGENTS=10" in block
+    assert "TECHNICAL_MAX_SUBAGENTS=6" in block
     assert "DSA_BATCH_SYMBOLS=NVDA,AVGO" in block
     assert "DSA_BATCH_OUTPUT_PATH=/tmp/dsa_batch_001.json" in block
 

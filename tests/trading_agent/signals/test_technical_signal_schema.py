@@ -11,6 +11,7 @@ class TechnicalPromptWiringTests(unittest.TestCase):
         self.assertIn(".agents/skills/brooks-trading-range-price-action", prompt)
         self.assertIn("TECHNICAL_SIGNALS_PATH", prompt)
         self.assertIn("MARKET_FEED_DIR", prompt)
+        self.assertIn("TECHNICAL_MAX_SUBAGENTS", prompt)
 
     def test_sample_schema_contains_dual_execution_scenarios(self) -> None:
         payload = {
