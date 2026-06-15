@@ -84,6 +84,7 @@ def evaluate_sell(inputs: PolicyInputs) -> OrderIntent | None:
             symbol=symbol,
             side="sell",
             order_type="limit",
+            reference_price=quote.price,
             setup_type="risk_exit" if "risk_exit" in reason_codes or "full_invalidation_exit" in reason_codes else "take_profit",
             limit_price=limit_price,
             estimated_notional=round(quantity * limit_price, 2),

@@ -1,10 +1,13 @@
 import unittest
+from datetime import datetime
 
+from trading_agent.core.time import PT
 from trading_agent.policy.engine import generate_order_intent
 from trading_agent.policy.models import OpenOrder, PolicyInputs, Position, Quote
 
 
 def base_inputs() -> PolicyInputs:
+    fresh_timestamp = datetime.now(tz=PT).isoformat()
     return PolicyInputs(
         run_date="2026-06-14",
         trading_mode="paper",
@@ -95,8 +98,8 @@ def base_inputs() -> PolicyInputs:
         daily_usage={"date": "2026-06-14", "used_notional": 0},
         account={"buying_power": 25.0},
         quotes={
-            "NVDA": Quote(symbol="NVDA", price=100.0, previous_close=101.0, timestamp="2026-06-14T09:45:00-07:00"),
-            "SMH": Quote(symbol="SMH", price=200.0, previous_close=201.0, timestamp="2026-06-14T09:45:00-07:00"),
+            "NVDA": Quote(symbol="NVDA", price=100.0, previous_close=101.0, timestamp=fresh_timestamp),
+            "SMH": Quote(symbol="SMH", price=200.0, previous_close=201.0, timestamp=fresh_timestamp),
         },
         technical_signals={
             "symbols": {
@@ -207,7 +210,7 @@ class PolicyBuySellTests(unittest.TestCase):
     def test_partial_take_profit_generates_sell_intent_before_buy(self) -> None:
         inputs = base_inputs()
         inputs.positions = {"NVDA": Position(symbol="NVDA", quantity=2, average_cost=100.0, market_price=103.0)}
-        inputs.quotes["NVDA"] = Quote(symbol="NVDA", price=103.0, previous_close=102.0, timestamp="2026-06-14T09:45:00-07:00")
+        inputs.quotes["NVDA"] = Quote(symbol="NVDA", price=103.0, previous_close=102.0, timestamp=datetime.now(tz=PT).isoformat())
 
         decision = generate_order_intent(inputs)
 
@@ -221,7 +224,7 @@ class PolicyBuySellTests(unittest.TestCase):
 
     def test_buy_blocks_when_price_is_in_no_trade_zone(self) -> None:
         inputs = base_inputs()
-        inputs.quotes["NVDA"] = Quote(symbol="NVDA", price=100.7, previous_close=101.0, timestamp="2026-06-14T09:45:00-07:00")
+        inputs.quotes["NVDA"] = Quote(symbol="NVDA", price=100.7, previous_close=101.0, timestamp=datetime.now(tz=PT).isoformat())
 
         decision = generate_order_intent(inputs)
 
@@ -243,7 +246,7 @@ class PolicyBuySellTests(unittest.TestCase):
     def test_risk_exit_uses_technical_trigger_and_scales_sell_quantity(self) -> None:
         inputs = base_inputs()
         inputs.positions = {"NVDA": Position(symbol="NVDA", quantity=4, average_cost=100.0, market_price=97.0)}
-        inputs.quotes["NVDA"] = Quote(symbol="NVDA", price=97.0, previous_close=100.0, timestamp="2026-06-14T09:45:00-07:00")
+        inputs.quotes["NVDA"] = Quote(symbol="NVDA", price=97.0, previous_close=100.0, timestamp=datetime.now(tz=PT).isoformat())
         inputs.dynamic_allowlist["symbol_scores"]["NVDA"]["score"] = 0
 
         decision = generate_order_intent(inputs)

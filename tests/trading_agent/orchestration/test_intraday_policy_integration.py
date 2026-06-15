@@ -2,14 +2,18 @@ import json
 import os
 import tempfile
 import unittest
+from datetime import datetime
 from pathlib import Path
 from unittest import mock
 
+from trading_agent.core.time import PT
 from trading_agent.orchestration import intraday as intraday_module
-from trading_agent.policy.models import PolicyInputs, Quote
+from trading_agent.paper.broker import apply_paper_intent
+from trading_agent.policy.models import OrderIntent, PolicyDecision, PolicyInputs, Quote
 
 
 def policy_ready_inputs(*, trading_mode: str = "paper") -> PolicyInputs:
+    fresh_timestamp = datetime.now(tz=PT).isoformat()
     return PolicyInputs(
         run_date="2026-06-14",
         trading_mode=trading_mode,
@@ -25,9 +29,49 @@ def policy_ready_inputs(*, trading_mode: str = "paper") -> PolicyInputs:
             "symbol_trade_rules": {"NVDA": {"max_notional": 10}},
         },
         dynamic_allowlist={"date": "2026-06-14", "symbol_scores": {"NVDA": {"score": 85}}},
+        candidate_scores={"date": "2026-06-14", "symbols": {"NVDA": {"score": 85, "total_score": 85, "components": {"technical": 78, "catalyst": 70}}}},
+        risk_overlay={
+            "date": "2026-06-14",
+            "market_regime": "aggressive_ok",
+            "max_single_order_notional": 10,
+            "max_daily_notional": 25,
+            "symbol_trade_rules": {"NVDA": {"max_notional": 10, "allow_buy": True}},
+        },
+        trader_watch_levels={
+            "symbols": {
+                "NVDA": {
+                    "entry_low": 99.5,
+                    "entry_high": 100.5,
+                    "buy_trigger_above": 100.5,
+                    "do_not_chase_above": 102.0,
+                    "no_trade_low": 100.6,
+                    "no_trade_high": 100.9,
+                    "invalidation_below": 99.0,
+                    "risk_reduction_trigger_below": 98.5,
+                    "risk_reduction_target_1": 97.5,
+                    "risk_reduction_target_2": 96.0,
+                    "target_1": 103.0,
+                    "target_2": 105.0,
+                }
+            }
+        },
+        data_status_summary={"execution_blocking": False, "reason_codes": []},
+        capital_snapshot={"sizing_buying_power": 25.0},
+        catalyst_snapshot={"symbols": {"NVDA": {"score": 70}}},
+        policy_profile={
+            "name": "aggressive_growth",
+            "per_trade_risk_pct": 0.005,
+            "cash_buffer_pct": 0.1,
+            "pullback_score_threshold": 82,
+            "breakout_score_threshold": 88,
+            "technical_min_score": 70,
+            "min_reward_risk": 1.5,
+            "breakout_chase_tolerance_pct": 0.002,
+            "minimum_trade_notional": 1.0,
+        },
         daily_usage={"date": "2026-06-14", "used_notional": 0},
         account={"buying_power": 25.0},
-        quotes={"NVDA": Quote(symbol="NVDA", price=100.0, previous_close=101.0, timestamp="2026-06-14T09:45:00-07:00")},
+        quotes={"NVDA": Quote(symbol="NVDA", price=100.0, previous_close=101.0, timestamp=fresh_timestamp)},
         technical_signals={
             "symbols": {
                 "NVDA": {
@@ -56,6 +100,11 @@ def policy_ready_inputs(*, trading_mode: str = "paper") -> PolicyInputs:
 def read_decisions(root: Path) -> list[dict[str, object]]:
     path = root / "runtime" / "logs" / "runs" / "2026-06-14" / "audit" / "decisions.jsonl"
     return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()]
+
+
+def write_json(path: Path, payload: object) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload), encoding="utf-8")
 
 
 class IntradayPolicyIntegrationTests(unittest.TestCase):
@@ -135,6 +184,63 @@ class IntradayPolicyIntegrationTests(unittest.TestCase):
 
         self.assertEqual(status, 0)
         self.assertEqual(decisions[0]["decision"], "kill_switch_skip")
+
+    def test_pending_paper_order_blocks_duplicate_submission_on_next_run(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            original_cwd = os.getcwd()
+            os.chdir(root)
+            try:
+                pending_inputs = policy_ready_inputs()
+                pending_decision = PolicyDecision(
+                    trading_mode="paper",
+                    checked_symbols=["NVDA"],
+                    decision="would_trade",
+                    intent=OrderIntent(
+                        symbol="NVDA",
+                        side="buy",
+                        order_type="limit",
+                        limit_price=100.0,
+                        reference_price=101.0,
+                        estimated_notional=10.0,
+                        quantity=0.1,
+                    ),
+                )
+                with mock.patch.dict(os.environ, {"PAPER_FILL_MODEL": "conservative"}, clear=False):
+                    apply_paper_intent(root, run_date="2026-06-14", decision=pending_decision, starting_cash=400000.0)
+                (root / "src" / "config").mkdir(parents=True, exist_ok=True)
+                planner_dir = root / "runtime" / "state" / "runs" / "2026-06-14" / "planner"
+                planner_dir.mkdir(parents=True, exist_ok=True)
+                (root / "src" / "config" / "universe.txt").write_text("NVDA\n", encoding="utf-8")
+                write_json(root / "src" / "config" / "risk_tiers.json", {"0": {"max_single_order_notional": 10, "max_daily_notional": 25}})
+                (planner_dir / "today_allowlist.txt").write_text("NVDA\n", encoding="utf-8")
+                write_json(planner_dir / "daily_plan.json", pending_inputs.daily_plan)
+                write_json(planner_dir / "candidate_scores.json", pending_inputs.candidate_scores)
+                write_json(planner_dir / "risk_overlay.json", pending_inputs.risk_overlay)
+                write_json(planner_dir / "trader_watch_levels.json", pending_inputs.trader_watch_levels)
+                write_json(planner_dir / "data_status_summary.json", pending_inputs.data_status_summary)
+                write_json(planner_dir / "capital_snapshot.json", pending_inputs.capital_snapshot)
+                write_json(planner_dir / "catalyst_snapshot.json", pending_inputs.catalyst_snapshot)
+                signals_dir = root / "runtime" / "state" / "runs" / "2026-06-14" / "signals"
+                paper_dir = root / "runtime" / "state" / "runs" / "2026-06-14" / "paper"
+                write_json(signals_dir / "technical_signals.json", pending_inputs.technical_signals)
+                write_json(planner_dir / "quote_snapshot_core.json", {"date": "2026-06-14", "symbols": {"NVDA": {"last_price": 101.0, "previous_close": 101.0, "timestamp": datetime.now(tz=PT).isoformat(), "is_fresh": True}}})
+                write_json(paper_dir / "account.json", {"cash": 400000.0})
+                write_json(paper_dir / "positions.json", {})
+                with mock.patch.object(intraday_module, "_is_weekday_pt", return_value=True), \
+                    mock.patch.object(intraday_module, "_is_intraday_window_pt", return_value=True), \
+                    mock.patch.object(intraday_module, "pt_date_string", return_value="2026-06-14"), \
+                    mock.patch.object(intraday_module, "load_runtime_config") as load_runtime_config, \
+                    mock.patch.object(intraday_module, "send_trade_email_notification"):
+                    load_runtime_config.return_value = mock.Mock(trading_mode="paper", risk_tier=0)
+                    status = intraday_module.run_intraday_pipeline(dry_run=False)
+                    decisions = read_decisions(root)
+            finally:
+                os.chdir(original_cwd)
+
+        self.assertEqual(status, 0)
+        self.assertEqual(decisions[-1]["decision"], "blocked")
+        self.assertIn("open_order_exists", decisions[-1]["blocked_reasons"])
 
 
 if __name__ == "__main__":

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import Any
 
 from trading_agent.policy.candidate_selector import RankedCandidate
 from trading_agent.policy.models import PolicyInputs
@@ -48,6 +49,39 @@ def _research_multiplier(candidate: RankedCandidate) -> float:
     return 0.0
 
 
+COMMON_ETFS = {"SPY", "QQQ", "IWM", "SMH", "VOO", "ARKK", "ARKW", "ARKG", "QTUM"}
+
+
+def _portfolio_equity(inputs: PolicyInputs) -> float:
+    buying_power = float((inputs.account or {}).get("buying_power") or (inputs.capital_snapshot or {}).get("sizing_buying_power") or 0.0)
+    positions_value = sum(float(position.quantity * position.market_price) for position in inputs.positions.values())
+    return round(buying_power + positions_value, 2)
+
+
+def _symbol_metadata(inputs: PolicyInputs, symbol: str) -> tuple[str, bool]:
+    dynamic = ((inputs.dynamic_allowlist.get("symbol_scores") or {}).get(symbol) or {})
+    daily_rule = ((inputs.daily_plan or {}).get("symbol_trade_rules") or {}).get(symbol) or {}
+    theme = str(dynamic.get("theme") or daily_rule.get("sector") or "single_name")
+    is_etf = symbol in COMMON_ETFS or theme in {"broad_beta", "etf", "index"}
+    return theme, is_etf
+
+
+def _position_notional(inputs: PolicyInputs, symbol: str) -> float:
+    position = inputs.positions.get(symbol)
+    if not position:
+        return 0.0
+    return round(float(position.quantity * position.market_price), 2)
+
+
+def _theme_notional(inputs: PolicyInputs, theme: str) -> float:
+    total = 0.0
+    for symbol, position in inputs.positions.items():
+        current_theme, _ = _symbol_metadata(inputs, symbol)
+        if current_theme == theme:
+            total += float(position.quantity * position.market_price)
+    return round(total, 2)
+
+
 def decide_size(inputs: PolicyInputs, candidate: RankedCandidate, price: BuyPriceDecision) -> SizeDecision:
     if price.blocked_reason:
         return SizeDecision(0.0, 0.0, 0.0, None, blocked_reason=price.blocked_reason)
@@ -76,8 +110,27 @@ def decide_size(inputs: PolicyInputs, candidate: RankedCandidate, price: BuyPric
     daily_remaining = daily_notional_remaining(inputs)
     cash_buffer = buying_power * float(profile.get("cash_buffer_pct", 0.1))
     buying_power_after_buffer = max(0.0, buying_power - cash_buffer)
+    portfolio_equity = max(portfolio_equity, buying_power)
+    theme, is_etf = _symbol_metadata(inputs, candidate.symbol)
+    existing_symbol_notional = _position_notional(inputs, candidate.symbol)
+    existing_theme_notional = _theme_notional(inputs, theme)
+    stock_weight_cap = portfolio_equity * float(profile.get("max_single_stock_weight", 1.0))
+    etf_weight_cap = portfolio_equity * float(profile.get("max_etf_weight", 1.0))
+    theme_weight_cap = portfolio_equity * float(profile.get("max_theme_weight", 1.0))
+    remaining_symbol_weight_cap = max(0.0, stock_weight_cap - existing_symbol_notional)
+    remaining_type_cap = max(0.0, (etf_weight_cap if is_etf else stock_weight_cap) - existing_symbol_notional)
+    remaining_theme_cap = max(0.0, theme_weight_cap - existing_theme_notional)
 
-    final_notional = min(notional_by_risk, symbol_cap, daily_cap, daily_remaining, buying_power_after_buffer)
+    final_notional = min(
+        notional_by_risk,
+        symbol_cap,
+        daily_cap,
+        daily_remaining,
+        buying_power_after_buffer,
+        remaining_symbol_weight_cap,
+        remaining_type_cap,
+        remaining_theme_cap,
+    )
     final_notional *= profile_multiplier
     final_notional = round(final_notional, 2)
     if final_notional < float(profile.get("minimum_trade_notional", 10.0)):
@@ -97,5 +150,11 @@ def decide_size(inputs: PolicyInputs, candidate: RankedCandidate, price: BuyPric
             "market": market_multiplier,
             "research": research_multiplier,
         },
-        reason_codes=["risk_sizing_ok"],
+        reason_codes=[
+            "risk_sizing_ok",
+            "cash_buffer_ok",
+            "symbol_weight_ok",
+            "theme_weight_ok",
+            "etf_weight_ok" if is_etf else "stock_weight_ok",
+        ],
     )

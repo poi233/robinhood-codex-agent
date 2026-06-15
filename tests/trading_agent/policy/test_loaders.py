@@ -270,6 +270,42 @@ class PolicyLoaderTests(unittest.TestCase):
         self.assertEqual(inputs.quotes["NVDA"].price, 105.5)
         self.assertEqual(inputs.quotes["SMH"].price, 260.1)
 
+    def test_load_policy_inputs_hydrates_pending_paper_orders_as_open_orders(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            (root / "src" / "config").mkdir(parents=True)
+            planner_dir = root / "runtime" / "state" / "runs" / "2026-06-14" / "planner"
+            paper_dir = root / "runtime" / "state" / "runs" / "2026-06-14" / "paper"
+            planner_dir.mkdir(parents=True)
+            paper_dir.mkdir(parents=True)
+            (root / "src" / "config" / "universe.txt").write_text("NVDA\n", encoding="utf-8")
+            (planner_dir / "today_allowlist.txt").write_text("NVDA\n", encoding="utf-8")
+            write_json(root / "src" / "config" / "risk_tiers.json", {"0": {"max_single_order_notional": 10, "max_daily_notional": 25}})
+            write_json(planner_dir / "daily_plan.json", {"date": "2026-06-14", "today_watchlist": ["NVDA"], "allowed_actions": ["small_limit_buy"]})
+            write_json(paper_dir / "account.json", {"cash": 100.0})
+            write_json(paper_dir / "positions.json", {})
+            (paper_dir / "orders.jsonl").write_text(
+                json.dumps(
+                    {
+                        "order_id": "paper-nvda-1",
+                        "timestamp": "2026-06-14T09:45:00-07:00",
+                        "symbol": "NVDA",
+                        "side": "buy",
+                        "quantity": 0.1,
+                        "notional": 10.0,
+                        "status": "pending",
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            inputs = load_policy_inputs(root, run_date="2026-06-14", trading_mode="paper", risk_tier=0)
+
+        self.assertEqual(len(inputs.open_orders), 1)
+        self.assertEqual(inputs.open_orders[0].symbol, "NVDA")
+        self.assertEqual(inputs.open_orders[0].status, "pending")
+
     def test_paper_mode_overrides_account_and_positions_from_paper_ledger(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)

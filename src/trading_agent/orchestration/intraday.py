@@ -11,7 +11,7 @@ from trading_agent.core.context import build_runtime_paths
 from trading_agent.core.time import PT
 from trading_agent.core.time import pt_date_string
 from trading_agent.notifications.email import send_trade_email_notification
-from trading_agent.paper.broker import apply_paper_intent, record_paper_day_start
+from trading_agent.paper.broker import apply_paper_intent, reconcile_pending_paper_orders, record_paper_day_start
 from trading_agent.policy.engine import generate_order_intent
 from trading_agent.policy.loaders import load_policy_inputs
 from trading_agent.policy.models import PolicyDecision
@@ -74,6 +74,21 @@ def run_intraday_pipeline(*, dry_run: bool) -> int:
         robinhood_gateway=None,
     )
     if runtime.trading_mode == "paper":
+        pending_fill_events = reconcile_pending_paper_orders(
+            agent_root,
+            run_date=run_date,
+            quotes=inputs.quotes,
+            starting_cash=paper_starting_cash,
+        )
+        if pending_fill_events:
+            inputs = load_policy_inputs(
+                agent_root,
+                run_date=run_date,
+                trading_mode=runtime.trading_mode,
+                risk_tier=runtime.risk_tier,
+                robinhood_gateway=None,
+            )
+    if runtime.trading_mode == "paper":
         record_paper_day_start(
             agent_root,
             run_date=run_date,
@@ -116,6 +131,8 @@ def run_intraday_pipeline(*, dry_run: bool) -> int:
                         "reason_codes": list(decision.intent.reason_codes),
                     },
                 )
+        elif paper_result.status == "pending":
+            decision = replace(decision, action_taken="paper_pending")
         elif paper_result.reason:
             decision.blocked_reasons.append(paper_result.reason)
     _append_policy_decision(agent_root, decision, run_date=run_date)

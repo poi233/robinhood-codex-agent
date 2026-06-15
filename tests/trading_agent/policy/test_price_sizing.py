@@ -1,12 +1,16 @@
 import unittest
+from datetime import datetime
 
 from trading_agent.policy.candidate_selector import RankedCandidate
+from trading_agent.policy.models import Position
 from trading_agent.policy.models import PolicyInputs, Quote
 from trading_agent.policy.price_policy import decide_buy_price
 from trading_agent.policy.sizing_policy import decide_size
+from trading_agent.core.time import PT
 
 
 def base_inputs() -> PolicyInputs:
+    fresh_timestamp = datetime.now(tz=PT).isoformat()
     return PolicyInputs(
         run_date="2026-06-14",
         trading_mode="paper",
@@ -22,6 +26,7 @@ def base_inputs() -> PolicyInputs:
             "symbol_trade_rules": {"NVDA": {"max_notional": 10, "breakout_allowed": True}},
         },
         candidate_scores={"date": "2026-06-14", "symbols": {"NVDA": {"total_score": 85}}},
+        dynamic_allowlist={"date": "2026-06-14", "symbol_scores": {"NVDA": {"theme": "ai_semis"}}},
         risk_overlay={
             "date": "2026-06-14",
             "market_regime": "aggressive_ok",
@@ -56,11 +61,12 @@ def base_inputs() -> PolicyInputs:
             "technical_min_score": 70,
             "min_reward_risk": 1.5,
             "breakout_chase_tolerance_pct": 0.002,
+            "max_theme_weight": 0.5,
             "minimum_trade_notional": 1.0
         },
         daily_usage={"date": "2026-06-14", "used_notional": 0},
         account={"buying_power": 25.0},
-        quotes={"NVDA": Quote(symbol="NVDA", price=100.0, previous_close=101.0, timestamp="2026-06-14T09:45:00-07:00")},
+        quotes={"NVDA": Quote(symbol="NVDA", price=100.0, previous_close=101.0, timestamp=fresh_timestamp)},
     )
 
 
@@ -107,6 +113,24 @@ class PriceSizingPolicyTests(unittest.TestCase):
         self.assertGreater(decision.quantity, 0)
         self.assertLess(decision.estimated_notional, 10.0)
         self.assertIsNone(decision.blocked_reason)
+
+    def test_size_is_capped_by_theme_weight(self) -> None:
+        inputs = base_inputs()
+        inputs.account = {"buying_power": 20.0}
+        inputs.policy_profile["minimum_trade_notional"] = 1.0
+        inputs.positions = {
+            "SMH": Position(symbol="SMH", quantity=0.1, average_cost=100.0, market_price=100.0),
+        }
+        inputs.dynamic_allowlist["symbol_scores"]["NVDA"]["theme"] = "ai_semis"
+        inputs.dynamic_allowlist["symbol_scores"]["SMH"] = {"theme": "ai_semis"}
+        candidate = RankedCandidate("NVDA", 93, 90, 78, 80, 70, 80)
+        price = decide_buy_price(inputs, candidate)
+
+        decision = decide_size(inputs, candidate, price)
+
+        self.assertGreater(decision.quantity, 0)
+        self.assertLessEqual(decision.estimated_notional, 5.0)
+        self.assertIn("theme_weight_ok", decision.reason_codes)
 
 
 if __name__ == "__main__":

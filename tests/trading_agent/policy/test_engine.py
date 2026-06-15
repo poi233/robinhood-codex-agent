@@ -1,10 +1,13 @@
 import unittest
+from datetime import datetime
 
+from trading_agent.core.time import PT
 from trading_agent.policy.engine import generate_order_intent
 from trading_agent.policy.models import PolicyInputs, Quote
 
 
 def base_inputs(*, trading_mode: str = "paper") -> PolicyInputs:
+    fresh_timestamp = datetime.now(tz=PT).isoformat()
     return PolicyInputs(
         run_date="2026-06-14",
         trading_mode=trading_mode,
@@ -82,7 +85,7 @@ def base_inputs(*, trading_mode: str = "paper") -> PolicyInputs:
         },
         daily_usage={"date": "2026-06-14", "used_notional": 0},
         account={"buying_power": 25.0},
-        quotes={"NVDA": Quote(symbol="NVDA", price=100.0, previous_close=101.0, timestamp="2026-06-14T09:45:00-07:00")},
+        quotes={"NVDA": Quote(symbol="NVDA", price=100.0, previous_close=101.0, timestamp=fresh_timestamp)},
         technical_signals={
             "symbols": {
                 "NVDA": {
@@ -137,6 +140,56 @@ class PolicyEngineTests(unittest.TestCase):
         self.assertEqual(decision.decision, "blocked")
         self.assertIn("missing_account", decision.blocked_reasons)
         self.assertIsNone(decision.intent)
+
+    def test_kill_switch_blocks_inside_policy_engine(self) -> None:
+        inputs = base_inputs()
+        inputs.kill_switch_present = True
+
+        decision = generate_order_intent(inputs)
+
+        self.assertEqual(decision.decision, "blocked")
+        self.assertIn("kill_switch_present", decision.blocked_reasons)
+
+    def test_stale_daily_plan_blocks_decision(self) -> None:
+        inputs = base_inputs()
+        inputs.daily_plan["date"] = "2026-06-13"
+
+        decision = generate_order_intent(inputs)
+
+        self.assertEqual(decision.decision, "blocked")
+        self.assertIn("stale_daily_plan", decision.blocked_reasons)
+
+    def test_execution_blocking_data_status_blocks_decision(self) -> None:
+        inputs = base_inputs()
+        inputs.data_status_summary = {"execution_blocking": True, "reason_codes": ["quotes:provider_failed"]}
+
+        decision = generate_order_intent(inputs)
+
+        self.assertEqual(decision.decision, "blocked")
+        self.assertIn("data_status_blocked", decision.blocked_reasons)
+
+    def test_risk_overlay_no_trade_blocks_decision(self) -> None:
+        inputs = base_inputs()
+        inputs.risk_overlay["market_regime"] = "no_trade"
+
+        decision = generate_order_intent(inputs)
+
+        self.assertEqual(decision.decision, "blocked")
+        self.assertIn("risk_overlay_blocks_trading", decision.blocked_reasons)
+
+    def test_cooldown_after_buy_blocks_reentry(self) -> None:
+        inputs = base_inputs()
+        inputs.daily_usage = {
+            "date": "2026-06-14",
+            "used_notional": 0,
+            "last_buy_date_by_symbol": {"NVDA": "2026-06-13"},
+        }
+        inputs.policy_profile["cooldown_days_after_buy"] = 3
+
+        decision = generate_order_intent(inputs)
+
+        self.assertEqual(decision.decision, "blocked")
+        self.assertIn("cooldown_after_buy", decision.blocked_reasons)
 
     def test_review_mode_blocks_execution_when_unwired(self) -> None:
         decision = generate_order_intent(base_inputs(trading_mode="review"))

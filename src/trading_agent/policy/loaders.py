@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Any, Protocol
 
 from trading_agent.core.context import build_runtime_paths
+from trading_agent.paper.broker import pending_paper_orders
 from trading_agent.data.universe import parse_universe
 from trading_agent.policy.models import OpenOrder, PolicyInputs, Position, Quote
 from trading_agent.policy.profiles import load_policy_profile
@@ -259,6 +260,15 @@ def _hydrate_paper_ledger_if_present(inputs: PolicyInputs, paths: Any) -> None:
             for payload in _payload_list(positions_payload)
             if (position := _parse_position(payload)) is not None
         }
+    pending_orders = [
+        order
+        for payload in pending_paper_orders(paths.agent_root, run_date=paths.run_date)
+        if (order := _parse_open_order(payload)) is not None
+    ]
+    existing = {(order.symbol, order.side, order.quantity, order.status): order for order in inputs.open_orders}
+    for order in pending_orders:
+        existing.setdefault((order.symbol, order.side, order.quantity, order.status), order)
+    inputs.open_orders = list(existing.values())
 
 
 def load_policy_inputs(

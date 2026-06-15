@@ -49,6 +49,7 @@ def evaluate_buy(inputs: PolicyInputs) -> BuyEvaluation:
                 symbol=candidate.symbol,
                 side="buy",
                 order_type="limit",
+                reference_price=inputs.quotes[candidate.symbol].price,
                 setup_type=price.setup_type,
                 limit_price=price.limit_price,
                 estimated_notional=size.estimated_notional,

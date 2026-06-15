@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+import os
+from datetime import datetime
+
+from trading_agent.core.time import PT
 from trading_agent.policy.models import PolicyInputs
 
 
@@ -50,6 +54,23 @@ def losing_position_exists(inputs: PolicyInputs, symbol: str) -> bool:
     return bool(position and position.quantity > 0 and position.unrealized_return < 0)
 
 
-def quote_is_tradeable(inputs: PolicyInputs, symbol: str) -> bool:
+def max_quote_age_seconds() -> int:
+    return int(os.environ.get("MAX_QUOTE_AGE_SECONDS", "600"))
+
+
+def quote_is_fresh(inputs: PolicyInputs, symbol: str) -> bool:
     quote = inputs.quotes.get(symbol.upper())
-    return bool(quote and quote.is_fresh and quote.price > 0)
+    if not quote or not quote.is_fresh or quote.price <= 0 or not quote.timestamp:
+        return False
+    try:
+        quote_time = datetime.fromisoformat(quote.timestamp)
+    except ValueError:
+        return False
+    if quote_time.tzinfo is None:
+        quote_time = quote_time.replace(tzinfo=PT)
+    age_seconds = (datetime.now(tz=PT) - quote_time.astimezone(PT)).total_seconds()
+    return 0 <= age_seconds <= max_quote_age_seconds()
+
+
+def quote_is_tradeable(inputs: PolicyInputs, symbol: str) -> bool:
+    return quote_is_fresh(inputs, symbol)

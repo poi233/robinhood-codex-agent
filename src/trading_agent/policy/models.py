@@ -47,6 +47,7 @@ class OrderIntent:
     limit_price: float
     estimated_notional: float
     quantity: float
+    reference_price: float | None = None
     setup_type: str = ""
     stop_price: float | None = None
     target_1: float | None = None
@@ -65,6 +66,7 @@ class OrderIntent:
             "limit_price": self.limit_price,
             "estimated_notional": self.estimated_notional,
             "quantity": self.quantity,
+            "reference_price": self.reference_price,
             "stop_price": self.stop_price,
             "target_1": self.target_1,
             "target_2": self.target_2,

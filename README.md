@@ -394,6 +394,9 @@ Policy behavior:
 - Sell can generate partial take-profit or risk-exit intents when the daily plan allows them.
 - Buy requires the intersection of `universe.txt`, `today_allowlist.txt`, and
   `daily_plan.today_watchlist`.
+- The policy engine also hard-blocks on `KILL_SWITCH`, stale `daily_plan`, stale/missing quotes,
+  `data_status_summary.execution_blocking=true`, and `risk_overlay.market_regime in {no_trade,
+  risk_off}` even if orchestration changes later.
 - Buy ranks candidates deterministically from `candidate_scores`, `risk_overlay`,
   `trader_watch_levels`, catalyst context, and the default `aggressive_growth` profile in
   `src/config/policy_profiles.json`.
@@ -405,6 +408,9 @@ Policy behavior:
   partial take-profit versus defensive exit.
 - Buy requires a score of at least 80, a fresh quote, no open order, no average-down into a losing
   position, daily cap room, single-order cap room, buying power, and a technically valid entry.
+- Quote freshness is bounded by `MAX_QUOTE_AGE_SECONDS` and defaults to 600 seconds.
+- Low-frequency controls block repeated re-entry through `cooldown_days_after_buy`,
+  `cooldown_days_after_stop`, `max_new_positions_per_day`, and `max_new_positions_per_week`.
 - Review/live currently block with `execution_not_wired`.
 
 ### Paper Mode
@@ -413,20 +419,28 @@ Paper mode is the active execution simulation path.
 
 When policy returns `would_trade`:
 
-- `trading_agent.paper.broker.apply_paper_intent()` applies an immediate simulated fill at the limit
-  price.
+- `trading_agent.paper.broker.apply_paper_intent()` uses `PAPER_FILL_MODEL`, which defaults to
+  `conservative`.
+- In `conservative` mode, a buy limit only fills when current price is at or below the limit, and a
+  sell limit only fills when current price is at or above the limit. Otherwise the order is logged
+  as pending/unfilled.
 - Buys reduce `paper/account.json` cash and update weighted average cost in `paper/positions.json`.
 - Sells require an existing paper position, increase cash, reduce/remove the position, and update
   realized PnL.
-- Every fill appends to `paper/orders.jsonl`.
+- Every submission appends to `paper/orders.jsonl`, including pending paper orders.
 - The first paper intraday run writes `paper/day_start.json` once.
 - Postmarket writes `paper/day_end.json`.
 - Paper fills append `fill` points to `paper/equity_curve.jsonl`; day start/end append their own
   equity curve points.
-- Every fill updates `planner/daily_usage.json`:
+- Only filled paper orders update `planner/daily_usage.json`:
   - `used_notional`
   - `paper_filled_notional`
   - `paper_order_count`
+  - `last_buy_date_by_symbol`
+  - `last_sell_date_by_symbol`
+  - `last_stop_date_by_symbol`
+  - `new_positions_today`
+  - `new_positions_this_week`
   - `updated_at`
 - Postmarket writes `paper/postmarket_summary.json` before the Codex summary prompt runs. It records
   starting/ending paper equity, cash change, realized PnL, filled notional, order counts, and open

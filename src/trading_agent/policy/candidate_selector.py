@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from datetime import date
 
 from trading_agent.policy.models import PolicyInputs
-from trading_agent.policy.risk import eligible_symbols, has_open_order, losing_position_exists, quote_is_tradeable
+from trading_agent.policy.risk import eligible_symbols, has_open_order, losing_position_exists, quote_is_fresh, quote_is_tradeable
 from trading_agent.policy.scoring import score_symbol
 from trading_agent.policy.technical import technical_symbol_payload
 
@@ -55,7 +56,11 @@ def hard_block_reasons(inputs: PolicyInputs, symbol: str) -> list[str]:
     research = inputs.research_reports.get(symbol) or {}
     if research.get("invalid_conditions_triggered") is True:
         reasons.append("research_invalid_condition")
-    if not quote_is_tradeable(inputs, symbol):
+    if symbol not in inputs.quotes:
+        reasons.append("missing_quote")
+    elif not quote_is_fresh(inputs, symbol):
+        reasons.append("stale_quote")
+    elif not quote_is_tradeable(inputs, symbol):
         reasons.append("missing_quote")
     if has_open_order(inputs, symbol):
         reasons.append("open_order_exists")
@@ -63,6 +68,41 @@ def hard_block_reasons(inputs: PolicyInputs, symbol: str) -> list[str]:
         reasons.append("average_down_blocked")
     if not technical_symbol_payload(inputs, symbol):
         reasons.append("missing_technical_levels")
+    reasons.extend(_cooldown_reasons(inputs, symbol))
+    return reasons
+
+
+def _days_since(run_date: str, prior_date: str) -> int | None:
+    try:
+        current = date.fromisoformat(run_date)
+        prior = date.fromisoformat(prior_date)
+    except ValueError:
+        return None
+    return (current - prior).days
+
+
+def _cooldown_reasons(inputs: PolicyInputs, symbol: str) -> list[str]:
+    profile = inputs.policy_profile or {}
+    usage = inputs.daily_usage if isinstance(inputs.daily_usage, dict) else {}
+    reasons: list[str] = []
+    if not bool(profile.get("allow_average_down", False)) and losing_position_exists(inputs, symbol):
+        reasons.append("average_down_blocked")
+    last_buy_date = str((usage.get("last_buy_date_by_symbol") or {}).get(symbol) or "")
+    if last_buy_date:
+        elapsed = _days_since(inputs.run_date, last_buy_date)
+        cooldown = int(profile.get("cooldown_days_after_buy", 0) or 0)
+        if elapsed is not None and elapsed < cooldown:
+            reasons.append("cooldown_after_buy")
+    last_stop_date = str((usage.get("last_stop_date_by_symbol") or {}).get(symbol) or "")
+    if last_stop_date:
+        elapsed = _days_since(inputs.run_date, last_stop_date)
+        cooldown = int(profile.get("cooldown_days_after_stop", 0) or 0)
+        if elapsed is not None and elapsed < cooldown:
+            reasons.append("cooldown_after_stop")
+    if int(usage.get("new_positions_today", 0) or 0) >= int(profile.get("max_new_positions_per_day", 99) or 99):
+        reasons.append("daily_new_position_limit_reached")
+    if int(usage.get("new_positions_this_week", 0) or 0) >= int(profile.get("max_new_positions_per_week", 999) or 999):
+        reasons.append("weekly_new_position_limit_reached")
     return reasons
 
 
