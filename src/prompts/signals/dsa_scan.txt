@@ -22,9 +22,11 @@ Progress logging:
 - If a symbol cannot be checked, use `status="partial"` or `status="failed"` and include the reason in `message`.
 
 Parallel execution:
-- In the normal premarket pipeline, DSA is split by the local runner into batch workers. If you are running this full-universe prompt directly and a subagent/task delegation tool is available, split `src/config/universe.txt` into batches of 5-8 symbols and run up to `DSA_MAX_WORKERS` read-only workers.
-- Assign non-overlapping symbols to each worker. Workers must not write `DSA_SIGNALS_PATH` or `DECISIONS_LOG_PATH`; the main agent must merge results and append the single final decision record.
-- If subagent/task delegation is unavailable, continue sequentially in small batches and log progress after each batch.
+- Prefer one main DSA prompt run, not multiple outer prompt files.
+- If a subagent/task delegation tool is available, split `src/config/universe.txt` into non-overlapping symbol groups and launch up to `DSA_MAX_SUBAGENTS` read-only subagents.
+- Each subagent should analyze only its assigned symbols and return structured notes back to the main DSA agent.
+- Only the main DSA agent may write `DSA_SIGNALS_PATH` and append the single final decision record to `DECISIONS_LOG_PATH`.
+- If subagent/task delegation is unavailable, continue sequentially in small symbol groups and log progress after each group.
 
 Allowed data behavior:
 - You may use public web/search tools if available.

@@ -30,7 +30,7 @@ from trading_agent.signals.kronos import (
     build_live_kronos_payload,
     build_mock_kronos_payload,
 )
-from trading_agent.signals.dsa import run_parallel_dsa_scan
+from trading_agent.signals.dsa import run_dsa_scan
 from trading_agent.signals.technical_fallback import build_failed_technical_payload
 
 
@@ -223,7 +223,7 @@ def run_premarket_pipeline(*, dry_run: bool) -> int:
         if os.environ.get("ENABLE_DSA_SIGNAL_LAYER", "1") != "1":
             append_stage_log(agent_root, run_date, "dsa", "skipped", "DSA signal layer disabled")
             return
-        run_parallel_dsa_scan(agent_root, prompt_runner=run_codex_prompt)
+        run_dsa_scan(agent_root, prompt_runner=run_codex_prompt)
 
     def run_kronos() -> None:
         if os.environ.get("ENABLE_KRONOS_SIGNAL_LAYER", "1") != "1":

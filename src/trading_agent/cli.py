@@ -32,10 +32,10 @@ def main(argv: list[str] | None = None) -> int:
         import os
         from pathlib import Path
 
-        from trading_agent.signals.dsa import run_parallel_dsa_scan
+        from trading_agent.signals.dsa import run_dsa_scan
 
         if args.dry_run:
             os.environ["CODEX_EXEC_DRY_RUN"] = "1"
-        run_parallel_dsa_scan(Path.cwd())
+        run_dsa_scan(Path.cwd())
         return 0
     return 0
