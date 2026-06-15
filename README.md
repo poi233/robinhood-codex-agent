@@ -24,6 +24,7 @@ Default state is deliberately safe:
 - generated state and logs are ignored by git
 - intraday paper execution is wired through the Python policy engine and local paper broker
 - intraday buy/sell decisions are gated by same-day technical price levels when available
+- intraday execution prices come from a live quote refresh on each run; if live quotes are missing or stale, policy blocks instead of falling back to premarket snapshots
 - intraday review/live execution is not wired yet and fails closed with `execution_not_wired`
 - real order placement tools are not auto-approved
 
@@ -56,8 +57,10 @@ flowchart TD
     Paper --> PaperSummary["paper/postmarket_summary.json"]
 ```
 
-Premarket is the only scheduled lifecycle phase that should collect account/quote/tradability data
-from Robinhood MCP. Intraday consumes the files premarket wrote.
+Premarket is the only scheduled lifecycle phase that should collect account/tradability planning data
+from Robinhood MCP and prompts. Intraday consumes the premarket plan artifacts, but it must refresh
+current execution quotes live on each run. Snapshot quotes remain planner context only and are not a
+valid fallback for intraday execution.
 
 ## Premarket DAG
 

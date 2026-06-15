@@ -270,6 +270,33 @@ class PolicyLoaderTests(unittest.TestCase):
         self.assertEqual(inputs.quotes["NVDA"].price, 105.5)
         self.assertEqual(inputs.quotes["SMH"].price, 260.1)
 
+    def test_load_policy_inputs_requires_live_quotes_when_requested(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            (root / "src" / "config").mkdir(parents=True)
+            (root / "runtime" / "state" / "runs" / "2026-06-14" / "planner").mkdir(parents=True)
+            (root / "src" / "config" / "universe.txt").write_text("NVDA\nSMH\n", encoding="utf-8")
+            write_json(root / "src" / "config" / "risk_tiers.json", {"0": {"max_single_order_notional": 10, "max_daily_notional": 25}})
+            write_json(
+                root / "runtime" / "state" / "runs" / "2026-06-14" / "planner" / "daily_plan.json",
+                {"date": "2026-06-14", "today_watchlist": ["NVDA", "SMH"], "allowed_actions": ["small_limit_buy"]},
+            )
+            write_json(
+                root / "runtime" / "state" / "runs" / "2026-06-14" / "planner" / "quote_snapshot_core.json",
+                {"symbols": {"NVDA": {"last_price": "105.50", "previous_close": "103.00", "timestamp": "2026-06-14T09:40:00-07:00"}}},
+            )
+
+            inputs = load_policy_inputs(
+                root,
+                run_date="2026-06-14",
+                trading_mode="paper",
+                risk_tier=0,
+                quote_provider=lambda symbols: [],
+                require_live_quotes=True,
+            )
+
+        self.assertEqual(inputs.quotes, {})
+
     def test_load_policy_inputs_hydrates_pending_paper_orders_as_open_orders(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)

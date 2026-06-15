@@ -144,6 +144,29 @@ class IntradayPolicyIntegrationTests(unittest.TestCase):
         notify.assert_called_once()
         self.assertEqual(notify.call_args.kwargs["event_tag"], "TRADE_EXECUTED")
 
+    def test_intraday_requires_live_quotes_in_loader(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            original_cwd = os.getcwd()
+            os.chdir(root)
+            try:
+                with mock.patch.object(intraday_module, "_is_weekday_pt", return_value=True), \
+                    mock.patch.object(intraday_module, "_is_intraday_window_pt", return_value=True), \
+                    mock.patch.object(intraday_module, "pt_date_string", return_value="2026-06-14"), \
+                    mock.patch.object(intraday_module, "load_runtime_config") as load_runtime_config, \
+                    mock.patch.object(intraday_module, "load_policy_inputs", return_value=policy_ready_inputs()) as load_policy_inputs, \
+                    mock.patch.object(intraday_module, "send_trade_email_notification"):
+                    load_runtime_config.return_value = mock.Mock(trading_mode="paper", risk_tier=0)
+                    status = intraday_module.run_intraday_pipeline(dry_run=False)
+            finally:
+                os.chdir(original_cwd)
+
+        self.assertEqual(status, 0)
+        self.assertTrue(load_policy_inputs.called)
+        kwargs = load_policy_inputs.call_args.kwargs
+        self.assertTrue(kwargs["require_live_quotes"])
+        self.assertIsNotNone(kwargs["quote_provider"])
+
     def test_review_mode_blocks_when_execution_is_unwired(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any, Protocol
+from typing import Any, Callable, Protocol
 
 from trading_agent.core.context import build_runtime_paths
 from trading_agent.paper.broker import pending_paper_orders
@@ -243,6 +243,30 @@ def _hydrate_snapshots_if_present(inputs: PolicyInputs, paths: Any) -> None:
             _hydrate_quote_snapshot(inputs, quote_snapshot)
 
 
+def _hydrate_live_quotes(
+    inputs: PolicyInputs,
+    quote_provider: Callable[[list[str]], list[dict[str, Any]]] | None,
+    *,
+    require_live_quotes: bool,
+) -> None:
+    if quote_provider is None:
+        return
+    symbols = _quote_symbols(inputs)
+    try:
+        payloads = quote_provider(symbols)
+    except Exception:
+        payloads = []
+    live_quotes = {
+        quote.symbol: quote
+        for payload in payloads
+        if (quote := _parse_quote(payload)) is not None
+    }
+    if require_live_quotes:
+        inputs.quotes = live_quotes
+        return
+    inputs.quotes.update(live_quotes)
+
+
 def _hydrate_paper_ledger_if_present(inputs: PolicyInputs, paths: Any) -> None:
     if inputs.trading_mode != "paper":
         return
@@ -278,6 +302,8 @@ def load_policy_inputs(
     trading_mode: str,
     risk_tier: int,
     robinhood_gateway: RobinhoodPolicyGateway | None = None,
+    quote_provider: Callable[[list[str]], list[dict[str, Any]]] | None = None,
+    require_live_quotes: bool = False,
 ) -> PolicyInputs:
     paths = build_runtime_paths(agent_root, run_date=run_date)
     config_dir = paths.config_dir
@@ -313,4 +339,5 @@ def load_policy_inputs(
     else:
         _hydrate_robinhood_inputs(inputs, robinhood_gateway)
     _hydrate_paper_ledger_if_present(inputs, paths)
+    _hydrate_live_quotes(inputs, quote_provider, require_live_quotes=require_live_quotes)
     return inputs
