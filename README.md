@@ -276,6 +276,9 @@ Important state contracts:
   thresholds, component coverage, score-status counts, unmapped technical actions, missing
   catalyst-score counts, missing-component warnings, final overlay state, final plan state, and
   concise warnings.
+- The diagnostics `thresholds` block records the active `scoring_profile`,
+  `watchlist_threshold`, `trade_threshold`, `high_conviction_threshold`, and
+  `min_effective_coverage`.
 - `planner/daily_plan.json` inherits executable gating from `planner/risk_overlay.json`. A
   premarket run before the cash open is still valid; soft research partials lower confidence but do
   not become a standalone `no_trade` reason. Its deterministic `plan_state` distinguishes
