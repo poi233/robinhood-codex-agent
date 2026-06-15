@@ -384,6 +384,9 @@ Deterministic versus reasoning boundaries:
   - `no_trade`: market, account, capital, or execution-blocking data gates are closed.
   - `observe_only`: watchlist candidates exist, but none are currently tradable.
   - `trade_ready`: at least one candidate clears the tradable threshold and the global gates are open.
+- `observe_only` must preserve `today_watchlist` and keep `allowed_actions=[]`.
+- `no_trade` means a real global blocker or zero scored candidates; it should not be used for
+  ordinary observe-only days.
 
 ### Troubleshooting premarket outcomes
 

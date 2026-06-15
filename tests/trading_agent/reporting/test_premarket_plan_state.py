@@ -12,6 +12,11 @@ def test_determine_plan_state_returns_no_trade_for_global_blocker() -> None:
     }
 
     assert determine_plan_state(overlay) == "no_trade"
+    normalized = normalize_daily_plan_state("2026-06-15", {"market_regime": "normal", "allowed_actions": ["small_limit_buy"]}, overlay)
+    assert normalized["plan_state"] == "no_trade"
+    assert normalized["market_regime"] == "no_trade"
+    assert normalized["allowed_actions"] == []
+    assert normalized["today_watchlist"] == []
 
 
 def test_determine_plan_state_returns_observe_only_when_candidates_exist_but_not_tradable() -> None:
