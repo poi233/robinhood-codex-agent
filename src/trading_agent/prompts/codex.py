@@ -3,19 +3,28 @@ from __future__ import annotations
 import os
 import subprocess
 from pathlib import Path
+from typing import Mapping
 
 from trading_agent.core.context import build_runtime_paths
 from trading_agent.core.run_history import append_prompt_progress_log, append_run_output_log, append_stage_log
 from trading_agent.prompts.runtime_block import build_runtime_block
 
 
-def run_codex_prompt(run_kind: str, agent_root: Path, prompt_file: Path) -> int:
+def run_codex_prompt(
+    run_kind: str,
+    agent_root: Path,
+    prompt_file: Path,
+    *,
+    runtime_overrides: Mapping[str, str] | None = None,
+) -> int:
     if not prompt_file.exists():
         raise FileNotFoundError(f"missing prompt file: {prompt_file}")
 
     run_date = build_runtime_paths(agent_root).run_date
     dry_run = os.environ.get("CODEX_EXEC_DRY_RUN", "0") == "1"
-    prompt_text = build_runtime_block(run_kind, agent_root) + prompt_file.read_text(encoding="utf-8")
+    prompt_text = build_runtime_block(run_kind, agent_root, overrides=runtime_overrides) + prompt_file.read_text(
+        encoding="utf-8"
+    )
     append_prompt_progress_log(
         agent_root,
         run_date,

@@ -2,12 +2,13 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+from typing import Mapping
 
 from trading_agent.core.context import build_runtime_paths
 from trading_agent.core.time import pt_now
 
 
-def build_runtime_block(run_kind: str, agent_root: Path) -> str:
+def build_runtime_block(run_kind: str, agent_root: Path, *, overrides: Mapping[str, str] | None = None) -> str:
     env = os.environ
     paths = build_runtime_paths(agent_root)
     values = {
@@ -38,6 +39,8 @@ def build_runtime_block(run_kind: str, agent_root: Path) -> str:
         "PAPER_STARTING_CASH": env.get("PAPER_STARTING_CASH", "400000"),
         "CODEX_EXEC_DRY_RUN": env.get("CODEX_EXEC_DRY_RUN", "0"),
         "ENABLE_DSA_SIGNAL_LAYER": env.get("ENABLE_DSA_SIGNAL_LAYER", "1"),
+        "DSA_MAX_WORKERS": env.get("DSA_MAX_WORKERS", "4"),
+        "DSA_BATCH_SIZE": env.get("DSA_BATCH_SIZE", "8"),
         "ENABLE_MARKET_FEED_LAYER": env.get("ENABLE_MARKET_FEED_LAYER", "1"),
         "ENABLE_TECHNICAL_SIGNAL_LAYER": env.get("ENABLE_TECHNICAL_SIGNAL_LAYER", "1"),
         "MARKET_FEED_DIR": str(paths.market_feed_dir),
@@ -73,6 +76,9 @@ def build_runtime_block(run_kind: str, agent_root: Path) -> str:
         "ORDERS_LOG_PATH": str(paths.orders_log_path),
         "POSTMARKET_SUMMARY_PATH": str(paths.postmarket_summary_path),
     }
+    if overrides:
+        values.update({key: str(value) for key, value in overrides.items()})
+
     lines = ["<runtime>"]
     lines.extend(f"{key}={value}" for key, value in values.items())
     lines.append("</runtime>")

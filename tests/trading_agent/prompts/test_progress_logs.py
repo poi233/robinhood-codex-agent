@@ -16,6 +16,19 @@ def test_runtime_block_exposes_progress_log_path(tmp_path: Path, monkeypatch) ->
     assert f"PROGRESS_LOG_PATH={expected}" in block
 
 
+def test_runtime_block_allows_prompt_specific_overrides(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("RUN_DATE_PT", "2026-06-14")
+
+    block = build_runtime_block(
+        "dsa_premarket_scan_batch_001",
+        tmp_path,
+        overrides={"DSA_BATCH_SYMBOLS": "NVDA,AVGO", "DSA_BATCH_OUTPUT_PATH": "/tmp/dsa_batch_001.json"},
+    )
+
+    assert "DSA_BATCH_SYMBOLS=NVDA,AVGO" in block
+    assert "DSA_BATCH_OUTPUT_PATH=/tmp/dsa_batch_001.json" in block
+
+
 def test_run_codex_prompt_records_dry_run_progress(tmp_path: Path, monkeypatch) -> None:
     prompt = tmp_path / "prompt.txt"
     prompt.write_text("Test prompt", encoding="utf-8")
