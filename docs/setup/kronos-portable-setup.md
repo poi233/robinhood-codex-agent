@@ -17,6 +17,23 @@ The setup script creates:
 - `.venv-kronos/`
 - `src/config/runtime.env.local` entries for `KRONOS_PYTHON_BIN` and `KRONOS_PROJECT_ROOT`
 
+## Model Selection
+
+The default model is `NeoQuasar/Kronos-base`, paired with
+`NeoQuasar/Kronos-Tokenizer-base`. This is the best public Kronos checkpoint currently usable by the
+repo. `Kronos-large` is not selected because upstream marks it as not publicly available.
+
+Defaults:
+
+```bash
+KRONOS_MODEL_NAME=NeoQuasar/Kronos-base
+KRONOS_TOKENIZER_NAME=NeoQuasar/Kronos-Tokenizer-base
+KRONOS_LOOKBACK_BARS=512
+```
+
+Keep `KRONOS_LOOKBACK_BARS` at or below `512` for `Kronos-small` and `Kronos-base`; the predictor
+uses a 512-bar max context for those checkpoints.
+
 ## Install
 
 ```bash

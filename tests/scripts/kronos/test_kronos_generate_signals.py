@@ -81,6 +81,31 @@ class CommonRuntimeTests(unittest.TestCase):
                 f"{tmp / '.venv-kronos' / 'bin' / 'python'}\n{tmp / '.vendor' / 'kronos'}\n",
             )
 
+    def test_common_sh_defaults_to_best_public_kronos_model(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp = Path(tmpdir)
+            config_dir = tmp / "src" / "config"
+            scripts_dir = tmp / "src" / "scripts"
+            config_dir.mkdir(parents=True)
+            (scripts_dir / "lib").mkdir(parents=True)
+
+            (config_dir / "runtime.env").write_text("TRADING_MODE=paper\n", encoding="utf-8")
+            (scripts_dir / "lib" / "common.sh").write_text((REPO_ROOT / "src" / "scripts" / "lib" / "common.sh").read_text(encoding="utf-8"), encoding="utf-8")
+
+            result = subprocess.run(
+                [
+                    "bash",
+                    "-lc",
+                    f"cd {tmp} && source src/scripts/lib/common.sh && printf '%s\\n%s\\n' \"$KRONOS_MODEL_NAME\" \"$KRONOS_LOOKBACK_BARS\"",
+                ],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 0)
+            self.assertEqual(result.stdout, "NeoQuasar/Kronos-base\n512\n")
+
     def test_common_sh_prefers_explicit_shell_env_over_env_files(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             tmp = Path(tmpdir)
@@ -462,6 +487,13 @@ class KronosGenerateSignalsTests(unittest.TestCase):
             self.assertEqual(payload["horizon_bars"], 8)
             self.assertEqual(sorted(payload["symbols"].keys()), ["NVDA", "PLTR"])
             self.assertEqual(payload["model"]["mode"], "inference_only_mock")
+
+    def test_mock_payload_defaults_to_best_public_kronos_model(self) -> None:
+        with mock.patch.dict(os.environ, {}, clear=True):
+            payload = build_mock_kronos_payload(["NVDA"], "2026-06-14", "src/config/universe.txt")
+
+        self.assertEqual(payload["model"]["name"], "NeoQuasar/Kronos-base")
+        self.assertEqual(payload["model"]["tokenizer"], "NeoQuasar/Kronos-Tokenizer-base")
 
     def test_rejects_predictions_for_symbols_outside_universe(self) -> None:
         mod = self.import_module()

@@ -50,6 +50,7 @@ flowchart TD
     Snapshots --> Postmarket
     Decisions --> Postmarket
     Postmarket --> Summary["postmarket_summary.md"]
+    Paper --> PaperSummary["paper/postmarket_summary.json"]
 ```
 
 Premarket is the only scheduled lifecycle phase that should collect account/quote/tradability data
@@ -206,6 +207,7 @@ runtime/state/runs/YYYY-MM-DD/
     day_start.json
     day_end.json
     equity_curve.jsonl
+    postmarket_summary.json
     account.json
     positions.json
     orders.jsonl
@@ -245,8 +247,9 @@ Important state contracts:
   gates before the final prompt writes narrative.
 - `planner/daily_usage.json` starts from the final premarket planner and is updated by paper fills.
 - `planner/daily_plan.zh.md` is the Chinese human-readable version of the premarket report.
-- `paper/day_start.json`, `paper/day_end.json`, and `paper/equity_curve.jsonl` are the
-  visualization-friendly daily paper snapshots and equity curve.
+- `paper/day_start.json`, `paper/day_end.json`, `paper/equity_curve.jsonl`, and
+  `paper/postmarket_summary.json` are the visualization-friendly daily paper snapshots, equity
+  curve, and postmarket paper performance summary.
 - `paper/account.json`, `paper/positions.json`, and `paper/orders.jsonl` are the current simulated
   account ledger used only in `TRADING_MODE=paper`.
 - `runtime/logs/runs/YYYY-MM-DD/*.progress.jsonl` records prompt-level progress. The Python runner
@@ -386,6 +389,9 @@ When policy returns `would_trade`:
   - `paper_filled_notional`
   - `paper_order_count`
   - `updated_at`
+- Postmarket writes `paper/postmarket_summary.json` before the Codex summary prompt runs. It records
+  starting/ending paper equity, cash change, realized PnL, filled notional, order counts, and open
+  paper positions for review and visualization.
 
 If paper cash or paper position quantity is insufficient, the fill is not applied and the reason is
 added to the decision.
@@ -418,6 +424,7 @@ should read local runtime/state/logs plus Robinhood data to reconcile the day, i
 data failures, and write:
 
 - `runtime/logs/runs/YYYY-MM-DD/postmarket_summary.md`
+- `runtime/state/runs/YYYY-MM-DD/paper/postmarket_summary.json` in `TRADING_MODE=paper`
 - one `postmarket_summary` record in `decisions.jsonl`
 
 ## Safety Model
@@ -496,6 +503,11 @@ Install repo-owned skills:
 
 Portable Kronos setup requires `git` and Python `3.11` or `3.12`. The setup script prefers
 `python3.12`, then `python3.11`, then a supported `python3`.
+
+The default Kronos model is `NeoQuasar/Kronos-base`, the best public checkpoint currently usable in
+this workflow. `Kronos-large` is not the default because the upstream model zoo marks it as not
+publicly available. The default tokenizer is `NeoQuasar/Kronos-Tokenizer-base`, with
+`KRONOS_LOOKBACK_BARS=512` to match the small/base context limit.
 
 ```bash
 KRONOS_BOOTSTRAP_PYTHON=$(command -v python3.12) ./src/scripts/kronos/setup_kronos_env.sh

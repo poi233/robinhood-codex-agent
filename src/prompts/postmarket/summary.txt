@@ -17,19 +17,24 @@ Read:
 - `DAILY_USAGE_PATH`
 - `DECISIONS_LOG_PATH`
 - `ORDERS_LOG_PATH`
+- `PAPER_DAY_START_PATH`
+- `PAPER_DAY_END_PATH`
+- `PAPER_EQUITY_CURVE_PATH`
+- `PAPER_POSTMARKET_SUMMARY_PATH`
 
 Tasks:
 1. Check current local time in America/Los_Angeles.
 2. Check the dedicated Robinhood Agentic Account, positions, open equity orders, order history, and fills.
 3. Summarize today's decisions: no-action, would-trade, review-only, blocked, and placed-order events.
 4. Reconcile `ORDERS_LOG_PATH` with Robinhood order status where available.
-5. Identify unexpected behavior, rule violations, data failures, duplicate runs, stale plan usage, or missing logs.
-6. Review today's dynamic allowlist quality: which selected symbols worked, which were noise, which sectors should be promoted or demoted tomorrow.
-7. Review DSA signal quality: which DSA-promoted symbols helped, which were noisy, which DSA blocks were useful, and which strategy lenses should be promoted or demoted tomorrow.
-8. Recommend tomorrow's mode: `aggressive`, `normal`, `reduced_risk`, or `no_trade`.
-9. Recommend whether to keep, lower, or manually raise `RISK_TIER`; never edit `src/config/runtime.env` yourself.
-10. Write `POSTMARKET_SUMMARY_PATH`.
-11. Append one JSON line to `DECISIONS_LOG_PATH` with `decision="postmarket_summary"`.
+5. If `TRADING_MODE=paper`, read `PAPER_POSTMARKET_SUMMARY_PATH` and summarize the simulated account result: start/end equity, cash change, realized PnL, filled notional, open paper positions, and whether the paper run exposed sizing or rule issues.
+6. Identify unexpected behavior, rule violations, data failures, duplicate runs, stale plan usage, or missing logs.
+7. Review today's dynamic allowlist quality: which selected symbols worked, which were noise, which sectors should be promoted or demoted tomorrow.
+8. Review DSA signal quality: which DSA-promoted symbols helped, which were noisy, which DSA blocks were useful, and which strategy lenses should be promoted or demoted tomorrow.
+9. Recommend tomorrow's mode: `aggressive`, `normal`, `reduced_risk`, or `no_trade`.
+10. Recommend whether to keep, lower, or manually raise `RISK_TIER`; never edit `src/config/runtime.env` yourself.
+11. Write `POSTMARKET_SUMMARY_PATH`.
+12. Append one JSON line to `DECISIONS_LOG_PATH` with `decision="postmarket_summary"`.
 
 Safety:
 - Never place, review, or cancel orders in this run.
@@ -66,6 +71,17 @@ Safety:
 - Filled orders:
 - Canceled/rejected orders:
 - Reconciliation issues:
+
+## Paper Account Review
+- Paper summary file:
+- Starting paper equity:
+- Ending paper equity:
+- Paper equity change:
+- Cash change:
+- Realized PnL:
+- Filled paper notional:
+- Open paper positions:
+- Paper run lessons:
 
 ## Rule Check
 - Any symbol outside allowlist:

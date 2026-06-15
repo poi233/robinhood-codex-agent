@@ -68,6 +68,7 @@ def build_runtime_block(run_kind: str, agent_root: Path) -> str:
         "PAPER_DAY_START_PATH": str(paths.paper_day_start_path),
         "PAPER_DAY_END_PATH": str(paths.paper_day_end_path),
         "PAPER_EQUITY_CURVE_PATH": str(paths.paper_equity_curve_path),
+        "PAPER_POSTMARKET_SUMMARY_PATH": str(paths.paper_postmarket_summary_path),
         "DECISIONS_LOG_PATH": str(paths.decisions_log_path),
         "ORDERS_LOG_PATH": str(paths.orders_log_path),
         "POSTMARKET_SUMMARY_PATH": str(paths.postmarket_summary_path),

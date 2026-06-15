@@ -4,6 +4,10 @@ import os
 import sys
 from datetime import datetime
 
+DEFAULT_KRONOS_MODEL_NAME = "NeoQuasar/Kronos-base"
+DEFAULT_KRONOS_TOKENIZER_NAME = "NeoQuasar/Kronos-Tokenizer-base"
+DEFAULT_KRONOS_LOOKBACK_BARS = "512"
+
 
 def validate_signal_symbols(universe_symbols: set[str], signal_map: dict[str, object]) -> None:
     extra = set(signal_map) - universe_symbols
@@ -19,8 +23,8 @@ def build_failed_kronos_payload(run_date: str, source_universe: str, note: str, 
         "horizon_bars": int(os.environ.get("KRONOS_HORIZON_BARS", "8")),
         "source_universe": source_universe,
         "model": {
-            "name": os.environ.get("KRONOS_MODEL_NAME", "NeoQuasar/Kronos-small"),
-            "tokenizer": os.environ.get("KRONOS_TOKENIZER_NAME", "NeoQuasar/Kronos-Tokenizer-base"),
+            "name": os.environ.get("KRONOS_MODEL_NAME", DEFAULT_KRONOS_MODEL_NAME),
+            "tokenizer": os.environ.get("KRONOS_TOKENIZER_NAME", DEFAULT_KRONOS_TOKENIZER_NAME),
             "mode": mode,
         },
         "data_status": "failed",
@@ -50,8 +54,8 @@ def build_mock_kronos_payload(symbols: list[str], run_date: str, source_universe
         "horizon_bars": int(os.environ.get("KRONOS_HORIZON_BARS", "8")),
         "source_universe": source_universe,
         "model": {
-            "name": os.environ.get("KRONOS_MODEL_NAME", "NeoQuasar/Kronos-small"),
-            "tokenizer": os.environ.get("KRONOS_TOKENIZER_NAME", "NeoQuasar/Kronos-Tokenizer-base"),
+            "name": os.environ.get("KRONOS_MODEL_NAME", DEFAULT_KRONOS_MODEL_NAME),
+            "tokenizer": os.environ.get("KRONOS_TOKENIZER_NAME", DEFAULT_KRONOS_TOKENIZER_NAME),
             "mode": "inference_only_mock",
         },
         "data_status": "ok",
@@ -67,10 +71,10 @@ def build_live_kronos_payload(symbols: list[str], run_date: str, source_universe
     sys.path.insert(0, os.environ["KRONOS_PROJECT_ROOT"])
     from model import Kronos, KronosPredictor, KronosTokenizer
 
-    model_name = os.environ.get("KRONOS_MODEL_NAME", "NeoQuasar/Kronos-small")
-    tokenizer_name = os.environ.get("KRONOS_TOKENIZER_NAME", "NeoQuasar/Kronos-Tokenizer-base")
+    model_name = os.environ.get("KRONOS_MODEL_NAME", DEFAULT_KRONOS_MODEL_NAME)
+    tokenizer_name = os.environ.get("KRONOS_TOKENIZER_NAME", DEFAULT_KRONOS_TOKENIZER_NAME)
     timeframe = os.environ.get("KRONOS_TIMEFRAME", "30m")
-    lookback = int(os.environ.get("KRONOS_LOOKBACK_BARS", "400"))
+    lookback = int(os.environ.get("KRONOS_LOOKBACK_BARS", DEFAULT_KRONOS_LOOKBACK_BARS))
     pred_len = int(os.environ.get("KRONOS_HORIZON_BARS", "8"))
     tokenizer = KronosTokenizer.from_pretrained(tokenizer_name)
     model = Kronos.from_pretrained(model_name)

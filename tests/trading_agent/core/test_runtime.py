@@ -21,6 +21,7 @@ class CoreRuntimeTests(unittest.TestCase):
             self.assertEqual(paths.daily_plan_zh_markdown_path, root / "runtime" / "state" / "runs" / paths.run_date / "planner" / "daily_plan.zh.md")
             self.assertEqual(paths.paper_account_path, root / "runtime" / "state" / "runs" / paths.run_date / "paper" / "account.json")
             self.assertEqual(paths.paper_positions_path, root / "runtime" / "state" / "runs" / paths.run_date / "paper" / "positions.json")
+            self.assertEqual(paths.paper_postmarket_summary_path, root / "runtime" / "state" / "runs" / paths.run_date / "paper" / "postmarket_summary.json")
 
     def test_runtime_paths_are_dataclass_like(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
