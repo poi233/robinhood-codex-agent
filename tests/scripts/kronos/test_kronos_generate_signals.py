@@ -636,7 +636,7 @@ class KronosRunnerTests(unittest.TestCase):
             "\n".join(
                 [
                     "TRADING_MODE=paper",
-                    "CODEX_MODEL=gpt-5.5",
+                    "CODEX_MODEL=gpt-5.4-mini",
                     "ENABLE_DSA_SIGNAL_LAYER=0",
                     "ENABLE_KRONOS_SIGNAL_LAYER=1",
                     "ENABLE_MARKET_FEED_LAYER=0",

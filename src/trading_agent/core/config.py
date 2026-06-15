@@ -18,7 +18,7 @@ def load_runtime_config(agent_root: Path) -> RuntimeConfig:
     env = os.environ
     return RuntimeConfig(
         trading_mode=env.get("TRADING_MODE", "paper"),
-        codex_model=env.get("CODEX_MODEL", "gpt-5.5"),
+        codex_model=env.get("CODEX_MODEL", "gpt-5.4-mini"),
         risk_tier=int(env.get("RISK_TIER", "0")),
         market_feed_timeframes=env.get("MARKET_FEED_TIMEFRAMES", "1w,1d,1h,15m"),
     )

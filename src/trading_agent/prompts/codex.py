@@ -53,7 +53,7 @@ def run_codex_prompt(
         return 0
 
     codex_bin = os.environ.get("CODEX_BIN", "codex")
-    model = os.environ.get("CODEX_MODEL", "gpt-5.5")
+    model = os.environ.get("CODEX_MODEL", "gpt-5.4-mini")
     timeout_sec = int(os.environ.get("CODEX_EXEC_TIMEOUT_SEC", "3600"))
     try:
         result = subprocess.run(
