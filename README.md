@@ -267,6 +267,10 @@ Important state contracts:
   gates before the final prompt writes narrative. It keeps `watchlist_candidates` separate from
   `tradable_candidates`, so observe-only names are preserved even when nothing currently clears the
   trading threshold.
+- `planner/premarket_diagnostics.json` is the deterministic debug summary for the run: candidate
+  counts, watchlist/tradable counts, top score, score distribution, thresholds, component coverage,
+  unmapped technical actions, missing catalyst-score counts, final overlay state, final plan state,
+  and concise warnings.
 - `planner/daily_plan.json` inherits executable gating from `planner/risk_overlay.json`. A
   premarket run before the cash open is still valid; soft research partials lower confidence but do
   not become a standalone `no_trade` reason. Its deterministic `plan_state` distinguishes

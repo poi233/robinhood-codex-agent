@@ -18,6 +18,7 @@ from trading_agent.data.universe import parse_universe
 from trading_agent.notifications.email import send_trade_email_notification
 from trading_agent.planner.candidates import build_candidate_snapshot
 from trading_agent.planner.data_status import build_data_status_summary_from_paths
+from trading_agent.planner.premarket_diagnostics import build_premarket_diagnostics_from_paths
 from trading_agent.planner.quote_snapshot import build_candidate_quote_snapshot_from_paths
 from trading_agent.planner.risk_overlay import build_capital_snapshot, build_risk_overlay_from_paths
 from trading_agent.planner.scoring import build_candidate_scores_from_paths
@@ -336,6 +337,7 @@ def run_premarket_pipeline(*, dry_run: bool) -> int:
             risk_overlay = read_json(paths.risk_overlay_path) if paths.risk_overlay_path.exists() else {}
             if isinstance(daily_plan, dict) and isinstance(risk_overlay, dict):
                 write_json(paths.daily_plan_path, normalize_daily_plan_state(run_date, daily_plan, risk_overlay))
+                build_premarket_diagnostics_from_paths(agent_root, run_date)
 
     def run_archive() -> None:
         technical_path = paths.technical_signals_path

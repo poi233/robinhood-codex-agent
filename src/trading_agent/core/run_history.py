@@ -149,6 +149,9 @@ def snapshot_stage_artifacts(agent_root: Path, run_date: str, stage: str) -> lis
         "risk_overlay": [
             (paths.risk_overlay_path, run_dir / "planner" / "risk_overlay.json"),
         ],
+        "premarket_diagnostics": [
+            (paths.premarket_diagnostics_path, run_dir / "planner" / "premarket_diagnostics.json"),
+        ],
         "planner": [
             (paths.account_snapshot_path, run_dir / "planner" / "account_snapshot.json"),
             (paths.capital_snapshot_path, run_dir / "planner" / "capital_snapshot.json"),
@@ -162,6 +165,7 @@ def snapshot_stage_artifacts(agent_root: Path, run_date: str, stage: str) -> lis
             (paths.trader_watch_levels_path, run_dir / "planner" / "trader_watch_levels.json"),
             (paths.data_status_summary_path, run_dir / "planner" / "data_status_summary.json"),
             (paths.risk_overlay_path, run_dir / "planner" / "risk_overlay.json"),
+            (paths.premarket_diagnostics_path, run_dir / "planner" / "premarket_diagnostics.json"),
             (paths.daily_plan_path, run_dir / "planner" / "daily_plan.json"),
             (paths.daily_plan_markdown_path, run_dir / "planner" / "daily_plan.md"),
             (paths.daily_plan_zh_markdown_path, run_dir / "planner" / "daily_plan.zh.md"),
@@ -173,6 +177,7 @@ def snapshot_stage_artifacts(agent_root: Path, run_date: str, stage: str) -> lis
             (paths.data_status_summary_path, run_dir / "planner" / "data_status_summary.json"),
             (paths.candidate_scores_path, run_dir / "planner" / "candidate_scores.json"),
             (paths.risk_overlay_path, run_dir / "planner" / "risk_overlay.json"),
+            (paths.premarket_diagnostics_path, run_dir / "planner" / "premarket_diagnostics.json"),
             (paths.daily_plan_path, run_dir / "planner" / "daily_plan.json"),
             (paths.daily_plan_markdown_path, run_dir / "planner" / "daily_plan.md"),
             (paths.daily_plan_zh_markdown_path, run_dir / "planner" / "daily_plan.zh.md"),
