@@ -19,9 +19,12 @@ Default state is deliberately safe:
 - `TRADING_MODE=paper`
 - `RISK_TIER=3`
 - `PAPER_STARTING_CASH=400000`
+- `CODEX_MODEL=gpt-5.4-mini`
 - `KILL_SWITCH` exists
 - generated state and logs are ignored by git
-- intraday live/review execution is not wired yet and fails closed with `execution_not_wired`
+- intraday paper execution is wired through the Python policy engine and local paper broker
+- intraday buy/sell decisions are gated by same-day technical price levels when available
+- intraday review/live execution is not wired yet and fails closed with `execution_not_wired`
 - real order placement tools are not auto-approved
 
 This is automation infrastructure, not financial advice. Live trading can lose money. Keep this in
@@ -217,13 +220,23 @@ runtime/state/runs/YYYY-MM-DD/
 
 ```text
 runtime/logs/runs/YYYY-MM-DD/
-  pipeline.jsonl
-  codex_runs.log
-  *.progress.jsonl
-  errors.log
-  decisions.jsonl
-  orders.jsonl
-  postmarket_summary.md
+  pipeline/
+    pipeline.jsonl
+  progress/
+    *.jsonl
+  outputs/
+    codex_runs.log
+    stdout/
+      *.log
+    stderr/
+      *.log
+  system/
+    errors.log
+  audit/
+    decisions.jsonl
+    orders.jsonl
+  reports/
+    postmarket_summary.md
 ```
 
 Important state contracts:
@@ -252,9 +265,13 @@ Important state contracts:
   curve, and postmarket paper performance summary.
 - `paper/account.json`, `paper/positions.json`, and `paper/orders.jsonl` are the current simulated
   account ledger used only in `TRADING_MODE=paper`.
-- `runtime/logs/runs/YYYY-MM-DD/*.progress.jsonl` records prompt-level progress. The Python runner
+- `runtime/logs/runs/YYYY-MM-DD/progress/*.jsonl` records prompt-level progress. The Python runner
   always writes started/skipped/completed/failed records; long research prompts are instructed to add
   per-symbol progress records.
+- `runtime/logs/runs/YYYY-MM-DD/outputs/stdout/*.log` and `outputs/stderr/*.log` store per-prompt
+  subprocess output, while `outputs/codex_runs.log` remains the shared shell-level Codex run log.
+- `runtime/logs/runs/YYYY-MM-DD/audit/decisions.jsonl` and `audit/orders.jsonl` are the operator-facing
+  audit trail for intraday actions and review outcomes.
 - Paper mode starts from `PAPER_STARTING_CASH` when the local ledger does not yet exist.
 - In paper mode, policy loading first reads real snapshots and then overlays the paper ledger cash
   and positions.
@@ -277,9 +294,12 @@ Premarket does the following:
    power.
 3. Collects deterministic market context with yfinance-backed data into `market_feed/`.
 4. Runs advisory layers in parallel:
-   - DSA-inspired signal scan through Codex.
+   - DSA-inspired signal scan through Codex, scoped to theme strength, cross-symbol priority,
+     crowding, macro sensitivity, and promote/demote/block classification rather than detailed
+     technical entries.
    - Kronos forecast locally.
-   - Repo-owned technical research through Codex.
+   - Repo-owned technical research through Codex, with a single prompt run that may fan out into
+     up to `TECHNICAL_MAX_SUBAGENTS` read-only subagents.
    - Market calendar snapshot through Codex.
    - Core quote snapshot through Codex.
 5. Builds `planner/trader_watch_levels.json` locally from the technical layer. This is a schema
@@ -313,6 +333,8 @@ Deterministic versus reasoning boundaries:
   snapshot prompts, and final narrative writing.
 - Python scoring aggregates existing signal-layer outputs; it does not invent technical setups,
   catalyst judgments, or DSA classifications.
+- DSA is intentionally narrowed so it does not duplicate detailed technical levels, stop/target
+  ladders, or explicit catalyst scoring already owned by other layers.
 
 Layer flags:
 
