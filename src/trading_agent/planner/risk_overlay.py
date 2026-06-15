@@ -7,9 +7,7 @@ from typing import Any
 from trading_agent.core.context import build_runtime_paths
 from trading_agent.core.io import read_json, write_json
 from trading_agent.core.time import PT
-
-WATCHLIST_SCORE_THRESHOLD = 35.0
-TRADE_SCORE_THRESHOLD = 50.0
+from trading_agent.planner.scoring_profiles import DEFAULT_SCORING_PROFILE, load_scoring_profile
 
 
 def _as_float(value: Any) -> float | None:
@@ -119,7 +117,12 @@ def build_risk_overlay(
     account_snapshot: dict[str, Any],
     candidate_scores: dict[str, Any],
     data_status_summary: dict[str, Any],
+    scoring_profile: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
+    scoring_profile = dict(scoring_profile or DEFAULT_SCORING_PROFILE)
+    watchlist_threshold = float(scoring_profile.get("watchlist_threshold", DEFAULT_SCORING_PROFILE["watchlist_threshold"]))
+    trade_threshold = float(scoring_profile.get("trade_threshold", DEFAULT_SCORING_PROFILE["trade_threshold"]))
+    high_conviction_threshold = float(scoring_profile.get("high_conviction_threshold", DEFAULT_SCORING_PROFILE["high_conviction_threshold"]))
     no_trade_reasons: list[str] = []
     hard_block_reasons: list[str] = []
     if not _is_trading_day(market_calendar):
@@ -138,11 +141,11 @@ def build_risk_overlay(
         )
         if isinstance(payload, dict) and not payload.get("blocked") and payload.get("score_status") != "blocked"
     ][:8]
-    watchlist_candidates = [symbol for symbol in scored_candidates if _candidate_score(symbols_payload[symbol]) >= WATCHLIST_SCORE_THRESHOLD][:8]
+    watchlist_candidates = [symbol for symbol in scored_candidates if _candidate_score(symbols_payload[symbol]) >= watchlist_threshold][:8]
     tradable_candidates = [
         symbol
         for symbol in watchlist_candidates
-        if _candidate_score(symbols_payload[symbol]) >= TRADE_SCORE_THRESHOLD
+        if _candidate_score(symbols_payload[symbol]) >= trade_threshold
         and (symbols_payload[symbol] or {}).get("score_status") == "scored"
     ][:8]
 
@@ -168,7 +171,7 @@ def build_risk_overlay(
         today_watchlist = watchlist_candidates
     elif tradable_candidates:
         allowed_actions = ["small_limit_buy", "partial_take_profit"]
-        market_regime = "aggressive_ok" if any(_candidate_score(symbols_payload.get(symbol) or {}) >= 80 for symbol in tradable_candidates) else "normal"
+        market_regime = "aggressive_ok" if any(_candidate_score(symbols_payload.get(symbol) or {}) >= high_conviction_threshold for symbol in tradable_candidates) else "normal"
         risk_level = "aggressive" if market_regime == "aggressive_ok" else "normal"
         risk_multiplier = 1.0
         today_watchlist = watchlist_candidates
@@ -184,8 +187,11 @@ def build_risk_overlay(
         "generated_at": datetime.now(tz=PT).isoformat(),
         "trading_mode": trading_mode,
         "risk_tier": risk_tier,
-        "watchlist_score_threshold": WATCHLIST_SCORE_THRESHOLD,
-        "trade_score_threshold": TRADE_SCORE_THRESHOLD,
+        "scoring_profile": scoring_profile.get("name", DEFAULT_SCORING_PROFILE["name"]),
+        "watchlist_score_threshold": watchlist_threshold,
+        "trade_score_threshold": trade_threshold,
+        "high_conviction_threshold": high_conviction_threshold,
+        "min_effective_coverage": float(scoring_profile.get("min_effective_coverage", DEFAULT_SCORING_PROFILE["min_effective_coverage"])),
         "market_regime": market_regime,
         "risk_level": risk_level,
         "risk_multiplier": risk_multiplier,
@@ -223,6 +229,7 @@ def build_risk_overlay_from_paths(agent_root: Path, run_date: str, *, trading_mo
     paths = build_runtime_paths(agent_root, run_date=run_date)
     risk_config = _read_json_or_empty(paths.config_dir / "risk_tiers.json")
     risk_caps = risk_config.get(str(risk_tier)) or {}
+    scoring_profile = load_scoring_profile(paths.config_dir)
     payload = build_risk_overlay(
         run_date=run_date,
         trading_mode=trading_mode,
@@ -233,6 +240,7 @@ def build_risk_overlay_from_paths(agent_root: Path, run_date: str, *, trading_mo
         account_snapshot=_read_json_or_empty(paths.account_snapshot_path),
         candidate_scores=_read_json_or_empty(paths.candidate_scores_path),
         data_status_summary=_read_json_or_empty(paths.data_status_summary_path),
+        scoring_profile=scoring_profile,
     )
     write_json(paths.risk_overlay_path, payload)
     return payload

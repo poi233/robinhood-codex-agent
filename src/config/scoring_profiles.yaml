@@ -1,0 +1,17 @@
+default_profile: aggressive_growth
+profiles:
+  aggressive_growth:
+    watchlist_threshold: 35
+    trade_threshold: 50
+    high_conviction_threshold: 80
+    min_effective_coverage: 0.5
+  balanced:
+    watchlist_threshold: 40
+    trade_threshold: 60
+    high_conviction_threshold: 82
+    min_effective_coverage: 0.55
+  conservative:
+    watchlist_threshold: 45
+    trade_threshold: 70
+    high_conviction_threshold: 85
+    min_effective_coverage: 0.6

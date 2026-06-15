@@ -7,6 +7,7 @@ from typing import Any
 from trading_agent.core.context import build_runtime_paths
 from trading_agent.core.io import read_json, write_json
 from trading_agent.core.time import PT
+from trading_agent.planner.scoring_profiles import load_scoring_profile
 
 
 WEIGHTS = {
@@ -441,6 +442,7 @@ def score_candidate(
     technical: dict[str, Any],
     quote: dict[str, Any],
     catalyst: dict[str, Any],
+    min_effective_coverage: float = MIN_EFFECTIVE_COVERAGE,
 ) -> dict[str, Any]:
     normalized = symbol.upper()
     dsa_score, dsa_diagnostics, block_reasons = _dsa_diagnostic(normalized, dsa)
@@ -469,7 +471,7 @@ def score_candidate(
     coverage = round(effective_weight_total / sum(WEIGHTS.values()), 4) if WEIGHTS else 0.0
     missing_components = [name for name, payload in diagnostics.items() if not payload.get("available")]
     warnings: list[str] = []
-    if coverage < MIN_EFFECTIVE_COVERAGE:
+    if coverage < min_effective_coverage:
         warnings.append("low_effective_coverage")
     for name, payload in diagnostics.items():
         if not payload.get("available"):
@@ -481,7 +483,7 @@ def score_candidate(
     component_block_reasons = [f"{name}:{payload.get('reason')}" for name, payload in diagnostics.items() if payload.get("blocked")]
     blocked_reasons.extend(component_block_reasons)
     blocked = bool(blocked_reasons)
-    score_status = "blocked" if blocked else "insufficient_data" if coverage < MIN_EFFECTIVE_COVERAGE else "scored"
+    score_status = "blocked" if blocked else "insufficient_data" if coverage < min_effective_coverage else "scored"
     return {
         "symbol": normalized,
         "score": round(score, 2),
@@ -501,6 +503,7 @@ def score_candidate(
 
 def build_candidate_scores_from_paths(agent_root: Path, run_date: str) -> dict[str, Any]:
     paths = build_runtime_paths(agent_root, run_date=run_date)
+    scoring_profile = load_scoring_profile(paths.config_dir)
     candidate_snapshot = _read_json_or_empty(paths.candidate_snapshot_path)
     quote_core = _read_json_or_empty(paths.quote_snapshot_core_path)
     quote_candidates = _read_json_or_empty(paths.quote_snapshot_candidates_path)
@@ -515,6 +518,7 @@ def build_candidate_scores_from_paths(agent_root: Path, run_date: str) -> dict[s
             technical=_read_json_or_empty(paths.technical_signals_path),
             quote=quote,
             catalyst=_read_json_or_empty(paths.catalyst_snapshot_path),
+            min_effective_coverage=float(scoring_profile.get("min_effective_coverage", MIN_EFFECTIVE_COVERAGE)),
         )
         for symbol in selected_symbols
     }
@@ -523,6 +527,7 @@ def build_candidate_scores_from_paths(agent_root: Path, run_date: str) -> dict[s
         "date": run_date,
         "generated_at": datetime.now(tz=PT).isoformat(),
         "weights": dict(WEIGHTS),
+        "scoring_profile": scoring_profile,
         "symbols": symbols,
         "ranked_symbols": ranked,
         "notes": "Deterministic aggregation of existing signal-layer outputs; does not create new AI reasoning.",

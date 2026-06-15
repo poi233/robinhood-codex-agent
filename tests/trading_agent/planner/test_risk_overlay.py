@@ -173,3 +173,31 @@ def test_risk_overlay_true_empty_candidate_list_still_reports_no_scored_candidat
     assert overlay["watchlist_candidates"] == []
     assert overlay["tradable_candidates"] == []
     assert overlay["no_trade_reasons"] == ["no_scored_candidates"]
+
+
+def test_risk_overlay_uses_configured_scoring_thresholds() -> None:
+    overlay = build_risk_overlay(
+        run_date="2026-06-15",
+        trading_mode="paper",
+        risk_tier=3,
+        risk_caps={"max_single_order_notional": 5000, "max_daily_notional": 20000},
+        market_calendar={"data_status": "ok", "is_trading_day": True, "session": "premarket"},
+        capital_snapshot={"sizing_buying_power": 400000.0, "sizing_source": "paper_starting_cash"},
+        account_snapshot={"agentic_account_identified": True, "data_status": "ok", "buying_power": 100.0},
+        candidate_scores={"symbols": {"AVGO": {"score": 66.1, "blocked": False, "score_status": "scored"}}},
+        data_status_summary={"execution_blocking": False, "reason_codes": []},
+        scoring_profile={
+            "name": "balanced",
+            "watchlist_threshold": 40.0,
+            "trade_threshold": 60.0,
+            "high_conviction_threshold": 82.0,
+            "min_effective_coverage": 0.55,
+        },
+    )
+
+    assert overlay["scoring_profile"] == "balanced"
+    assert overlay["watchlist_score_threshold"] == 40.0
+    assert overlay["trade_score_threshold"] == 60.0
+    assert overlay["high_conviction_threshold"] == 82.0
+    assert overlay["min_effective_coverage"] == 0.55
+    assert overlay["tradable_candidates"] == ["AVGO"]

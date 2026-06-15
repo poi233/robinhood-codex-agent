@@ -259,3 +259,18 @@ def test_score_candidate_marks_insufficient_data_when_effective_coverage_is_low(
     assert "missing_component:technical" in score["warnings"]
     assert "missing_component:kronos" in score["warnings"]
     assert "missing_component:catalyst" in score["warnings"]
+
+
+def test_score_candidate_uses_profile_min_effective_coverage_when_provided() -> None:
+    score = score_candidate(
+        symbol="AVGO",
+        dsa={"selected_candidates": [{"symbol": "AVGO", "score": 70}]},
+        kronos={"symbols": {"AVGO": {"signal": "neutral", "confidence": 0.5}}},
+        technical={"symbols": {"AVGO": {"technical_action": "promote"}}},
+        quote={"symbols": {"AVGO": {"score": 64.77}}},
+        catalyst={"symbols": {"AVGO": {"status": "completed"}}},
+        min_effective_coverage=0.95,
+    )
+
+    assert score["coverage"] < 0.95
+    assert score["score_status"] == "insufficient_data"

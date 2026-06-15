@@ -9,6 +9,7 @@ from typing import Any
 from trading_agent.core.context import build_runtime_paths
 from trading_agent.core.io import read_json, write_json
 from trading_agent.core.time import PT
+from trading_agent.planner.scoring_profiles import DEFAULT_SCORING_PROFILE, load_scoring_profile
 
 
 def _read_json_or_empty(path: Path) -> dict[str, Any]:
@@ -58,7 +59,9 @@ def build_premarket_diagnostics(
     data_status_summary: dict[str, Any] | None = None,
     catalyst_snapshot: dict[str, Any] | None = None,
     technical_signals: dict[str, Any] | None = None,
+    scoring_profile: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
+    scoring_profile = dict(scoring_profile or DEFAULT_SCORING_PROFILE)
     ranked_items = _ranked_candidates(candidate_scores)
     scored_items = [
         (symbol, payload)
@@ -111,8 +114,14 @@ def build_premarket_diagnostics(
     watchlist_candidates = list(risk_overlay.get("watchlist_candidates") or [])
     tradable_candidates = list(risk_overlay.get("tradable_candidates") or [])
     scored_candidate_count = len(scored_items)
-    watchlist_threshold = _as_float(risk_overlay.get("watchlist_score_threshold"), 35.0) or 35.0
-    trade_threshold = _as_float(risk_overlay.get("trade_score_threshold"), 50.0) or 50.0
+    watchlist_threshold = _as_float(
+        risk_overlay.get("watchlist_score_threshold"),
+        _as_float(scoring_profile.get("watchlist_threshold"), DEFAULT_SCORING_PROFILE["watchlist_threshold"]),
+    ) or DEFAULT_SCORING_PROFILE["watchlist_threshold"]
+    trade_threshold = _as_float(
+        risk_overlay.get("trade_score_threshold"),
+        _as_float(scoring_profile.get("trade_threshold"), DEFAULT_SCORING_PROFILE["trade_threshold"]),
+    ) or DEFAULT_SCORING_PROFILE["trade_threshold"]
 
     warnings: list[str] = []
     if unmapped_technical_actions:
@@ -169,8 +178,17 @@ def build_premarket_diagnostics(
             "min": round(min(scores), 2) if scores else None,
         },
         "thresholds": {
+            "scoring_profile": scoring_profile.get("name", DEFAULT_SCORING_PROFILE["name"]),
             "watchlist_threshold": watchlist_threshold,
             "trade_threshold": trade_threshold,
+            "high_conviction_threshold": _as_float(
+                risk_overlay.get("high_conviction_threshold"),
+                _as_float(scoring_profile.get("high_conviction_threshold"), DEFAULT_SCORING_PROFILE["high_conviction_threshold"]),
+            ),
+            "min_effective_coverage": _as_float(
+                risk_overlay.get("min_effective_coverage"),
+                _as_float(scoring_profile.get("min_effective_coverage"), DEFAULT_SCORING_PROFILE["min_effective_coverage"]),
+            ),
         },
         "component_coverage": component_coverage,
         "unmapped_technical_actions": unmapped_technical_actions,
@@ -198,6 +216,7 @@ def build_premarket_diagnostics_from_paths(agent_root: Path, run_date: str) -> d
         data_status_summary=_read_json_or_empty(paths.data_status_summary_path),
         catalyst_snapshot=_read_json_or_empty(paths.catalyst_snapshot_path),
         technical_signals=_read_json_or_empty(paths.technical_signals_path),
+        scoring_profile=load_scoring_profile(paths.config_dir),
     )
     write_json(paths.premarket_diagnostics_path, payload)
     return payload

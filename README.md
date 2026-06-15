@@ -127,6 +127,7 @@ then call the Python package.
 src/config/
   allowlist.txt                  emergency fallback symbols
   policy_profiles.json           deterministic intraday policy profiles
+  scoring_profiles.yaml          premarket watchlist/trade/coverage thresholds
   risk.md                        human-readable hard risk rules
   risk_tiers.json                machine-readable notional caps by tier
   runtime.env                    default mode, model, tier, layer flags
@@ -376,8 +377,12 @@ Deterministic versus reasoning boundaries:
 - Candidate-level diagnostics include `score_status`, `coverage`, `missing_components`, and
   `warnings`. Low effective coverage is marked as `insufficient_data` instead of being treated as a
   bearish read.
+- `src/config/scoring_profiles.yaml` controls premarket watchlist/trade thresholds and minimum
+  effective coverage. `SCORING_PROFILE` selects the active profile and defaults to the YAML file's
+  `default_profile`.
 - `risk_overlay.json` uses a lower watchlist threshold than the trade threshold by default
-  (`35` versus `50`). If scored candidates exist but none clear the trade threshold, the overlay
+  (`35` versus `50` in the default `aggressive_growth` scoring profile). If scored candidates exist
+  but none clear the trade threshold, the overlay
   keeps them in `today_watchlist`, leaves `allowed_actions=[]`, and records
   `no_tradable_candidates_above_threshold` instead of `no_scored_candidates`.
 - `daily_plan.json.plan_state` semantics:

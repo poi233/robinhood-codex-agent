@@ -44,11 +44,21 @@ def test_premarket_diagnostics_identifies_missing_catalyst_scores_and_thresholds
         data_status_summary={"execution_blocking": False, "reason_codes": []},
         catalyst_snapshot={"symbols": {"AVGO": {"status": "completed"}}},
         technical_signals={"symbols": {"AVGO": {"technical_action": "promote"}}},
+        scoring_profile={
+            "name": "balanced",
+            "watchlist_threshold": 40.0,
+            "trade_threshold": 60.0,
+            "high_conviction_threshold": 82.0,
+            "min_effective_coverage": 0.55,
+        },
     )
 
     assert payload["missing_catalyst_score_count"] == 1
     assert payload["top_candidate"] == "AVGO"
     assert payload["thresholds"]["trade_threshold"] == 50.0
+    assert payload["thresholds"]["scoring_profile"] == "balanced"
+    assert payload["thresholds"]["high_conviction_threshold"] == 82.0
+    assert payload["thresholds"]["min_effective_coverage"] == 0.55
     assert payload["score_status_counts"]["scored"] == 1
     assert payload["component_coverage"]["technical"] == 1
 
