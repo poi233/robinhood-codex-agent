@@ -8,8 +8,10 @@
   <string>com.example.robinhood-codex-agent.premarket</string>
   <key>ProgramArguments</key>
   <array>
-    <string>/bin/bash</string>
-    <string>__REPO_ROOT__/src/scripts/entrypoints/run_premarket.sh</string>
+    <string>__REPO_ROOT__/.venv/bin/python</string>
+    <string>-m</string>
+    <string>trading_agent</string>
+    <string>premarket</string>
   </array>
   <key>StartCalendarInterval</key>
   <dict>
