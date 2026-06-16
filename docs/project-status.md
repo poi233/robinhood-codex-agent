@@ -1,7 +1,7 @@
 # 项目状态总表 — 做了什么 / 没做什么
 
 > 最后更新：2026-06-15
-> 范围：`src/trading_agent/`（约 6500 行 Python）+ 配置 + 编排 + 入口 + 测试（275 passed）
+> 范围：`src/trading_agent/`（约 6500 行 Python）+ 配置 + 编排 + 入口 + 测试（282 passed）
 > 用途：**单一权威的"现状"文档**，按子系统逐块说明已实现与未实现。未来要做的事另见
 > [`roadmap.md`](./roadmap.md)。
 >
@@ -97,10 +97,14 @@
   yfinance I/O-bound 并发收益大。
 - `symbols=` 覆盖参数：可只跑 active watchlist。
 - 失败容忍：单 symbol 失败记 `partial`，不拖垮整批。
+- **（roadmap D2，部分完成）** 新增 `data/ohlcv_cache.py`：1w/1d 两个长周期 timeframe 跨 run-date 缓存到
+  `runtime/cache/ohlcv/<symbol>/<timeframe>.json`，每天只拉短尾增量（1d 用 5 天窗口，1w 用 1 个月窗口）
+  而不是全量 1y/3y；重叠 bar 收盘价偏差超 1% 时判定为 split/dividend 调整，整份缓存失效重建。
+  `ENABLE_OHLCV_CACHE`（默认 1）控制开关，`doctor` 回显。1h/15m 不缓存。
 
 **没做**
-- 没有跨 run-date 的 OHLCV 缓存复用（每天仍重新拉同样的历史 bar）。
-- 没有 `yf.download` 批量单请求（当前是每 symbol 并发单独请求；并发已大幅缓解，但非最优）。
+- `yf.download` 批量单请求未做（当前仍是每 symbol 并发单独请求；并发 + 跨日缓存已大幅缓解请求量，
+  batch 拉取的 period 限制/响应 shape 差异比单独做缓存更复杂，留给以后需要时再评估）。
 
 ### 5. 信号层（`signals/`）
 
@@ -280,6 +284,7 @@
 | **P5-B4** 数据可追溯 | `docs/strategy-changelog.md` + `list_strategy_ids()` + 配套测试 | 见 git log |
 | **P5-C2** 观测 | `premarket_diagnostics.json` 新增 theme/speculative 集中度诊断 + 可配置 cap | 见 git log |
 | **P5-C1** 可视化 | `dashboard/` 包 + `dashboard` 子命令（Streamlit，视觉未人工验证） | 见 git log |
+| **P5-D2** 工程优化 | `data/ohlcv_cache.py`：1w/1d 跨日缓存 + split/dividend 失效策略（batch 拉取未做） | 见 git log |
 
 ---
 
@@ -293,8 +298,8 @@
   下一批是 C 阶段（theme 诊断 + 只读 dashboard）。
 - **C 只读可视化与观测**：✅ 全部完成（C1/C2，见上方 P5-C1/P5-C2；C2 见第 6 节，C1 见第 14 节）。
   C1 的页面视觉效果尚未人工核实——见第 14 节"没做/注意"。
-- **D 工程优化**：market_feed 跨日缓存/batch、Kronos batch 推理、paper 部分成交模型。
-  （DSA/Technical token 优化已完成，见上方 P4 与 roadmap D1。）
+- **D 工程优化**：Kronos batch 推理（D3，需接口确认）、paper 部分成交模型（D4）。
+  （DSA/Technical token 优化已完成见 P4/D1；market_feed 跨日缓存已完成见 P5-D2，batch 拉取部分未做。）
 - **E 数据驱动校准（阻塞 2–3 周 paper）**：forward/benchmark returns + entry-zone 命中率 +
   component attribution、评分/价格 setup 权重校准、near-miss tracking、bid/ask/spread 成交质量。
 - **F 后期/故意推后**：strategy compare、review/live 真实下单接线、dashboard config editor。

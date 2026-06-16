@@ -145,6 +145,42 @@ class PremarketOrchestrationTests(unittest.TestCase):
 
         self.assertEqual(collect_market_context.call_count, 1)
         self.assertFalse(collect_market_context.call_args.kwargs["mock"])
+        self.assertEqual(
+            collect_market_context.call_args.kwargs["cache_dir"].resolve(),
+            (root / "runtime" / "cache" / "ohlcv").resolve(),
+        )
+
+    def test_ohlcv_cache_disabled_via_env_flag(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            for dirname in ("config", "scripts", "state", "logs", "reports"):
+                (root / dirname).mkdir()
+            (root / "src" / "config").mkdir(parents=True)
+            (root / "src" / "config" / "universe.txt").write_text("NVDA\n", encoding="utf-8")
+
+            with mock.patch.object(premarket_module, "_is_weekday_pt", return_value=True), \
+                mock.patch.object(premarket_module, "collect_market_context") as collect_market_context, \
+                mock.patch.object(premarket_module, "run_codex_prompt", return_value=0), \
+                mock.patch.object(premarket_module, "_write_kronos_signals"):
+                original_cwd = os.getcwd()
+                os.chdir(root)
+                try:
+                    with mock.patch.dict(
+                        premarket_module.os.environ,
+                        {
+                            "ENABLE_OHLCV_CACHE": "0",
+                            "ENABLE_DSA_SIGNAL_LAYER": "0",
+                            "ENABLE_KRONOS_SIGNAL_LAYER": "0",
+                            "ENABLE_TECHNICAL_SIGNAL_LAYER": "0",
+                            "ALLOW_WEEKEND_RUN": "1",
+                        },
+                        clear=False,
+                    ):
+                        premarket_module.run_premarket_pipeline(dry_run=False)
+                finally:
+                    os.chdir(original_cwd)
+
+        self.assertIsNone(collect_market_context.call_args.kwargs["cache_dir"])
 
     def test_candidate_quote_and_tradability_stages_do_not_call_codex_prompts(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

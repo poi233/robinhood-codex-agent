@@ -242,6 +242,7 @@ def run_premarket_pipeline(*, dry_run: bool) -> int:
             timeframes=timeframes,
             news_limit=news_limit,
             mock=dry_run,
+            cache_dir=paths.ohlcv_cache_dir if os.environ.get("ENABLE_OHLCV_CACHE", "1") == "1" else None,
         )
 
     def run_dsa() -> None:

@@ -27,6 +27,7 @@ class RuntimePaths:
     paper_dir: Path
     archive_dir: Path
     market_feed_dir: Path
+    ohlcv_cache_dir: Path
     dsa_signals_path: Path
     kronos_signals_path: Path
     technical_signals_path: Path
@@ -90,6 +91,7 @@ def build_runtime_paths(agent_root: Path, *, run_date: str | None = None) -> Run
     paper_dir = run_state_dir / "paper"
     archive_dir = run_state_dir / "archive"
     market_feed_dir = _resolve_env_path(agent_root, "MARKET_FEED_DIR", run_state_dir / "market_feed")
+    ohlcv_cache_dir = _resolve_env_path(agent_root, "OHLCV_CACHE_DIR", runtime_dir / "cache" / "ohlcv")
     return RuntimePaths(
         agent_root=agent_root,
         src_dir=src_dir,
@@ -109,6 +111,7 @@ def build_runtime_paths(agent_root: Path, *, run_date: str | None = None) -> Run
         paper_dir=paper_dir,
         archive_dir=archive_dir,
         market_feed_dir=market_feed_dir,
+        ohlcv_cache_dir=ohlcv_cache_dir,
         dsa_signals_path=_resolve_env_path(agent_root, "DSA_SIGNALS_PATH", signals_dir / "dsa_signals.json"),
         kronos_signals_path=_resolve_env_path(agent_root, "KRONOS_SIGNALS_PATH", signals_dir / "kronos_signals.json"),
         technical_signals_path=_resolve_env_path(agent_root, "TECHNICAL_SIGNALS_PATH", signals_dir / "technical_signals.json"),

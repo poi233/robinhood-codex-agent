@@ -33,7 +33,7 @@
 | **C 只读可视化与观测** | C1 | Dashboard MVP（Streamlit 只读） | docx | ✅ **已完成**（2026-06-15，视觉未验证） |
 | | C2 | theme exposure / speculative cap 诊断 | docx | ✅ **已完成**（2026-06-15） |
 | **D 工程优化 · 不阻塞** | D1 | DSA/Technical token 优化 | design doc | ✅ **已完成**（2026-06-15，见下方实现记录） |
-| | D2 | market_feed 跨日缓存 / batch | 旧 R4 | ✅ 可立即做 |
+| | D2 | market_feed 跨日缓存 / batch | 旧 R4 | 🟡 部分完成（2026-06-15，缓存做了，batch 未做） |
 | | D3 | Kronos batch 推理 | 旧 R5 | ✅ 可立即做（需接口确认） |
 | | D4 | paper 部分成交模型 | 旧 R6 + docx P3 | ✅ 可立即做 |
 | **E 数据驱动校准** | E1 | replay 校准：forward/benchmark returns + 命中率 + attribution | 旧 R1 + docx P1 | ⏳ 阻塞于 2–3 周 paper 数据 |
@@ -378,20 +378,36 @@ speculative 占比分别有独立 cap）；阈值通过 `scoring_profiles.yaml` 
 
 ---
 
-## D2 — market_feed 跨日缓存 / batch（旧 R4）
+## D2 — market_feed 跨日缓存 / batch（旧 R4） — 部分完成（2026-06-15，跨日缓存已做，batch 拉取未做）
 
 **目标**：进一步降低 yfinance 调用量与延迟（并发已做，缓存与 batch 是下一步）。
 
-**具体步骤**：
-1. **跨日缓存**：长周期 bar（1w/1d）跨 run-date 基本不变，缓存到 `runtime/cache/ohlcv/<symbol>/<timeframe>.json`，
-   每天只拉增量。
-2. **batch 拉取**：`yf.download(tickers=[...], group_by='ticker')` 单请求多标的（注意 1h/15m period 限制）。
+**实现记录**：
+- **跨日缓存（已完成）**：新增 `data/ohlcv_cache.py`，对 1w/1d 两个长周期 timeframe 生效（1h/15m 不缓存，
+  变化太快、收益小）。缓存文件 `runtime/cache/ohlcv/<symbol>/<timeframe>.json`（新增 `RuntimePaths.
+  ohlcv_cache_dir`，`OHLCV_CACHE_DIR` 可覆盖）。逻辑：
+  - 无缓存 → 全量拉取（1d 用 `period=1y`，1w 用 `period=3y`，与原行为一致），写缓存。
+  - 有缓存 → 只拉短尾增量（1d 用 `period=5d`，1w 用 `period=1mo`），按 timestamp 去重合并，按原本的
+    lookback 窗口（1d 120 天 / 1w 180 天）裁剪过期数据，写回缓存。
+  - **失效策略**：增量窗口里和缓存重叠的 bar，如果收盘价相对变化超过 1%（`SPLIT_DIVIDEND_TOLERANCE`），
+    判定为 split/dividend 调整导致旧缓存价格不可用，整份缓存丢弃、退回全量拉取重建——直接响应 roadmap
+    "缓存要有失效策略" 的要求。
+  - `fetch_live_rows()` 新增可选 `period` 参数（默认行为不变），供增量拉取复用同一份 yfinance 调用逻辑。
+  - `collect_market_context()`/`_process_one_symbol()` 新增 `cache_dir` 参数（默认 `None` = 不缓存，
+    向后兼容现有调用方/测试）；`premarket.py` 接入时传 `paths.ohlcv_cache_dir`，受 `ENABLE_OHLCV_CACHE`
+    （默认 1）开关控制，`doctor` 回显。
+- **batch 拉取（未做）**：`yf.download(tickers=[...], group_by='ticker')` 单请求多标的没有实现——
+  跨日缓存已经把 1w/1d 的全量历史拉取频率从"每天每标的"降到"每天每标的一次短尾增量"，是更大的请求量
+  下降来源；batch 拉取要处理不同 timeframe 的 period 限制和响应 shape 差异，复杂度/风险相对单独跨日
+  缓存更高，这次先不做，需要时再单独评估。
 
-**涉及文件**：`data/market_context.py`、可能新增 `data/ohlcv_cache.py`、测试。
+**涉及文件**：新增 `data/ohlcv_cache.py`、`tests/trading_agent/data/test_ohlcv_cache.py`；改动
+`data/market_context.py`、`core/context.py`、`orchestration/premarket.py`、`cli.py`、`runtime.env`、
+对应测试文件。
 
-**验收**：同样数据下 yfinance 请求次数显著下降；data_status 仍准确。
-
-**注意**：缓存要有失效策略（split/dividend 调整后失效）；`auto_adjust=False` 下小心复权差异。
+**验收**：✅ 跨日缓存场景下 yfinance 请求次数显著下降（增量 period 远小于全量 period）；data_status
+逻辑不变，仍准确（缓存失败不影响其 try/except 包裹）。⏳ batch 拉取未做，见上方"未做"说明。282 测试
+通过（+7 新增）。
 
 ---
 

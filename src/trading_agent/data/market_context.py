@@ -65,14 +65,14 @@ def build_mock_rows(run_date: date, timeframe: str) -> list[dict[str, object]]:
     return rows
 
 
-def fetch_live_rows(symbol: str, timeframe: str) -> list[dict[str, object]]:
+def fetch_live_rows(symbol: str, timeframe: str, *, period: str | None = None) -> list[dict[str, object]]:
     try:
         import yfinance as yf
     except Exception as exc:
         raise RuntimeError(f"yfinance import failed: {exc}") from exc
 
     interval = {"1w": "1wk", "1d": "1d", "1h": "60m", "15m": "15m"}[timeframe]
-    period = {"1w": "3y", "1d": "1y", "1h": "60d", "15m": "30d"}[timeframe]
+    period = period or {"1w": "3y", "1d": "1y", "1h": "60d", "15m": "30d"}[timeframe]
     frame = yf.Ticker(symbol).history(period=period, interval=interval, auto_adjust=False)
     if frame.empty:
         raise RuntimeError(f"empty history for {symbol} {timeframe}")
@@ -169,6 +169,7 @@ def _process_one_symbol(
     news_limit: int,
     mock: bool,
     output_dir: Path,
+    cache_dir: Path | None = None,
 ) -> tuple[str, dict[str, str], bool]:
     notes: list[str] = []
     ohlcv_status = "ok"
@@ -180,7 +181,14 @@ def _process_one_symbol(
     try:
         for timeframe in timeframes:
             label = TIMEFRAME_MAP[timeframe]["label"]
-            rows = build_mock_rows(date_value, timeframe) if mock else fetch_live_rows(symbol, timeframe)
+            if mock:
+                rows = build_mock_rows(date_value, timeframe)
+            elif cache_dir is not None:
+                from trading_agent.data.ohlcv_cache import fetch_cached_rows
+
+                rows = fetch_cached_rows(symbol, timeframe, date_value, cache_dir)
+            else:
+                rows = fetch_live_rows(symbol, timeframe)
             write_json(output_dir / "ohlcv" / symbol / f"{label}.json", rows)
             write_chart(rows, output_dir / "charts" / symbol / f"{label}.png", f"{symbol} {label}")
     except Exception as exc:
@@ -226,6 +234,7 @@ def collect_market_context(
     news_limit: int,
     mock: bool,
     symbols: list[str] | None = None,
+    cache_dir: Path | None = None,
 ) -> dict[str, object]:
     date_value = date.fromisoformat(run_date)
     requested_symbols = symbols if symbols is not None else parse_universe(universe_file)
@@ -253,7 +262,7 @@ def collect_market_context(
     with ThreadPoolExecutor(max_workers=min(max_workers, max(1, len(requested_symbols)))) as executor:
         futures = {
             executor.submit(
-                _process_one_symbol, sym, date_value, run_date, timeframes, news_limit, mock, output_dir
+                _process_one_symbol, sym, date_value, run_date, timeframes, news_limit, mock, output_dir, cache_dir
             ): sym
             for sym in requested_symbols
         }
