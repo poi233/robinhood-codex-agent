@@ -1,11 +1,12 @@
 import unittest
 from datetime import datetime
 
-from trading_agent.policy.candidate_selector import RankedCandidate
+from trading_agent.policy.candidate_selector import RankedCandidate, rank_candidates
 from trading_agent.policy.models import Position
 from trading_agent.policy.models import PolicyInputs, Quote
 from trading_agent.policy.price_policy import decide_buy_price
 from trading_agent.policy.sizing_policy import decide_size
+from trading_agent.policy.technical import estimate_price_setup_score
 from trading_agent.core.time import PT
 
 
@@ -131,6 +132,132 @@ class PriceSizingPolicyTests(unittest.TestCase):
         self.assertGreater(decision.quantity, 0)
         self.assertLessEqual(decision.estimated_notional, 5.0)
         self.assertIn("theme_weight_ok", decision.reason_codes)
+
+
+class PriceSetupScoreTests(unittest.TestCase):
+    def test_in_entry_zone_with_good_rr_scores_high(self) -> None:
+        inputs = base_inputs()
+        # price=100.0, entry 99.5-100.5, stop=99.0, target=103.0 → RR=(103-100)/(100-99)=3.0
+        score = estimate_price_setup_score(inputs, "NVDA")
+        # RR 3.0 → bonus = (3.0-1.5)*20 = 30; pullback base=70+30=100
+        self.assertGreaterEqual(score, 90.0)
+
+    def test_no_trade_zone_scores_zero(self) -> None:
+        inputs = base_inputs()
+        inputs.quotes["NVDA"] = Quote(symbol="NVDA", price=100.7, previous_close=101.0, timestamp="2026-06-14T09:45:00-07:00")
+        score = estimate_price_setup_score(inputs, "NVDA")
+        self.assertEqual(score, 0.0)
+
+    def test_chase_blocked_scores_zero(self) -> None:
+        inputs = base_inputs()
+        inputs.quotes["NVDA"] = Quote(symbol="NVDA", price=101.0, previous_close=101.0, timestamp="2026-06-14T09:45:00-07:00")
+        score = estimate_price_setup_score(inputs, "NVDA")
+        self.assertEqual(score, 0.0)
+
+    def test_outside_zone_scores_low(self) -> None:
+        inputs = base_inputs()
+        # Price 98.0 — below entry zone (99.5-100.5), no breakout trigger met
+        inputs.quotes["NVDA"] = Quote(symbol="NVDA", price=98.0, previous_close=101.0, timestamp="2026-06-14T09:45:00-07:00")
+        score = estimate_price_setup_score(inputs, "NVDA")
+        self.assertEqual(score, 20.0)
+
+    def test_breakout_zone_scores_mid_range(self) -> None:
+        inputs = base_inputs()
+        # Price exactly at trigger 100.5, not in no_trade zone (100.6-100.9)
+        inputs.quotes["NVDA"] = Quote(symbol="NVDA", price=100.5, previous_close=101.0, timestamp="2026-06-14T09:45:00-07:00")
+        score = estimate_price_setup_score(inputs, "NVDA")
+        # breakout triggered; in entry zone too (99.5-100.5) → pullback wins → base 70+
+        self.assertGreaterEqual(score, 60.0)
+
+    def test_missing_watch_levels_scores_zero(self) -> None:
+        inputs = base_inputs()
+        inputs.trader_watch_levels["symbols"].pop("NVDA")
+        score = estimate_price_setup_score(inputs, "NVDA")
+        self.assertEqual(score, 0.0)
+
+    def test_price_setup_score_in_ranked_candidate(self) -> None:
+        inputs = base_inputs()
+        inputs.technical_signals = {"symbols": {"NVDA": {"setup": "pullback"}}}
+        ranked, _ = rank_candidates(inputs)
+        self.assertEqual(len(ranked), 1)
+        self.assertGreater(ranked[0].price_setup_score, 0.0)
+        # price_setup_score should be reflected in trade_readiness_score
+        self.assertGreater(ranked[0].trade_readiness_score, 0.0)
+
+    def test_in_zone_candidate_ranks_above_outside_zone_candidate(self) -> None:
+        fresh = datetime.now(tz=PT).isoformat()
+        # NVDA at 100.0 — inside entry zone (99.5-100.5), good RR
+        # AMD at 95.0 — outside both entry zone and breakout trigger
+        watch = {
+            "entry_low": 99.5,
+            "entry_high": 100.5,
+            "buy_trigger_above": 100.5,
+            "do_not_chase_above": 102.0,
+            "no_trade_low": None,
+            "no_trade_high": None,
+            "invalidation_below": 99.0,
+            "target_1": 103.0,
+            "target_2": 105.0,
+        }
+        inputs = PolicyInputs(
+            run_date="2026-06-14",
+            trading_mode="paper",
+            risk_tier=0,
+            risk_caps={"max_single_order_notional": 10000, "max_daily_notional": 40000},
+            universe=["NVDA", "AMD"],
+            today_allowlist=["NVDA", "AMD"],
+            daily_plan={
+                "date": "2026-06-14",
+                "market_regime": "normal",
+                "allowed_actions": ["small_limit_buy"],
+                "today_watchlist": ["NVDA", "AMD"],
+                "symbol_trade_rules": {
+                    "NVDA": {"max_notional": 500, "allow_buy": True},
+                    "AMD": {"max_notional": 500, "allow_buy": True},
+                },
+            },
+            candidate_scores={
+                "symbols": {
+                    "NVDA": {"total_score": 85, "components": {"technical": 80}},
+                    "AMD": {"total_score": 85, "components": {"technical": 80}},
+                }
+            },
+            risk_overlay={
+                "symbol_trade_rules": {
+                    "NVDA": {"allow_buy": True},
+                    "AMD": {"allow_buy": True},
+                }
+            },
+            trader_watch_levels={
+                "symbols": {
+                    "NVDA": {**watch},
+                    "AMD": {**watch, "entry_low": 96.0, "entry_high": 97.0, "invalidation_below": 94.0, "target_1": 100.0},
+                }
+            },
+            data_status_summary={"execution_blocking": False},
+            capital_snapshot={"sizing_buying_power": 10000.0},
+            policy_profile={"per_trade_risk_pct": 0.005, "min_reward_risk": 1.5},
+            daily_usage={},
+            account={"buying_power": 10000.0},
+            quotes={
+                "NVDA": Quote(symbol="NVDA", price=100.0, previous_close=101.0, timestamp=fresh),
+                "AMD": Quote(symbol="AMD", price=95.0, previous_close=101.0, timestamp=fresh),
+            },
+            technical_signals={
+                "symbols": {
+                    "NVDA": {"setup": "pullback"},
+                    "AMD": {"setup": "pullback"},
+                }
+            },
+        )
+        ranked, _ = rank_candidates(inputs)
+        symbols = [r.symbol for r in ranked]
+        self.assertIn("NVDA", symbols)
+        self.assertIn("AMD", symbols)
+        nvda_idx = symbols.index("NVDA")
+        amd_idx = symbols.index("AMD")
+        # NVDA in entry zone → higher price_setup_score → ranks first
+        self.assertLess(nvda_idx, amd_idx)
 
 
 if __name__ == "__main__":

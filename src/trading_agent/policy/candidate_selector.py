@@ -6,7 +6,7 @@ from datetime import date
 from trading_agent.policy.models import PolicyInputs
 from trading_agent.policy.risk import eligible_symbols, has_open_order, losing_position_exists, quote_is_fresh, quote_is_tradeable
 from trading_agent.policy.scoring import score_symbol
-from trading_agent.policy.technical import technical_symbol_payload
+from trading_agent.policy.technical import estimate_price_setup_score, technical_symbol_payload
 
 
 @dataclass(frozen=True)
@@ -18,6 +18,7 @@ class RankedCandidate:
     research_score: float
     catalyst_score: float
     liquidity_score: float
+    price_setup_score: float = 0.0  # pending calibration via replay component attribution
     reason_codes: list[str] = field(default_factory=list)
 
 
@@ -115,9 +116,12 @@ def rank_candidates(inputs: PolicyInputs) -> tuple[list[RankedCandidate], dict[s
             blocked[symbol] = reasons
             continue
         candidate_total, technical_score, research_score, catalyst_score, liquidity_score = _candidate_components(inputs, symbol)
+        pss = estimate_price_setup_score(inputs, symbol)
+        # Weights sum to 1.00; price_setup_score weight pending calibration via replay.
         trade_readiness_score = (
             0.35 * candidate_total
             + 0.25 * technical_score
+            + 0.15 * pss
             + 0.10 * liquidity_score
             + 0.10 * research_score
             + 0.05 * catalyst_score
@@ -131,6 +135,7 @@ def rank_candidates(inputs: PolicyInputs) -> tuple[list[RankedCandidate], dict[s
                 research_score=round(research_score, 2),
                 catalyst_score=round(catalyst_score, 2),
                 liquidity_score=round(liquidity_score, 2),
+                price_setup_score=round(pss, 2),
                 reason_codes=["candidate_ranked", "hard_blocks_cleared"],
             )
         )
