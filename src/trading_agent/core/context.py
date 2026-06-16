@@ -30,6 +30,8 @@ class RuntimePaths:
     dsa_signals_path: Path
     kronos_signals_path: Path
     technical_signals_path: Path
+    technical_features_path: Path
+    dsa_metrics_path: Path
     trader_watch_levels_path: Path
     daily_plan_path: Path
     daily_plan_markdown_path: Path
@@ -110,6 +112,8 @@ def build_runtime_paths(agent_root: Path, *, run_date: str | None = None) -> Run
         dsa_signals_path=_resolve_env_path(agent_root, "DSA_SIGNALS_PATH", signals_dir / "dsa_signals.json"),
         kronos_signals_path=_resolve_env_path(agent_root, "KRONOS_SIGNALS_PATH", signals_dir / "kronos_signals.json"),
         technical_signals_path=_resolve_env_path(agent_root, "TECHNICAL_SIGNALS_PATH", signals_dir / "technical_signals.json"),
+        technical_features_path=_resolve_env_path(agent_root, "TECHNICAL_FEATURES_PATH", signals_dir / "technical_features.json"),
+        dsa_metrics_path=_resolve_env_path(agent_root, "DSA_METRICS_PATH", signals_dir / "dsa_metrics.json"),
         trader_watch_levels_path=_resolve_env_path(agent_root, "TRADER_WATCH_LEVELS_PATH", planner_dir / "trader_watch_levels.json"),
         daily_plan_path=_resolve_env_path(agent_root, "DAILY_PLAN_PATH", planner_dir / "daily_plan.json"),
         daily_plan_markdown_path=_resolve_env_path(agent_root, "DAILY_PLAN_MARKDOWN_PATH", planner_dir / "daily_plan.md"),

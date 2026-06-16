@@ -23,6 +23,8 @@ from trading_agent.planner.quote_snapshot import build_candidate_quote_snapshot_
 from trading_agent.planner.risk_overlay import build_capital_snapshot, build_risk_overlay_from_paths
 from trading_agent.planner.scoring import build_candidate_scores_from_paths
 from trading_agent.planner.tradability import build_tradability_snapshot_from_paths
+from trading_agent.planner.technical_features import build_technical_features
+from trading_agent.signals.dsa_metrics import build_dsa_metrics
 from trading_agent.prompts.codex import run_codex_prompt
 from trading_agent.reporting.premarket import build_fail_closed_daily_plan, build_premarket_archive_payload, normalize_daily_plan_state
 from trading_agent.reporting.trader_watch_levels import build_trader_watch_levels
@@ -243,6 +245,19 @@ def run_premarket_pipeline(*, dry_run: bool) -> int:
         if os.environ.get("ENABLE_DSA_SIGNAL_LAYER", "1") != "1":
             append_stage_log(agent_root, run_date, "dsa", "skipped", "DSA signal layer disabled")
             return
+        if os.environ.get("ENABLE_DSA_METRICS_PRECOMPUTE", "1") == "1":
+            lookback_days = int(os.environ.get("DSA_METRICS_LOOKBACK_DAYS", "180") or "180")
+            mock = os.environ.get("DSA_USE_MOCK", "0") == "1" or dry_run
+            write_json(
+                paths.dsa_metrics_path,
+                build_dsa_metrics(
+                    universe_file=paths.config_dir / "universe.txt",
+                    meta_file=paths.config_dir / "universe_meta.json",
+                    run_date=run_date,
+                    lookback_days=lookback_days,
+                    mock=mock,
+                ),
+            )
         run_dsa_scan(agent_root, prompt_runner=run_codex_prompt)
 
     def run_kronos() -> None:
@@ -281,6 +296,12 @@ def run_premarket_pipeline(*, dry_run: bool) -> int:
                 ),
             )
             return
+        if os.environ.get("ENABLE_TECHNICAL_FEATURES_PRECOMPUTE", "1") == "1":
+            recent_bars = int(os.environ.get("TECHNICAL_RECENT_BARS", "30") or "30")
+            write_json(
+                paths.technical_features_path,
+                build_technical_features(market_feed_dir, active_symbols, run_date, recent_bars=recent_bars),
+            )
         status = run_codex_prompt("technical_research", agent_root, paths.prompts_dir / "technical" / "research.txt")
         if status != 0:
             write_json(
