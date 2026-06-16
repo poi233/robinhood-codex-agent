@@ -4,7 +4,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from trading_agent.core.config import load_env_files
+from trading_agent.core.config import RuntimeConfig, TierMisconfigurationError, load_env_files
 from trading_agent.core.context import RuntimePaths, build_runtime_paths
 from trading_agent.core.time import pt_date_string
 
@@ -64,3 +64,45 @@ class CoreRuntimeTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
             load_env_files(root)
+
+    def test_effective_risk_tier_fails_closed_for_live_mode_at_tier_4(self) -> None:
+        config = RuntimeConfig(
+            trading_mode="live",
+            codex_model="gpt-5.4-mini",
+            risk_tier=4,
+            paper_risk_tier=4,
+            market_feed_timeframes="1d",
+        )
+        with self.assertRaises(TierMisconfigurationError):
+            config.effective_risk_tier
+
+    def test_effective_risk_tier_fails_closed_for_review_mode_at_tier_4(self) -> None:
+        config = RuntimeConfig(
+            trading_mode="review",
+            codex_model="gpt-5.4-mini",
+            risk_tier=4,
+            paper_risk_tier=0,
+            market_feed_timeframes="1d",
+        )
+        with self.assertRaises(TierMisconfigurationError):
+            config.effective_risk_tier
+
+    def test_effective_risk_tier_allows_tier_4_in_paper_mode(self) -> None:
+        config = RuntimeConfig(
+            trading_mode="paper",
+            codex_model="gpt-5.4-mini",
+            risk_tier=0,
+            paper_risk_tier=4,
+            market_feed_timeframes="1d",
+        )
+        self.assertEqual(config.effective_risk_tier, 4)
+
+    def test_effective_risk_tier_allows_live_mode_below_tier_4(self) -> None:
+        config = RuntimeConfig(
+            trading_mode="live",
+            codex_model="gpt-5.4-mini",
+            risk_tier=2,
+            paper_risk_tier=4,
+            market_feed_timeframes="1d",
+        )
+        self.assertEqual(config.effective_risk_tier, 2)

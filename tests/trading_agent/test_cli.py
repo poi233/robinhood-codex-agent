@@ -61,3 +61,31 @@ class PackageCliTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, msg=result.stderr)
         self.assertIn("TRADING_MODE              = review", result.stdout)
         self.assertIn("effective_risk_tier now   = 2", result.stdout)
+
+    def test_doctor_fails_closed_when_live_mode_has_tier_4(self) -> None:
+        import os
+        env = {**os.environ, "PYTHONPATH": str(REPO_ROOT / "src"), "TRADING_MODE": "live", "RISK_TIER": "4"}
+        result = subprocess.run(
+            [sys.executable, "-m", "trading_agent", "doctor"],
+            cwd=REPO_ROOT,
+            capture_output=True,
+            text=True,
+            check=False,
+            env=env,
+        )
+        self.assertEqual(result.returncode, 2, msg=result.stderr)
+        self.assertIn("FAIL-CLOSED", result.stdout)
+
+    def test_doctor_does_not_fail_closed_in_paper_mode_at_tier_4(self) -> None:
+        import os
+        env = {**os.environ, "PYTHONPATH": str(REPO_ROOT / "src"), "TRADING_MODE": "paper", "PAPER_RISK_TIER": "4"}
+        result = subprocess.run(
+            [sys.executable, "-m", "trading_agent", "doctor"],
+            cwd=REPO_ROOT,
+            capture_output=True,
+            text=True,
+            check=False,
+            env=env,
+        )
+        self.assertEqual(result.returncode, 0, msg=result.stderr)
+        self.assertIn("effective_risk_tier now   = 4", result.stdout)

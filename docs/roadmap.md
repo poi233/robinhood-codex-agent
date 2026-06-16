@@ -24,7 +24,7 @@
 | 阶段 | 项 | 主题 | 来源 | 状态 / 阻塞 |
 |---|---|---|---|---|
 | **A 立即做 · 正确性与安全闸** | A1 | env 加载早于 early gate | docx | ✅ **已完成**（2026-06-15） |
-| | A2 | Tier 4 非 paper → fail-closed | docx | ✅ 可立即做（低风险） |
+| | A2 | Tier 4 非 paper → fail-closed | docx | ✅ **已完成**（2026-06-15） |
 | | A3 | 配置化魔数 + doctor/runtime_block 默认值 | 旧 R3 + docx | ✅ 可立即做 |
 | **B 数据可追溯基建（P0）** | B1 | run_manifest（每次 lifecycle run） | docx | ✅ 可立即做 · 时间敏感 |
 | | B2 | strategy_registry + registry.py | docx | ✅ 可立即做 |
@@ -94,19 +94,30 @@
 
 ---
 
-## A2 — Tier 4 非 paper → fail-closed
+## A2 — Tier 4 非 paper → fail-closed — ✅ 已完成（2026-06-15）
 
 **目标**：`RISK_TIER=4`（paper_max，$100k 单 / $400k 日）若被误用到 live/review，会拿到 paper 级 caps，
 是真实资金风险。
 
-**具体步骤**：
-1. 在 tier 解析处加 guard：若 `trading_mode != paper` 且 `effective_risk_tier == 4` → fail closed
-   （抛错或强制 block），绝不放行。
-2. 加 fail-closed 测试。
+**实现记录**：
+- `core/config.py` 新增 `TierMisconfigurationError(RuntimeError)` 和常量 `PAPER_ONLY_RISK_TIER = 4`；
+  `RuntimeConfig.effective_risk_tier` 属性在 `trading_mode != "paper" and risk_tier == 4` 时直接抛出该异常，
+  不返回任何 tier 值。
+- 确认了异常传播路径：`effective_risk_tier` 在 `intraday.py`、`premarket.py`（`run_risk_overlay` 闭包，非
+  advisory 阶段，不被 `_run_advisory` 吞掉）两处被直接访问、无 try/except 包裹，异常会一路冒泡到
+  `run_intraday_pipeline` / `run_premarket_pipeline` 顶层，再到 `cli.py` 的 `main()`，最终让进程崩溃退出
+  ——符合"抛错或强制 block，绝不放行"的要求。
+- `cli.py` 的 `_run_doctor()` 是例外：作为只读诊断工具，捕获 `TierMisconfigurationError` 后不让整个命令崩溃，
+  而是把对应行替换为 `FAIL-CLOSED: ...` 提示文本，并将退出码改为 `2`（而不是 `0`），同样不会"放行"，
+  只是给出更友好的诊断输出。
+- paper 模式不受影响：`effective_risk_tier` 在 `trading_mode == "paper"` 时跳过 guard，照常返回
+  `paper_risk_tier`。
 
-**涉及文件**：`core/config.py`（`effective_risk_tier` 解析）/ `policy/risk.py`、测试。
+**涉及文件**：`core/config.py`、`cli.py`、`tests/trading_agent/core/test_runtime.py`、`tests/trading_agent/test_cli.py`、
+`tests/trading_agent/orchestration/test_intraday_policy_integration.py`。
 
-**验收**：`TRADING_MODE` 非 paper 且 tier=4 时进程 fail-closed；paper 模式不受影响。
+**验收**：✅ `TRADING_MODE` 非 paper 且 tier=4 时进程 fail-closed（`intraday`/`premarket` 抛异常崩溃，
+`doctor` 退出码 2 并打印 FAIL-CLOSED）；paper 模式不受影响。238 测试通过（+7 新增）。
 
 ---
 

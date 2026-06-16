@@ -6,6 +6,7 @@ from datetime import datetime
 from pathlib import Path
 from unittest import mock
 
+from trading_agent.core.config import TierMisconfigurationError
 from trading_agent.core.time import PT
 from trading_agent.orchestration import intraday as intraday_module
 from trading_agent.paper.broker import apply_paper_intent
@@ -156,6 +157,25 @@ class IntradayPolicyIntegrationTests(unittest.TestCase):
 
         self.assertEqual(status, 0)
         self.assertEqual(decisions[0]["decision"], "calendar_skip")
+
+    def test_intraday_fails_closed_when_live_mode_has_tier_4(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            original_cwd = os.getcwd()
+            os.chdir(root)
+            try:
+                with mock.patch.object(intraday_module, "_is_weekday_pt", return_value=True), \
+                    mock.patch.object(intraday_module, "_is_intraday_window_pt", return_value=True), \
+                    mock.patch.object(intraday_module, "pt_date_string", return_value="2026-06-14"), \
+                    mock.patch.dict(
+                        intraday_module.os.environ,
+                        {"TRADING_MODE": "live", "RISK_TIER": "4"},
+                        clear=False,
+                    ):
+                    with self.assertRaises(TierMisconfigurationError):
+                        intraday_module.run_intraday_pipeline(dry_run=False)
+            finally:
+                os.chdir(original_cwd)
 
     def test_intraday_uses_policy_and_does_not_call_codex_prompt(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

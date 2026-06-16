@@ -5,6 +5,13 @@ from dataclasses import dataclass
 from pathlib import Path
 
 
+PAPER_ONLY_RISK_TIER = 4
+
+
+class TierMisconfigurationError(RuntimeError):
+    """Raised when a paper-only risk tier would apply to a non-paper trading mode."""
+
+
 @dataclass(frozen=True)
 class RuntimeConfig:
     trading_mode: str
@@ -15,7 +22,18 @@ class RuntimeConfig:
 
     @property
     def effective_risk_tier(self) -> int:
-        """Return tier appropriate for the active trading_mode."""
+        """Return tier appropriate for the active trading_mode.
+
+        Tier 4 (paper_max, $100k/$400k caps) is only safe to apply in paper
+        mode. If trading_mode is live/review and risk_tier resolves to 4
+        (e.g. an operator left RISK_TIER=4 set from prior paper testing),
+        fail closed instead of handing real-money trades paper-sized caps.
+        """
+        if self.trading_mode != "paper" and self.risk_tier == PAPER_ONLY_RISK_TIER:
+            raise TierMisconfigurationError(
+                f"RISK_TIER={PAPER_ONLY_RISK_TIER} (paper_max) is not allowed when "
+                f"TRADING_MODE={self.trading_mode!r}; this tier is paper-only."
+            )
         return self.paper_risk_tier if self.trading_mode == "paper" else self.risk_tier
 
 

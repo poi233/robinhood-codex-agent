@@ -1,7 +1,7 @@
 # 项目状态总表 — 做了什么 / 没做什么
 
 > 最后更新：2026-06-15
-> 范围：`src/trading_agent/`（约 6500 行 Python）+ 配置 + 编排 + 入口 + 测试（231 passed）
+> 范围：`src/trading_agent/`（约 6500 行 Python）+ 配置 + 编排 + 入口 + 测试（238 passed）
 > 用途：**单一权威的"现状"文档**，按子系统逐块说明已实现与未实现。未来要做的事另见
 > [`roadmap.md`](./roadmap.md)。
 >
@@ -48,6 +48,11 @@
   三个 lifecycle 入口现在第一行就调用它，早于 `ALLOW_WEEKEND_RUN`/`ALLOW_OUTSIDE_MARKET_TEST`/
   `ALLOW_KILL_SWITCH_PAPER_TEST` 等任何 skip-gate 判断；只在 `runtime.env.local` 设置、未 export
   到 shell 的 override 现在对直接 `python -m trading_agent` 调用同样生效。
+- **（roadmap A2）** `RuntimeConfig.effective_risk_tier` 在 `trading_mode != "paper"` 且解析到
+  tier 4（`paper_max`，$100k/$400k）时抛出 `TierMisconfigurationError`，不再放行；该属性在
+  `intraday.py`/`premarket.py`（`run_risk_overlay`）均无 try/except 包裹，异常会一路冒泡到进程崩溃。
+  `doctor` 单独捕获该异常，打印 `FAIL-CLOSED: ...` 并把退出码改为 `2`（而不是让诊断命令本身崩溃）。
+  paper 模式不受影响。
 
 **没做 / 注意**
 - `doctor` 默认值字符串仍写 `'10'`（DSA/TECHNICAL subagents 旧默认），实际 runtime.env 已是 3；
@@ -215,6 +220,7 @@
 | **P3** 成本速度 | market_feed 并发；intraday quote 瘦身；subagents 10→3 | `ebd756a` |
 | **P4** Token 优化 | technical_features.py + dsa_metrics.py 预计算；technical/DSA prompt 改读特征包/横截面表；env flag + doctor 回显 | `bd456f7` `1b1a079` |
 | **P5-A1** 正确性 | env 加载提前到 skip-gate 判断之前（premarket/intraday/postmarket） | `7f69775` |
+| **P5-A2** 正确性 | Tier 4 非 paper fail-closed（`TierMisconfigurationError` + doctor 退出码 2） | 见 git log |
 
 ---
 
@@ -222,8 +228,8 @@
 
 按 roadmap 全局阶段归类（详细步骤/验收/依赖见 [`roadmap.md`](./roadmap.md)）：
 
-- **A 正确性与安全闸**：Tier 4 非 paper fail-closed；配置化魔数（`selected[:20]`、`[:8]`、
-  doctor/runtime_block 默认值）。（A1 env 加载提前已完成，见上方 P5-A1。）
+- **A 正确性与安全闸**：配置化魔数（`selected[:20]`、`[:8]`、doctor/runtime_block 默认值，A3）。
+  （A1 env 加载提前、A2 Tier 4 fail-closed 已完成，见上方 P5-A1/P5-A2。）
 - **B 数据可追溯基建（P0）**：run_manifest（每次 lifecycle run）、strategy_registry、
   analytics.db builder、strategy-changelog。
 - **C 只读可视化与观测**：Strategy Lab dashboard（Streamlit 只读）、theme/speculative 集中度诊断。

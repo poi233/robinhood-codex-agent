@@ -25,10 +25,19 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def _run_doctor(agent_root: Path) -> int:
-    from trading_agent.core.config import load_runtime_config
+    from trading_agent.core.config import TierMisconfigurationError, load_runtime_config
 
     config = load_runtime_config(agent_root)
     env = os.environ
+
+    tier_misconfigured = False
+    try:
+        effective_tier_line = (
+            f"  effective_risk_tier now   = {config.effective_risk_tier}  (based on TRADING_MODE)"
+        )
+    except TierMisconfigurationError as exc:
+        tier_misconfigured = True
+        effective_tier_line = f"  effective_risk_tier now   = FAIL-CLOSED: {exc}"
 
     risk_tiers_path = agent_root / "src" / "config" / "risk_tiers.json"
     risk_tiers: dict = {}
@@ -53,7 +62,7 @@ def _run_doctor(agent_root: Path) -> int:
         "  --- Risk Tiers ---",
         f"  RISK_TIER (live/review)   = {config.risk_tier}  [{tier_caps(config.risk_tier)}]",
         f"  PAPER_RISK_TIER           = {config.paper_risk_tier}  [{tier_caps(config.paper_risk_tier)}]",
-        f"  effective_risk_tier now   = {config.effective_risk_tier}  (based on TRADING_MODE)",
+        effective_tier_line,
         "",
         "  --- Codex ---",
         f"  CODEX_MODEL               = {env.get('CODEX_MODEL', 'gpt-5.4-mini')}",
@@ -83,7 +92,7 @@ def _run_doctor(agent_root: Path) -> int:
     ]
 
     print("\n".join(lines))
-    return 0
+    return 2 if tier_misconfigured else 0
 
 
 def _run_replay(agent_root: Path, *, since: str | None, until: str | None, output: str | None) -> int:
