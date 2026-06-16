@@ -198,6 +198,8 @@ class IntradayPolicyIntegrationTests(unittest.TestCase):
                     paper_orders_written = (paper_dir / "orders.jsonl").exists()
                     day_start_written = (paper_dir / "day_start.json").exists()
                     equity_curve_written = (paper_dir / "equity_curve.jsonl").exists()
+                    manifest_path = root / "runtime" / "state" / "runs" / "2026-06-14" / "run_manifest.json"
+                    manifest_written = manifest_path.exists()
             finally:
                 os.chdir(original_cwd)
 
@@ -210,6 +212,7 @@ class IntradayPolicyIntegrationTests(unittest.TestCase):
         self.assertTrue(paper_orders_written)
         self.assertTrue(day_start_written)
         self.assertTrue(equity_curve_written)
+        self.assertTrue(manifest_written)
         notify.assert_called_once()
         self.assertEqual(notify.call_args.kwargs["event_tag"], "TRADE_EXECUTED")
 

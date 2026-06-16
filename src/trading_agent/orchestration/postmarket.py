@@ -12,6 +12,7 @@ from trading_agent.notifications.email import send_trade_email_notification
 from trading_agent.paper.broker import record_paper_day_end
 from trading_agent.prompts.codex import run_codex_prompt
 from trading_agent.reporting.postmarket import build_paper_postmarket_summary, build_paper_postmarket_zh_report
+from trading_agent.strategy.manifest import build_run_manifest
 
 
 def _is_weekday_pt() -> bool:
@@ -26,6 +27,7 @@ def run_postmarket_pipeline(*, dry_run: bool) -> int:
         return 0
     paths = build_runtime_paths(agent_root)
     runtime = load_runtime_config(agent_root)
+    build_run_manifest(agent_root, paths.run_date)
     if runtime.trading_mode == "paper":
         record_paper_day_end(agent_root, run_date=paths.run_date)
         paper_summary = build_paper_postmarket_summary(

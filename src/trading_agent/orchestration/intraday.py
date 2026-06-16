@@ -17,6 +17,7 @@ from trading_agent.policy.engine import generate_order_intent
 from trading_agent.policy.loaders import load_policy_inputs
 from trading_agent.policy.models import PolicyDecision
 from trading_agent.prompts.codex import run_codex_prompt
+from trading_agent.strategy.manifest import build_run_manifest
 
 
 def _append_local_decision(agent_root: Path, decision: str, reason: str, *, run_date: str | None = None) -> None:
@@ -68,6 +69,7 @@ def run_intraday_pipeline(*, dry_run: bool) -> int:
         return 0
     runtime = load_runtime_config(agent_root)
     effective_risk_tier = runtime.effective_risk_tier
+    build_run_manifest(agent_root, run_date)
     paper_starting_cash = float(os.environ.get("PAPER_STARTING_CASH", "400000"))
     inputs = load_policy_inputs(
         agent_root,

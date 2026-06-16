@@ -214,8 +214,16 @@ class PremarketOrchestrationTests(unittest.TestCase):
                 finally:
                     os.chdir(original_cwd)
 
+            manifest_paths = list((root / "runtime" / "state" / "runs").glob("*/run_manifest.json"))
+            manifest = read_json(manifest_paths[0]) if manifest_paths else None
+
         self.assertEqual(collect_market_context.call_count, 1)
         self.assertTrue(collect_market_context.call_args.kwargs["mock"])
+        self.assertEqual(len(manifest_paths), 1)
+        self.assertIsNotNone(manifest)
+        self.assertEqual(manifest["strategy_id"], "baseline_v1")
+        self.assertIn("config_hash", manifest)
+        self.assertIn("git_commit", manifest)
 
     def test_weekend_gate_honors_runtime_env_local_override(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

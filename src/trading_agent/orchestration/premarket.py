@@ -37,6 +37,7 @@ from trading_agent.core.config import load_env_files, load_runtime_config
 from trading_agent.data.universe import parse_active_watchlist
 from trading_agent.signals.dsa import run_dsa_scan
 from trading_agent.signals.technical_fallback import build_failed_technical_payload
+from trading_agent.strategy.manifest import build_run_manifest
 
 
 @dataclass
@@ -175,6 +176,7 @@ def run_premarket_pipeline(*, dry_run: bool) -> int:
     market_feed_dir = paths.market_feed_dir
     timeframes = [value.strip() for value in runtime.market_feed_timeframes.split(",") if value.strip()]
     news_limit = int(os.environ.get("MARKET_FEED_NEWS_LIMIT", "5"))
+    build_run_manifest(agent_root, run_date)
 
     def run_stage(stage: str, fn: callable, *, snapshot: bool = True) -> None:
         started = time.perf_counter()

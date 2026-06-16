@@ -94,6 +94,8 @@ class PostmarketPaperSnapshotTests(unittest.TestCase):
                 day_end = json.loads((paper_dir / "day_end.json").read_text(encoding="utf-8"))
                 zh_report = (root / "runtime" / "logs" / "runs" / "2026-06-14" / "reports" / "postmarket_summary.md").read_text(encoding="utf-8")
                 curve = [json.loads(line) for line in (paper_dir / "equity_curve.jsonl").read_text(encoding="utf-8").splitlines()]
+                manifest_path = root / "runtime" / "state" / "runs" / "2026-06-14" / "run_manifest.json"
+                manifest = json.loads(manifest_path.read_text(encoding="utf-8")) if manifest_path.exists() else None
             finally:
                 os.chdir(original_cwd)
 
@@ -102,6 +104,9 @@ class PostmarketPaperSnapshotTests(unittest.TestCase):
         self.assertEqual(day_end["positions_market_value"], 10.0)
         self.assertEqual(day_end["total_equity"], 25.0)
         self.assertEqual(curve[-1]["event"], "day_end")
+        self.assertIsNotNone(manifest)
+        self.assertEqual(manifest["run_date"], "2026-06-14")
+        self.assertEqual(manifest["strategy_id"], "baseline_v1")
         self.assertIn("# 盘后复盘报告 - 2026-06-14", zh_report)
         self.assertIn("## 账户概览", zh_report)
         notify.assert_called_once()

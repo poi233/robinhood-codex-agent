@@ -26,7 +26,7 @@
 | **A 立即做 · 正确性与安全闸** | A1 | env 加载早于 early gate | docx | ✅ **已完成**（2026-06-15） |
 | | A2 | Tier 4 非 paper → fail-closed | docx | ✅ **已完成**（2026-06-15） |
 | | A3 | 配置化魔数 + doctor/runtime_block 默认值 | 旧 R3 + docx | ✅ **已完成**（2026-06-15） |
-| **B 数据可追溯基建（P0）** | B1 | run_manifest（每次 lifecycle run） | docx | ✅ 可立即做 · 时间敏感 |
+| **B 数据可追溯基建（P0）** | B1 | run_manifest（每次 lifecycle run） | docx | ✅ **已完成**（2026-06-15） |
 | | B2 | strategy_registry + registry.py | docx | ✅ **已完成**（2026-06-15） |
 | | B3 | analytics DB builder（analytics.db） | docx | ✅ 可立即做（依赖 B1 落盘） |
 | | B4 | strategy-changelog.md | docx | ✅ 可立即做（文档） |
@@ -153,22 +153,37 @@
 > 这一阶段是 Strategy Lab 的地基。目标：让每次运行的「用了哪个策略版本 / 哪个 commit / 哪份配置」
 > 可追溯，让分散的 JSON/JSONL 可查询。**没有它，后续 dashboard、strategy compare、可信校准都无从谈起。**
 
-## B1 — run_manifest（每次 lifecycle run）
+## B1 — run_manifest（每次 lifecycle run） — ✅ 已完成（2026-06-15）
 
 **目标**：每次 premarket / intraday / postmarket 都落一份 `run_manifest.json`，记录当时的策略版本、
 git commit、config hash、profiles、风险层、model，保证任何结果可回溯。
 
-**具体步骤**：
-1. 新增 `src/trading_agent/strategy/manifest.py`。
-2. 三个 lifecycle 入口都写 `runtime/state/runs/<YYYY-MM-DD>/run_manifest.json`。
-3. 字段：`run_date`、`strategy_id`、`trading_mode`、`effective_risk_tier`、`scoring_profile`、
-   `policy_profile`、`active_watchlist_count`、`git_commit`、`config_hash`、`codex_model`。
+**实现记录**：
+- 新增 `src/trading_agent/strategy/manifest.py`：`build_run_manifest(agent_root, run_date)` 聚合
+  `load_runtime_config`、`load_active_strategy`（B2）、`load_scoring_profile`、`load_policy_profile`、
+  `parse_active_watchlist`，写 `runtime/state/runs/<run_date>/run_manifest.json`（覆盖写，最近一次
+  调用的入口决定该 run-date 的最新状态）。
+- 字段：`run_date`、`strategy_id`、`trading_mode`、`effective_risk_tier`、`scoring_profile`、
+  `policy_profile`、`active_watchlist_count`、`git_commit`（`git rev-parse HEAD`，非 git 仓库或失败时
+  回退 `"unknown"`）、`config_hash`（trading_mode/两个 risk tier/strategy/scoring_profile/
+  policy_profile 组合做 sha256，取前 12 位）、`codex_model`。
+- 三个 lifecycle 入口（`premarket.py`/`intraday.py`/`postmarket.py`）都在 `load_runtime_config()`
+  之后立即调用 `build_run_manifest()`——即周末/盘外/KILL_SWITCH 等早期 skip-gate 之后、真正开始业务
+  逻辑之前。`active_watchlist_count` 用了一个本地容错包装（`universe.txt` 缺失时返回 0 而不是抛错），
+  因为 manifest 是辅助性的可追溯元数据，不应该让缺一个文件就拖垮整条 pipeline。
+- 因为 `effective_risk_tier` 用了 A2 的 fail-closed 属性，如果某次运行配置错误（live + tier 4），
+  manifest 构建本身就会抛 `TierMisconfigurationError`，和 A2 的"绝不放行"语义一致地传播崩溃，
+  不会留下一份基于错误配置的 manifest。
 
-**涉及文件**：新增 `strategy/manifest.py`、三个 `orchestration/*.py`、测试。
+**涉及文件**：新增 `strategy/manifest.py`、`tests/trading_agent/strategy/test_manifest.py`；改动
+`orchestration/premarket.py`、`orchestration/intraday.py`、`orchestration/postmarket.py`，以及三者
+对应的现有测试文件（各加一条 manifest 落盘断言）。
 
-**验收**：每次运行后该 run-date 目录下有 manifest；字段完整；测试覆盖 git_commit/config_hash 生成。
+**验收**：✅ 每次运行后该 run-date 目录下有 manifest；字段完整；测试覆盖 git_commit（真实仓库匹配
+`git rev-parse HEAD` + 非 git 目录回退 `"unknown"`）和 config_hash（切换 active_strategy 后 hash 必变）。
+253 测试通过（+5 新增 manifest 单测，另有 3 个现有编排测试加了 manifest 落盘断言）。
 
-**注意**：**时间敏感**——manifest 越早上线，可对比的历史样本越多。
+**注意**：**时间敏感**——manifest 越早上线，可对比的历史样本越多。已尽快上线。
 
 ---
 
