@@ -134,7 +134,7 @@ symbols that receive expensive analysis):
 | Layer | Pool | Why |
 |---|---|---|
 | DSA signal scan | full `universe.txt` (88 symbols) | Cheap classification; wide funnel |
-| Kronos forecast | `active_watchlist.txt` (≤30) | Local model inference is the slowest premarket step |
+| Kronos forecast | `active_watchlist.txt` (≤30) | Local model inference is batched but still the heaviest advisory step |
 | market_feed (4 timeframes + charts) | `active_watchlist.txt` | Heavy yfinance + chart I/O |
 | technical research (Codex) | `active_watchlist.txt` | Token cost |
 
@@ -524,6 +524,10 @@ KRONOS_BOOTSTRAP_PYTHON=$(command -v python3.12) ./src/scripts/kronos/setup_kron
 
 Default Kronos model `NeoQuasar/Kronos-base`, tokenizer `NeoQuasar/Kronos-Tokenizer-base`,
 `KRONOS_LOOKBACK_BARS=512`. The setup script prefers `python3.12`, then `python3.11`.
+Live Kronos generation uses upstream `KronosPredictor.predict_batch()` grouped by historical
+window length, so normal active-watchlist runs make one local inference call per window-length
+group instead of one call per symbol. If the installed Kronos build lacks batch support or a batch
+call fails, the generator automatically falls back to per-symbol `predict()` for that group.
 
 Portable rebuild and validation flow:
 

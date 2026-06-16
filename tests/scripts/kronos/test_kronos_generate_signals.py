@@ -568,6 +568,211 @@ class KronosPredictor:
             self.assertEqual(payload["symbols"]["NVDA"]["direction_bias"], "bullish")
             self.assertEqual(payload["symbols"]["NVDA"]["setup_bias"], "breakout")
 
+    def test_build_live_payload_batches_symbols_with_matching_window_length(self) -> None:
+        import pandas as pd
+
+        mod = self.import_module()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp = Path(tmpdir)
+            model_file = tmp / "model.py"
+            model_file.write_text(
+                """
+import pandas as pd
+
+class KronosTokenizer:
+    @classmethod
+    def from_pretrained(cls, name):
+        return cls()
+
+class Kronos:
+    @classmethod
+    def from_pretrained(cls, name):
+        return cls()
+
+class KronosPredictor:
+    call_log = []
+
+    def __init__(self, model, tokenizer, max_context):
+        self.max_context = max_context
+
+    def predict(self, *args, **kwargs):
+        raise AssertionError("predict() should not be called when predict_batch() is available")
+
+    def predict_batch(self, df_list, x_timestamp_list, y_timestamp_list, pred_len, T, top_p, sample_count):
+        KronosPredictor.call_log.append(len(df_list))
+        return [pd.DataFrame({"close": [110.0 + index for index in range(pred_len)]}) for _ in df_list]
+""".strip(),
+                encoding="utf-8",
+            )
+
+            def fake_download(symbol, **kwargs):
+                base = 100.0 if symbol == "NVDA" else 50.0
+                return pd.DataFrame(
+                    [[base, base + 1, base - 1, base, 1000], [base + 1, base + 2, base, base + 2, 1100], [base + 2, base + 3, base + 1, base + 4, 1200]],
+                    index=pd.date_range("2026-06-10", periods=3, freq="D", name="Date"),
+                    columns=["Open", "High", "Low", "Close", "Volume"],
+                )
+
+            env = {
+                "KRONOS_PROJECT_ROOT": str(tmp),
+                "KRONOS_TIMEFRAME": "1d",
+                "KRONOS_HORIZON_BARS": "2",
+                "KRONOS_LOOKBACK_BARS": "10",
+            }
+            with mock.patch.dict(os.environ, env, clear=False), mock.patch.dict(
+                sys.modules,
+                {"yfinance": types.SimpleNamespace(download=fake_download)},
+                clear=False,
+            ):
+                payload = mod.build_live_payload(["NVDA", "PLTR"], "2026-06-13", "test-universe")
+
+                model_module = sys.modules["model"]
+                call_log = model_module.KronosPredictor.call_log
+
+            self.assertEqual(payload["data_status"], "ok")
+            self.assertEqual(sorted(payload["symbols"].keys()), ["NVDA", "PLTR"])
+            # Both symbols have the same 3-bar window -> one predict_batch() call for both.
+            self.assertEqual(call_log, [2])
+
+    def test_build_live_payload_batches_symbols_by_window_length(self) -> None:
+        import pandas as pd
+
+        mod = self.import_module()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp = Path(tmpdir)
+            model_file = tmp / "model.py"
+            model_file.write_text(
+                """
+import pandas as pd
+
+class KronosTokenizer:
+    @classmethod
+    def from_pretrained(cls, name):
+        return cls()
+
+class Kronos:
+    @classmethod
+    def from_pretrained(cls, name):
+        return cls()
+
+class KronosPredictor:
+    call_log = []
+
+    def __init__(self, model, tokenizer, max_context):
+        self.max_context = max_context
+
+    def predict_batch(self, df_list, x_timestamp_list, y_timestamp_list, pred_len, T, top_p, sample_count):
+        KronosPredictor.call_log.append([len(df) for df in df_list])
+        return [pd.DataFrame({"close": [float(df["close"].iloc[-1]) + 2.0 for _ in range(pred_len)]}) for df in df_list]
+""".strip(),
+                encoding="utf-8",
+            )
+
+            def fake_download(symbol, **kwargs):
+                base = {"NVDA": 100.0, "PLTR": 50.0, "IPO": 20.0}[symbol]
+                periods = 3 if symbol != "IPO" else 2
+                rows = [
+                    [base + offset, base + offset + 1, base + offset - 1, base + offset, 1000 + offset]
+                    for offset in range(periods)
+                ]
+                return pd.DataFrame(
+                    rows,
+                    index=pd.date_range("2026-06-10", periods=periods, freq="D", name="Date"),
+                    columns=["Open", "High", "Low", "Close", "Volume"],
+                )
+
+            env = {
+                "KRONOS_PROJECT_ROOT": str(tmp),
+                "KRONOS_TIMEFRAME": "1d",
+                "KRONOS_HORIZON_BARS": "2",
+                "KRONOS_LOOKBACK_BARS": "10",
+            }
+            with mock.patch.dict(os.environ, env, clear=False), mock.patch.dict(
+                sys.modules,
+                {"yfinance": types.SimpleNamespace(download=fake_download)},
+                clear=False,
+            ):
+                payload = mod.build_live_payload(["NVDA", "PLTR", "IPO"], "2026-06-13", "test-universe")
+                model_module = sys.modules["model"]
+
+            self.assertEqual(payload["data_status"], "ok")
+            self.assertEqual(sorted(payload["symbols"].keys()), ["IPO", "NVDA", "PLTR"])
+            # NVDA/PLTR share 3 bars and IPO has 2 bars, so Kronos receives two valid batches.
+            self.assertEqual(model_module.KronosPredictor.call_log, [[3, 3], [2]])
+
+    def test_build_live_payload_falls_back_to_serial_when_batch_inference_fails(self) -> None:
+        import pandas as pd
+
+        mod = self.import_module()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp = Path(tmpdir)
+            model_file = tmp / "model.py"
+            model_file.write_text(
+                """
+import pandas as pd
+
+class KronosTokenizer:
+    @classmethod
+    def from_pretrained(cls, name):
+        return cls()
+
+class Kronos:
+    @classmethod
+    def from_pretrained(cls, name):
+        return cls()
+
+class KronosPredictor:
+    batch_calls = 0
+    serial_calls = []
+
+    def __init__(self, model, tokenizer, max_context):
+        self.max_context = max_context
+
+    def predict_batch(self, df_list, x_timestamp_list, y_timestamp_list, pred_len, T, top_p, sample_count):
+        KronosPredictor.batch_calls += 1
+        raise RuntimeError("batch oom")
+
+    def predict(self, df, x_timestamp, y_timestamp, pred_len, T, top_p, sample_count):
+        KronosPredictor.serial_calls.append(float(df["close"].iloc[-1]))
+        return pd.DataFrame({"close": [float(df["close"].iloc[-1]) + 1.0 for _ in range(pred_len)]})
+""".strip(),
+                encoding="utf-8",
+            )
+
+            def fake_download(symbol, **kwargs):
+                base = 100.0 if symbol == "NVDA" else 50.0
+                return pd.DataFrame(
+                    [
+                        [base, base + 1, base - 1, base, 1000],
+                        [base + 1, base + 2, base, base + 2, 1100],
+                        [base + 2, base + 3, base + 1, base + 4, 1200],
+                    ],
+                    index=pd.date_range("2026-06-10", periods=3, freq="D", name="Date"),
+                    columns=["Open", "High", "Low", "Close", "Volume"],
+                )
+
+            env = {
+                "KRONOS_PROJECT_ROOT": str(tmp),
+                "KRONOS_TIMEFRAME": "1d",
+                "KRONOS_HORIZON_BARS": "2",
+                "KRONOS_LOOKBACK_BARS": "10",
+            }
+            with mock.patch.dict(os.environ, env, clear=False), mock.patch.dict(
+                sys.modules,
+                {"yfinance": types.SimpleNamespace(download=fake_download)},
+                clear=False,
+            ):
+                payload = mod.build_live_payload(["NVDA", "PLTR"], "2026-06-13", "test-universe")
+                model_module = sys.modules["model"]
+
+            self.assertEqual(payload["data_status"], "ok")
+            self.assertEqual(sorted(payload["symbols"].keys()), ["NVDA", "PLTR"])
+            self.assertEqual(model_module.KronosPredictor.batch_calls, 1)
+            self.assertEqual(model_module.KronosPredictor.serial_calls, [104.0, 54.0])
+
     def test_main_writes_failed_payload_for_live_setup_errors(self) -> None:
         mod = self.import_module()
 

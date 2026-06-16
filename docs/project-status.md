@@ -110,7 +110,9 @@
 
 **已做**
 - DSA 扫描（Codex，全 universe，theme/crowding/promote-demote-block 分类）。
-- Kronos 本地预测（active watchlist），失败时写 `build_failed_kronos_payload` 并 fail-closed。
+- Kronos 本地预测（active watchlist），按历史窗口长度分组走 `KronosPredictor.predict_batch()`；
+  batch 接口缺失或运行失败时回退到逐标的 `predict()`，整体生成失败时写
+  `build_failed_kronos_payload` 并 fail-closed。
 - Technical research（Codex，active watchlist，可 fan-out 到 `TECHNICAL_MAX_SUBAGENTS` 子代理）。
 - Technical fallback：market feed 不完整或 prompt 失败时写保守 watch-only 价格层。
 - **Token 优化（P4）**：`planner/technical_features.py` 在跑 technical prompt 前，从已收集的
@@ -122,7 +124,6 @@
   两者都有 `ENABLE_*_PRECOMPUTE` 开关可秒回退；**输出 schema 不变**，scoring/risk_overlay 不受影响。
 
 **没做**
-- Kronos 仍是单标的串行推理（本地模型，受 active watchlist 降到 ≤30 缓解，但未做 batch 推理）。
 - token 优化上线时 B1/B2（run_manifest/strategy_registry）尚未实现，没有按设计登记为新的
   strategy version，因此目前无法区分优化前后的 paper 样本（见 roadmap D1 遗留注意）。
 
@@ -292,6 +293,7 @@
 | **P5-C2** 观测 | `premarket_diagnostics.json` 新增 theme/speculative 集中度诊断 + 可配置 cap | 见 git log |
 | **P5-C1** 可视化 | `dashboard/` 包 + `dashboard` 子命令（Streamlit，视觉未人工验证） | 见 git log |
 | **P5-D2** 工程优化 | `data/ohlcv_cache.py`：1w/1d 跨日缓存 + split/dividend 失效策略（batch 拉取未做） | 见 git log |
+| **P5-D3** 工程优化 | Kronos `predict_batch()`：按窗口长度合批推理，batch 失败回退逐标的 | 见 git log |
 | **P5-D4** 工程优化 | paper 部分成交模型：确定性 ratio + 余量续接重新进入 pending 队列 | 见 git log |
 
 ---
@@ -306,8 +308,8 @@
   下一批是 C 阶段（theme 诊断 + 只读 dashboard）。
 - **C 只读可视化与观测**：✅ 全部完成（C1/C2，见上方 P5-C1/P5-C2；C2 见第 6 节，C1 见第 14 节）。
   C1 的页面视觉效果尚未人工核实——见第 14 节"没做/注意"。
-- **D 工程优化**：Kronos batch 推理（D3，需接口确认，剩下唯一未做的工程优化项）。
-  （DSA/Technical token 优化见 P4/D1；market_feed 跨日缓存见 P5-D2（batch 拉取部分未做）；
+- **D 工程优化**：✅ 已完成 D1/D3/D4；D2 的跨日缓存已完成，`yf.download` 多 ticker batch 拉取未做。
+  （DSA/Technical token 优化见 P4/D1；market_feed 跨日缓存见 P5-D2；Kronos batch 推理见 P5-D3；
   paper 部分成交见 P5-D4。）
 - **E 数据驱动校准（阻塞 2–3 周 paper）**：forward/benchmark returns + entry-zone 命中率 +
   component attribution、评分/价格 setup 权重校准、near-miss tracking、bid/ask/spread 成交质量。

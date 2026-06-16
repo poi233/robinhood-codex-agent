@@ -89,6 +89,15 @@ def build_live_kronos_payload(symbols: list[str], run_date: str, source_universe
     signals: dict[str, dict[str, object]] = {}
     failures: list[str] = []
 
+    # predict_batch() requires every series in a call to share the same
+    # historical length, so group symbols by window length first. Symbols
+    # with full lookback history (the common case) land in one group and
+    # get a single batched inference call; symbols with shorter history
+    # (e.g. recent IPOs) form their own smaller groups instead of being
+    # dropped, matching the old per-symbol tolerance for short windows.
+    groups: dict[int, dict[str, list[object]]] = {}
+    last_close_by_symbol: dict[str, float] = {}
+
     for symbol in symbols:
         try:
             history = yf.download(symbol, period=period, interval=interval, progress=False, auto_adjust=False)
@@ -112,17 +121,67 @@ def build_live_kronos_payload(symbols: list[str], run_date: str, source_universe
             x_timestamp = pd.Series(pd.to_datetime(window["timestamps"]), name="timestamps")
             last_ts = pd.to_datetime(x_timestamp.iloc[-1])
             y_timestamp = pd.Series(pd.date_range(last_ts, periods=pred_len + 1, freq=future_freq)[1:], name="timestamps")
-            pred_df = predictor.predict(
-                df=x_df,
-                x_timestamp=x_timestamp,
-                y_timestamp=y_timestamp,
+
+            group = groups.setdefault(
+                len(window), {"symbols": [], "df_list": [], "x_timestamp_list": [], "y_timestamp_list": []}
+            )
+            group["symbols"].append(symbol)
+            group["df_list"].append(x_df)
+            group["x_timestamp_list"].append(x_timestamp)
+            group["y_timestamp_list"].append(y_timestamp)
+            last_close_by_symbol[symbol] = float(x_df["close"].iloc[-1])
+        except Exception as exc:
+            failures.append(f"{symbol}: {exc}")
+
+    batch_symbols: list[str] = []
+    pred_df_list: list[object] = []
+    for group in groups.values():
+        group_symbols = group["symbols"]
+        try:
+            # One predict_batch() call covers every symbol in this length
+            # group, instead of one predictor.predict() call per symbol --
+            # the slow part of premarket on a multi-symbol universe.
+            group_pred_df_list = predictor.predict_batch(
+                df_list=group["df_list"],
+                x_timestamp_list=group["x_timestamp_list"],
+                y_timestamp_list=group["y_timestamp_list"],
                 pred_len=pred_len,
                 T=float(os.environ.get("KRONOS_TEMPERATURE", "1.0")),
                 top_p=float(os.environ.get("KRONOS_TOP_P", "0.9")),
                 sample_count=int(os.environ.get("KRONOS_SAMPLE_COUNT", "1")),
             )
+        except Exception:
+            # Older Kronos installs without predict_batch(), or batch runtime
+            # failures such as memory pressure, fall back to the original
+            # one-call-per-symbol path so a batch issue does not discard the
+            # whole active watchlist.
+            group_pred_df_list = []
+            for symbol, x_df, x_timestamp, y_timestamp in zip(
+                group_symbols, group["df_list"], group["x_timestamp_list"], group["y_timestamp_list"]
+            ):
+                try:
+                    group_pred_df_list.append(
+                        predictor.predict(
+                            df=x_df,
+                            x_timestamp=x_timestamp,
+                            y_timestamp=y_timestamp,
+                            pred_len=pred_len,
+                            T=float(os.environ.get("KRONOS_TEMPERATURE", "1.0")),
+                            top_p=float(os.environ.get("KRONOS_TOP_P", "0.9")),
+                            sample_count=int(os.environ.get("KRONOS_SAMPLE_COUNT", "1")),
+                        )
+                    )
+                except Exception as exc:
+                    failures.append(f"{symbol}: {exc}")
+                    group_pred_df_list.append(None)
+        batch_symbols.extend(group_symbols)
+        pred_df_list.extend(group_pred_df_list)
 
-            last_close = float(x_df["close"].iloc[-1])
+    for symbol, pred_df in zip(batch_symbols, pred_df_list):
+        if pred_df is None:
+            continue
+        try:
+            last_close = last_close_by_symbol[symbol]
             forecast_close = float(pred_df["close"].iloc[-1])
             return_bps = int(round(((forecast_close - last_close) / last_close) * 10000))
             vol_bps = max(1, int(round(pred_df["close"].pct_change().fillna(0).std() * 10000)))

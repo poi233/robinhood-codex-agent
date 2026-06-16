@@ -34,7 +34,7 @@
 | | C2 | theme exposure / speculative cap 诊断 | docx | ✅ **已完成**（2026-06-15） |
 | **D 工程优化 · 不阻塞** | D1 | DSA/Technical token 优化 | design doc | ✅ **已完成**（2026-06-15，见下方实现记录） |
 | | D2 | market_feed 跨日缓存 / batch | 旧 R4 | 🟡 部分完成（2026-06-15，缓存做了，batch 未做） |
-| | D3 | Kronos batch 推理 | 旧 R5 | ✅ 可立即做（需接口确认） |
+| | D3 | Kronos batch 推理 | 旧 R5 | ✅ **已完成**（2026-06-16） |
 | | D4 | paper 部分成交模型 | 旧 R6 + docx P3 | ✅ **已完成**（2026-06-15） |
 | **E 数据驱动校准** | E1 | replay 校准：forward/benchmark returns + 命中率 + attribution | 旧 R1 + docx P1 | ⏳ 阻塞于 2–3 周 paper 数据 |
 | | E2 | 评分 / 价格 setup 权重校准 | 旧 R2 | ⏳ 依赖 E1 |
@@ -411,17 +411,26 @@ speculative 占比分别有独立 cap）；阈值通过 `scoring_profiles.yaml` 
 
 ---
 
-## D3 — Kronos batch 推理（旧 R5，需接口确认）
+## D3 — Kronos batch 推理（旧 R5） — ✅ 已完成（2026-06-16）
 
 **目标**：Kronos 本地推理是 premarket 最慢环节之一，当前逐标的串行（active watchlist≤30 已缓解）。
 
-**具体步骤**：
-1. 确认 `kronos_generate_signals.py` / 上游 Kronos 是否支持 batch 输入。
-2. 支持则改 `signals/kronos.py` live payload 走 batch；不支持则评估进程池并行（注意显存/CPU）。
+**实现记录**：
+- 已确认 `.vendor/kronos/model/kronos.py` 的 `KronosPredictor.predict_batch(...)` 支持 batch 输入：
+  `df_list` / `x_timestamp_list` / `y_timestamp_list` 同长输入，要求同一 batch 内历史窗口长度一致，
+  返回顺序与输入顺序一致。
+- `signals/kronos.py` 的 live payload 现在先逐 symbol 拉取/清洗 yfinance 历史数据，再按 `len(window)`
+  分组调用 `predict_batch()`；正常 active watchlist 历史长度一致时，一组 symbol 只触发一次 Kronos
+  推理调用。短历史标的（如近期 IPO）会进入自己的较短窗口 batch，不会被丢弃。
+- batch 接口缺失或运行时失败（例如内存压力）时，自动回退到原来的逐标的 `predict()` 路径；只有单标的
+  回退也失败时才把该 symbol 计入 `notes`/`data_status`，避免一个 batch 问题打废整批 active watchlist。
 
 **涉及文件**：`signals/kronos.py`、`src/scripts/kronos/kronos_generate_signals.py`、测试（mock）。
 
-**验收**：全量 Kronos 推理时间下降；signal 输出与逐标的一致。
+**验收**：✅ mock 覆盖同窗口长度合批、不同窗口长度拆批、batch 失败回退逐标的三条路径；
+`tests/scripts/kronos/test_kronos_generate_signals.py` 31 个测试通过。实际耗时下降取决于 active watchlist
+规模、CPU/GPU/MPS 与模型配置；本次先保证调用数从“每 symbol 一次推理”降为“每窗口长度一组一次推理”，并保留
+逐标的兼容回退。
 
 ---
 
