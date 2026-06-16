@@ -166,9 +166,10 @@ def collect_market_context(
     timeframes: list[str],
     news_limit: int,
     mock: bool,
+    symbols: list[str] | None = None,
 ) -> dict[str, object]:
     date_value = date.fromisoformat(run_date)
-    requested_symbols = parse_universe(universe_file)
+    requested_symbols = symbols if symbols is not None else parse_universe(universe_file)
 
     if output_dir.exists():
         shutil.rmtree(output_dir)

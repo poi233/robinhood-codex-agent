@@ -32,6 +32,7 @@ from trading_agent.signals.kronos import (
     build_mock_kronos_payload,
 )
 from trading_agent.core.config import load_runtime_config
+from trading_agent.data.universe import parse_active_watchlist
 from trading_agent.signals.dsa import run_dsa_scan
 from trading_agent.signals.technical_fallback import build_failed_technical_payload
 
@@ -116,10 +117,10 @@ def _ensure_kronos_env_defaults(agent_root: Path) -> None:
             os.environ["KRONOS_PYTHON_BIN"] = str(default_python)
 
 
-def _write_kronos_signals(agent_root: Path) -> None:
+def _write_kronos_signals(agent_root: Path, active_universe_file: Path | None = None) -> None:
     _ensure_kronos_env_defaults(agent_root)
     paths = build_runtime_paths(agent_root)
-    universe_file = paths.config_dir / "universe.txt"
+    universe_file = active_universe_file or (paths.config_dir / "universe.txt")
     output_file = paths.kronos_signals_path
     symbols = parse_universe(universe_file)
     run_date = paths.run_date
@@ -166,6 +167,7 @@ def run_premarket_pipeline(*, dry_run: bool) -> int:
 
     runtime = load_runtime_config(agent_root)
     paths = build_runtime_paths(agent_root)
+    active_symbols = parse_active_watchlist(paths.config_dir)
     run_date = paths.run_date
     market_feed_dir = paths.market_feed_dir
     timeframes = [value.strip() for value in runtime.market_feed_timeframes.split(",") if value.strip()]
@@ -229,6 +231,7 @@ def run_premarket_pipeline(*, dry_run: bool) -> int:
             return
         collect_market_context(
             universe_file=paths.config_dir / "universe.txt",
+            symbols=active_symbols,
             output_dir=market_feed_dir,
             run_date=run_date,
             timeframes=timeframes,
@@ -246,12 +249,14 @@ def run_premarket_pipeline(*, dry_run: bool) -> int:
         if os.environ.get("ENABLE_KRONOS_SIGNAL_LAYER", "1") != "1":
             append_stage_log(agent_root, run_date, "kronos", "skipped", "Kronos signal layer disabled")
             return
+        active_watchlist_path = paths.config_dir / "active_watchlist.txt"
+        kronos_universe = active_watchlist_path if active_watchlist_path.exists() else paths.config_dir / "universe.txt"
         try:
-            _write_kronos_signals(agent_root)
+            _write_kronos_signals(agent_root, active_universe_file=kronos_universe)
         except Exception as exc:
             payload = build_failed_kronos_payload(
                 run_date,
-                str(paths.config_dir / "universe.txt"),
+                str(kronos_universe),
                 f"live Kronos generation failed: {exc}",
                 "inference_only",
             )

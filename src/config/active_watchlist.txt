@@ -1,0 +1,46 @@
+# Active watchlist — symbols that run Kronos, market_feed (4 timeframes), and technical AI.
+# Full universe.txt is used for DSA scanning only.
+# Keep ≤ 30 symbols. Edit freely; system falls back to full universe.txt if this file is missing.
+
+# Liquidity anchors / broad beta
+SPY
+QQQ
+SMH
+IWM
+
+# AI semiconductors & compute (highest conviction)
+NVDA
+AVGO
+AMD
+MRVL
+MU
+ALAB
+CRDO
+
+# AI infrastructure & data center
+ANET
+VRT
+PLTR
+EQIX
+
+# Large-cap platforms
+AMZN
+GOOGL
+META
+TSLA
+NFLX
+
+# High-growth speculative (space / defense / autonomy / quantum)
+ASTS
+RKLB
+AXON
+IONQ
+KTOS
+
+# Nuclear / critical materials
+LEU
+UUUU
+
+# Theme ETFs
+ARKK
+QTUM

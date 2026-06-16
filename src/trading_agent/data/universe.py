@@ -13,3 +13,11 @@ def parse_universe(path: Path) -> list[str]:
         seen.add(candidate)
         symbols.append(candidate)
     return symbols
+
+
+def parse_active_watchlist(config_dir: Path) -> list[str]:
+    """Return active_watchlist symbols, falling back to full universe if file is absent."""
+    active_path = config_dir / "active_watchlist.txt"
+    if active_path.exists():
+        return parse_universe(active_path)
+    return parse_universe(config_dir / "universe.txt")
