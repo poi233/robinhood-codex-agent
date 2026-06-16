@@ -15,6 +15,7 @@ from trading_agent.replay.forward_returns import (
     compute_forward_return_records,
     default_price_loader,
 )
+from trading_agent.replay.near_miss import load_trade_thresholds, near_threshold_analysis
 from trading_agent.replay.setup_outcomes import setup_outcomes
 
 _SCORE_FIELDS = ("candidate_score", "trade_readiness_score", "price_setup_score")
@@ -43,6 +44,8 @@ def build_calibration_report(
     attribution = {str(h): component_attribution(records, horizon=h) for h in horizons}
     benchmark = compute_benchmark_returns(agent_root, horizons=horizons, benchmarks=benchmarks, since=since, until=until, price_loader=price_loader)
     setups = setup_outcomes(agent_root, since=since, until=until, price_loader=price_loader)
+    thresholds = load_trade_thresholds(agent_root, run_dates)
+    near_miss = near_threshold_analysis(records, thresholds, horizons=horizons)
 
     return {
         "generated_at": datetime.now(timezone.utc).isoformat(),
@@ -53,6 +56,7 @@ def build_calibration_report(
         "attribution": {h: [dict(r) for r in rows] for h, rows in attribution.items()},
         "benchmarks": {sym: {str(h): v for h, v in per.items()} for sym, per in benchmark.items()},
         "setup_outcomes": setups,
+        "near_miss": near_miss,
     }
 
 
@@ -116,6 +120,17 @@ def format_calibration_markdown(report: dict[str, Any]) -> str:
         wr = f"{row['win_rate'] * 100:.0f}%" if row["win_rate"] is not None else "—"
         lines.append(f"- {row['setup_type']}: fills={row['fills']}  target_first={row['target_first']}  "
                      f"stop_first={row['stop_first']}  win_rate={wr}")
+    lines.append("")
+
+    lines.append("## Near-miss vs trade threshold (is the gate too strict?)")
+    lines.append("")
+    lines.append("_If `near_miss` forward returns ≈ or > `cleared`, lowering trade_threshold may be costing winners._")
+    for horizon, classes in (report.get("near_miss") or {}).items():
+        parts = []
+        for cls in ("cleared", "near_miss", "below"):
+            data = classes.get(cls) or {}
+            parts.append(f"{cls} n={data.get('count', 0)} mean={_fmt_pct(data.get('mean_return'))}")
+        lines.append(f"- **{horizon}d:** " + "  ·  ".join(parts))
     lines.append("")
     return "\n".join(lines) + "\n"
 

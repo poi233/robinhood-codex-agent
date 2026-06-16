@@ -251,3 +251,14 @@ def calibration_view(report: dict) -> None:
     st.subheader("Setup outcomes (target_1 before stop)")
     if report.get("setup_outcomes"):
         st.dataframe(report["setup_outcomes"], use_container_width=True)
+
+    st.subheader("Near-miss vs trade threshold (is the gate too strict?)")
+    st.caption("If near_miss returns ≈ or > cleared, lowering trade_threshold may be costing winners.")
+    near_rows = []
+    for horizon, classes in (report.get("near_miss") or {}).items():
+        for cls in ("cleared", "near_miss", "below"):
+            data = classes.get(cls) or {}
+            near_rows.append({"horizon_d": horizon, "class": cls, "count": data.get("count"),
+                              "mean_return": data.get("mean_return"), "hit_rate": data.get("hit_rate")})
+    if near_rows:
+        st.dataframe(near_rows, use_container_width=True)
