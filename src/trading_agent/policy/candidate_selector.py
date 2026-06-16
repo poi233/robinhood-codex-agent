@@ -121,7 +121,6 @@ def rank_candidates(inputs: PolicyInputs) -> tuple[list[RankedCandidate], dict[s
             + 0.10 * liquidity_score
             + 0.10 * research_score
             + 0.05 * catalyst_score
-            + 0.15 * candidate_total
         )
         ranked.append(
             RankedCandidate(
