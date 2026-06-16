@@ -28,8 +28,8 @@
 | 数据可追溯（run_manifest / analytics.db） | ✅ 已加（B1–B4，见 roadmap B） |
 | 只读可视化（Strategy Lab dashboard） | ✅ 已加（C1–C2，dashboard 视觉未人工验证，见 roadmap C） |
 | Token 成本（DSA/Technical 预计算） | ✅ 已加（P4，见 roadmap D1） |
-| 自成长平台（observe→propose→shadow→promote） | 🟡 G-pre/G0–G3 已加（诊断 + 提议，paper-safe），G4–G8 待做（见 roadmap G） |
-| 自成长诊断 + 提议（growth observe/propose / Self-Growth Lab） | ✅ G0–G3 已加（只写文件、不启用，见 roadmap G） |
+| 自成长平台（observe→propose→shadow→promote） | ✅ G-pre/G0–G8 全闭环已加（paper/shadow only，promote 仅人工，见 roadmap G） |
+| 自成长诊断/提议/shadow/推荐（growth 全命令树） | ✅ observe/propose/validate/experiments/shadow/evaluate/recommend/promote check 全部上线 |
 | review/live 真实下单 | ⛔ 故意未接线 |
 
 ---
@@ -274,41 +274,45 @@
   通过"不代表"功能已验证"的例外，使用前建议先手动跑一次确认。**
 - dashboard 新增了只读的 **Self-Growth Lab** 区块（见下一节 15）；同样未经人工视觉核实。
 
-### 15. 自成长平台（`growth/`，roadmap G-pre + G0–G3）
+### 15. 自成长平台（`growth/`，roadmap G-pre + G0–G8 全闭环）
 
-**已做（只读、paper-safe、零交易行为变化）**
-- **（G-pre）** profile 按名解析：`load_scoring_profile(..., profile_name=)` /
-  `load_policy_profile(..., profile_name=)` / `load_policy_inputs(..., policy_profile_name=)` 支持不碰
-  `os.environ` 直接按名取 profile，默认 `None` 时行为逐字不变。这是 G6 在同一进程并跑 champion +
-  challenger 的硬前置。
-- **（G0）** 安全边界：`src/config/growth_policy.json` + `growth/policy.py`（`forbidden_mutations`
-  并集处理，配置只能扩红线不能削）+ `growth/validator.py`（`validate_mutation` 失败即拒：禁止字段 /
-  超范围 / 超 delta / 权重和 / 非 paper_only 全部拒绝）。
-- **（G1）** 全局诊断：`growth/observations.py` 复用 replay report + run manifest，检测
-  `low_trade_frequency`/`high_no_trade_rate`/`dominant_blocked_reason`/`high_pending_cancel_rate`/
-  `missing_manifest`，写 `runtime/analytics/growth_observations.json`；CLI `growth observe`。
-- **（G2）** 模块 diagnoser 注册表（`growth/diagnosers/`，首批 `scoring`/`setups`，开闭可扩展）+
-  dashboard 只读 Self-Growth Lab 区块。
-- **（G3）** proposal 生成器 `growth/proposals.py`：规则注册表把 observation 映射成**白名单内、过
-  validator、按 max_delta 夹紧**的候选 mutation，写 `runtime/strategy_proposals/<date>/proposal_*.{json,md}`；
-  CLI `growth propose`。**只写文件、不启用、交易路径不读它。**
-- **（E1/E2 数据前置）** intraday `trade_readiness_score`/`price_setup_score` + 六分量现在每次 run 落到
-  `intraday_rankings.jsonl`，`analytics build` 新增第 7 张表 `intraday_rankings`，为 E1 attribution /
-  E2 校准提供历史数据（这天之前的样本仍缺这两个分数）。
+**已做（全部 paper/shadow only、champion 零行为变化、promote 仅人工）**
+- **（G-pre）** profile 按名解析（`load_scoring_profile/policy_profile(..., profile_name=)`，默认 `None`
+  行为不变）+ 实验账本隔离 `build_experiment_paths`（challenger 产物根到 `experiments/<id>/`）。
+- **（G0）** 安全边界：`growth_policy.json` + `policy.py`（`forbidden_mutations` 并集、只能扩不能削）+
+  `validator.py`（`validate_mutation`/`validate_proposal` 失败即拒）。
+- **（G1/G2）** observations + 模块 diagnoser 注册表，写 `growth_observations.json`，dashboard 只读
+  Self-Growth Lab；CLI `growth observe`。
+- **（G3/G4）** proposal 生成器（白名单内、过 validator、按 max_delta 夹紧）+ `proposal_review.py` 完整
+  校验写 `*_validation.json`；CLI `growth propose` / `growth validate`。**只写文件、不启用。**
+- **（G5）** experiment queue（`strategy_experiments.yaml` + `experiment_queue.py` 状态机）；CLI
+  `growth experiments list/add/approve/reject/archive`。**approve 只到 active_shadow，断言不改
+  active_strategy。**
+- **（G6）** shadow runner：用纯函数 `build_risk_overlay`（challenger scoring override）+
+  `generate_order_intent` 在隔离账本跑出 `shadow_decisions.jsonl`，已接入 intraday（best-effort）+ CLI
+  `growth shadow`。champion `paper/*`/`decisions` 一字不变。
+- **（G7）** evaluator：champion（replay）vs challenger（shadow 决策）并排指标 + `promotion_rules` 裁决，
+  写 `experiment_report.json` + `promotion_recommendation.md`；CLI `growth evaluate` / `recommend`。
+- **（G8）** promotion check：校验 + 生成 changelog/registry 草稿到 `promotion_drafts/`，CLI
+  `growth promote check`。**从不改 `strategy_registry.yaml`（断言字节不变）。**
+- **（E1/E2 数据前置）** intraday 六分量 + `trade_readiness_score`/`price_setup_score` 落
+  `intraday_rankings.jsonl`，analytics 第 7 张表。
 - 测试：`tests/trading_agent/growth/*`（profiles_by_name 3 / growth_policy 3 / validator 7 /
-  observations 2 / diagnosers 3 / proposals 8）+ CLI/dashboard/analytics/orchestration 各新增测试，全绿。
+  observations 2 / diagnosers 3 / proposals 8 / proposal_validation 5 / experiment_queue 8 /
+  shadow_runner 3 / evaluator 4 / promotion 5）+ CLI/dashboard/analytics/orchestration 各新增，全绿。
 
 **红线（代码强制）**
-- 自成长只**诊断 + 提议**（提议也只写文件），不改任何交易参数；永远禁止 mutation：`TRADING_MODE`/
-  `RISK_TIER`/`PAPER_RISK_TIER`/`KILL_SWITCH`/MCP 审批/`place_equity_order`/`per_trade_risk_pct`/
-  `max_daily_risk_pct`/`max_single_stock_weight`。validator 对这些一律 fail-closed；G3 proposal 只 emit
-  过 validator 的白名单 mutation。
+- 自成长只**诊断 + 提议 + shadow + 推荐**，从不改 champion 交易参数、从不自动 promote、从不碰 review/live。
+  永远禁止 mutation：`TRADING_MODE`/`RISK_TIER`/`PAPER_RISK_TIER`/`KILL_SWITCH`/MCP 审批/
+  `place_equity_order`/`per_trade_risk_pct`/`max_daily_risk_pct`/`max_single_stock_weight`，validator
+  一律 fail-closed。`approve` 不改 active_strategy、`promote check` 不改 registry，均有测试断言。
 
-**没做**
-- G-pre 的实验账本隔离 `build_experiment_paths` 推后到 G6（YAGNI，G6 前无消费者）。
-- G4–G8（完整 proposal 校验命令 → 实验队列 → shadow runner → evaluator → 人工 promote）未做；
-  其中 G7 评估质量依赖 E1 的 forward returns（阻塞于 paper 数据积累）。
-- `analyzer_failure_rate` 这条 observation 留给后续 analyzers diagnoser。
+**没做 / 故意推后**
+- G6 目前**只产决策流**：`shadow_orders.jsonl`/`shadow_equity_curve.jsonl` 的 paper 仿真（让 broker 写
+  隔离账本）未做；因此 G7 的 challenger fill rate / drawdown 标 unavailable。
+- E1 forward returns 未建（阻塞于 2–3 周 paper 数据），G7 把它当缺失指标 → 在它和 shadow 订单仿真到位前
+  **永远不出 promote 推荐**。
+- `analyzer_failure_rate` observation 留给后续 analyzers diagnoser。
 
 ---
 
@@ -336,6 +340,7 @@
 | **P5-D4** 工程优化 | paper 部分成交模型：确定性 ratio + 余量续接重新进入 pending 队列 | 见 git log |
 | **G-pre/G0–G2** 自成长 Phase 1 | profile 按名解析；`growth_policy.json` + validator；`growth observe` + observations；模块 diagnoser 注册表 + dashboard Self-Growth Lab（全只读、paper-safe） | 见 git log |
 | **G3 + 数据前置** 自成长提议 | `growth/proposals.py` + `growth propose`（白名单、过 validator、只写文件）；intraday 分数落盘 `intraday_rankings.jsonl` + analytics 第 7 张表 | 见 git log |
+| **G4–G8** 自成长全闭环 | proposal 完整校验（`growth validate`）→ 实验队列（`growth experiments`）→ shadow runner + 隔离账本（`growth shadow`，接入 intraday）→ evaluator（`growth evaluate/recommend`）→ 人工 promote check（`growth promote check`，不改 registry） | 见 git log |
 
 ---
 

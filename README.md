@@ -183,57 +183,72 @@ only the *inputs* the prompts read changed.
 
 The self-growth platform turns each module into a controlled
 **Observe → Diagnose → Propose → Validate → Shadow Test → Compare → Recommend → Human Approve**
-loop. **G-pre + G0–G3 are implemented and are strictly paper-safe** — the platform diagnoses and now
-*proposes* bounded experiments, but it changes no trading parameter, enables nothing automatically,
-and never touches review/live. A proposal is just a file a human must review.
+loop. **The full loop (G-pre + G0–G8) is implemented and is strictly paper-safe** — it diagnoses,
+proposes bounded experiments, runs challengers in shadow paper against isolated ledgers, and
+recommends promotions, but it changes no champion trading parameter, enables nothing automatically,
+and never touches review/live. Promotion is always a manual `strategy_registry.yaml` edit by a human.
 
-**Red line (enforced by code):** self-growth may eventually *propose* paper experiments, but it can
-**never** auto-edit the champion strategy and **never** auto-promote to live. The following are
-permanently forbidden from any mutation: `TRADING_MODE`, `RISK_TIER`, `PAPER_RISK_TIER`,
-`KILL_SWITCH`, MCP approval, `place_equity_order`, `per_trade_risk_pct`, `max_daily_risk_pct`,
-`max_single_stock_weight`.
+**Red line (enforced by code):** the platform can **never** auto-edit the champion strategy and
+**never** auto-promote to live. The following are permanently forbidden from any mutation:
+`TRADING_MODE`, `RISK_TIER`, `PAPER_RISK_TIER`, `KILL_SWITCH`, MCP approval, `place_equity_order`,
+`per_trade_risk_pct`, `max_daily_risk_pct`, `max_single_stock_weight`.
 
-What ships in Phase 1 (`src/trading_agent/growth/`):
+The pipeline (`src/trading_agent/growth/`):
 
-- **Safety boundary** — `src/config/growth_policy.json` + `growth/policy.py`. Defines `mode:
-  paper_only`, the allowed-mutation whitelist (per-field `min`/`max`/`max_delta`, component-weight
-  sum constraints) and the forbidden-mutation deny-list. The deny-list is **union-only**: a tampered
-  or partial config can widen it but never weaken it.
-- **Fail-closed validator** — `growth/validator.py`. `validate_mutation(mutation, policy)` rejects
-  any forbidden field, out-of-range value, oversized single-step delta, non-normalized weight set,
-  or non-`paper_only` policy. (Skeleton now; full proposal validation lands in G4.)
-- **Observations + module diagnosers** — `growth/observations.py` reuses the existing replay report
-  and run manifests to detect `low_trade_frequency`, `high_no_trade_rate`, `dominant_blocked_reason`,
-  `high_pending_cancel_rate`, and `missing_manifest`. An extensible per-module diagnoser registry
-  (`growth/diagnosers/`, currently `scoring` + `setups`) shares one `GrowthContext` computed once.
-  Each observation carries `type/module/severity/evidence/suggested_action`.
-- **Extensibility seam (G-pre)** — `load_scoring_profile(..., profile_name=...)` /
-  `load_policy_profile(..., profile_name=...)` can now resolve a profile by explicit name without
-  mutating `os.environ` (default behavior unchanged). This is the prerequisite for later running a
-  challenger alongside the champion in one process (G6).
-- **Proposal generator (G3)** — `growth/proposals.py` maps observations to bounded candidate
-  mutations on whitelisted fields (e.g. `low_trade_frequency` → lower `scoring.trade_threshold` by
-  one `max_delta` step) via an extensible rule registry. **Every candidate is run through the G0
-  validator and only emitted if it passes**; steps clamp to `min`/`max` and no-ops are dropped.
-  Output is written as `proposal_*.json` + `.md` under `runtime/strategy_proposals/<date>/` —
-  **never auto-applied**; the trading path doesn't read it.
+- **Safety boundary (G0)** — `src/config/growth_policy.json` + `growth/policy.py`: `mode: paper_only`,
+  the allowed-mutation whitelist (per-field `min`/`max`/`max_delta`) and the forbidden-mutation
+  deny-list (**union-only**: config can widen it but never weaken it). `growth/validator.py` rejects
+  any forbidden field, out-of-range value, oversized delta, non-normalized weight set, or
+  non-`paper_only` policy — fail-closed.
+- **Observe + diagnose (G1/G2)** — `growth/observations.py` reuses the replay report + manifests to
+  detect `low_trade_frequency`, `high_no_trade_rate`, `dominant_blocked_reason`,
+  `high_pending_cancel_rate`, `missing_manifest`; an extensible per-module diagnoser registry
+  (`growth/diagnosers/`) adds module-level findings. Surfaced read-only in the dashboard's
+  "Self-Growth Lab" section.
+- **Propose + validate (G3/G4)** — `growth/proposals.py` maps observations to bounded candidate
+  mutations on whitelisted fields (e.g. lower `scoring.trade_threshold` by one `max_delta` step);
+  every candidate passes the validator or is dropped. `growth validate` re-checks proposal files and
+  writes `*_validation.json`. Output lives under `runtime/strategy_proposals/<date>/` — never applied.
+- **Queue (G5)** — `growth/experiment_queue.py` + `src/config/strategy_experiments.yaml` manage the
+  lifecycle `proposed → human_approved → active_shadow → ready_for_review → promoted/rejected/archived`.
+  `approve` only enables shadow paper and is asserted never to switch `active_strategy`.
+- **Shadow run (G-pre + G6)** — `build_experiment_paths` gives each challenger an isolated ledger
+  under `runtime/state/runs/<date>/experiments/<id>/`. `growth/shadow_runner.py` re-runs the pure
+  `build_risk_overlay` with the challenger's overridden threshold over the champion's persisted
+  artifacts, then the pure `generate_order_intent`, writing `shadow_decisions.jsonl`. Wired into
+  intraday (best-effort; a failing challenger never affects the champion).
+- **Evaluate + recommend (G7)** — `growth/evaluator.py` compares champion (replay) vs challengers on
+  decision-level metrics and applies `promotion_rules`; any unmet rule or unavailable metric blocks
+  the recommendation. Writes `experiment_report.json` + `promotion_recommendation.md`.
+- **Human promotion (G8)** — `growth promote check <id>` validates a `ready_for_review` challenger and
+  drafts ready-to-paste changelog + registry entries; it **never** edits `strategy_registry.yaml`.
 
 ```bash
-# Build the analytics DB first (observations read fill-rate / blocked-reason data from it)
+# 1. Build analytics, then observe + propose (diagnostics → bounded proposals; enables nothing)
 python3 -m trading_agent analytics build
-
-# Write runtime/analytics/growth_observations.json (read-only; optional --since/--until)
 python3 -m trading_agent growth observe
-
-# Generate validated, whitelist-only proposals (writes files only; enables nothing)
 python3 -m trading_agent growth propose
+python3 -m trading_agent growth validate runtime/strategy_proposals/<date>/
+
+# 2. A human enqueues + approves a proposal for shadow (never switches the champion)
+python3 -m trading_agent growth experiments add runtime/strategy_proposals/<date>/proposal_001_*.json
+python3 -m trading_agent growth experiments approve <experiment_id>
+
+# 3. Challengers run in shadow (also runs automatically after each intraday)
+python3 -m trading_agent growth shadow
+
+# 4. Compare + recommend (recommend-only), then draft a promotion for human review
+python3 -m trading_agent growth recommend
+python3 -m trading_agent growth promote check <experiment_id>
 
 # View diagnostics in the dashboard's "Self-Growth Lab" section
 python3 -m trading_agent dashboard
 ```
 
-Later phases (G4–G8: full proposal validation → experiment queue → shadow runner → evaluator →
-human promotion) are **not** implemented yet; see [`docs/roadmap.md`](docs/roadmap.md) G phase.
+Two pieces are deliberately deferred: shadow **order/equity** simulation (G6 currently produces the
+decision stream only) and **forward-return attribution** (E1, blocked on accumulated paper data). The
+evaluator treats both as missing metrics and therefore withholds any promote recommendation until
+they exist. See [`docs/roadmap.md`](docs/roadmap.md) G phase for the full record.
 
 ---
 
@@ -276,6 +291,11 @@ environment.
 | `dashboard` | Launch the read-only Streamlit dashboard at `http://localhost:8501` |
 | `growth observe` | Write read-only self-growth diagnostics to `runtime/analytics/growth_observations.json` (`--since`, `--until`) |
 | `growth propose` | Write validated, whitelist-only strategy proposals to `runtime/strategy_proposals/<date>/` (never auto-enabled; `--since`, `--until`) |
+| `growth validate <file\|dir>` | Validate proposal JSON(s) against `growth_policy.json`; writes sibling `*_validation.json` |
+| `growth experiments list/add/approve/reject/archive` | Manage the shadow-experiment queue; `approve` only enables shadow, never switches `active_strategy` |
+| `growth shadow` | Run `active_shadow` challengers over the champion's inputs into isolated ledgers (`--run-date`) |
+| `growth evaluate` / `growth recommend` | Champion-vs-challenger report + promotion recommendation (recommend-only; `--since`, `--until`) |
+| `growth promote check <id>` | Validate a challenger + draft changelog/registry entries; never edits `strategy_registry.yaml` |
 
 All lifecycle commands accept `--dry-run`. Shell wrappers in `src/scripts/entrypoints/` export the
 same defaults used by cron/launchd and are the canonical operational path.
@@ -300,7 +320,8 @@ src/trading_agent/
   strategy/                run_manifest + strategy_registry (traceability for every run)
   analytics/               analytics.db builder (SQLite) over runtime/state/runs/*
   dashboard/               read-only Streamlit console (queries + charts + app)
-  growth/                  self-growth platform: safety policy, validator, observations, diagnosers
+  growth/                  self-growth platform (G0-G8): policy/validator, observations/diagnosers,
+                           proposals, experiment queue, shadow runner, evaluator, promotion check
   reporting/               premarket archive, postmarket reports, watch-level normalization
   notifications/           email notifications
   contracts/               schema validators for generated payloads
