@@ -57,14 +57,14 @@ def _parse_scoring_profiles_yaml(path: Path) -> dict[str, Any]:
     return payload
 
 
-def load_scoring_profile(config_dir: Path) -> dict[str, Any]:
+def load_scoring_profile(config_dir: Path, *, profile_name: str | None = None) -> dict[str, Any]:
     path = config_dir / "scoring_profiles.yaml"
     if not path.exists():
         return dict(DEFAULT_SCORING_PROFILE)
     payload = _parse_scoring_profiles_yaml(path)
     profiles = payload.get("profiles") or {}
     default_name = str(payload.get("default_profile") or DEFAULT_SCORING_PROFILE["name"])
-    requested_name = str(os.environ.get("SCORING_PROFILE") or default_name)
+    requested_name = str(profile_name or os.environ.get("SCORING_PROFILE") or default_name)
     selected = profiles.get(requested_name) or profiles.get(default_name) or DEFAULT_SCORING_PROFILE
     resolved_name = (
         requested_name

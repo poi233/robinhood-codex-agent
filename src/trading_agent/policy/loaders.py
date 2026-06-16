@@ -303,6 +303,7 @@ def load_policy_inputs(
     robinhood_gateway: RobinhoodPolicyGateway | None = None,
     quote_provider: Callable[[list[str]], list[dict[str, Any]]] | None = None,
     require_live_quotes: bool = False,
+    policy_profile_name: str | None = None,
 ) -> PolicyInputs:
     paths = build_runtime_paths(agent_root, run_date=run_date)
     config_dir = paths.config_dir
@@ -325,7 +326,7 @@ def load_policy_inputs(
         data_status_summary=_read_json_if_fresh(paths.data_status_summary_path, run_date),
         capital_snapshot=_read_json_if_fresh(paths.capital_snapshot_path, run_date),
         catalyst_snapshot=_read_json_if_fresh(paths.catalyst_snapshot_path, run_date),
-        policy_profile=load_policy_profile(agent_root),
+        policy_profile=load_policy_profile(agent_root, profile_name=policy_profile_name),
         daily_usage=_read_json_if_fresh(paths.daily_usage_path, run_date),
         dsa_signals=_read_json_if_fresh(paths.dsa_signals_path, run_date),
         kronos_signals=_read_json_if_fresh(paths.kronos_signals_path, run_date),
