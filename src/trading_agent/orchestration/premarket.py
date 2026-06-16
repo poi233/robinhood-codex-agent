@@ -31,6 +31,7 @@ from trading_agent.signals.kronos import (
     build_live_kronos_payload,
     build_mock_kronos_payload,
 )
+from trading_agent.core.config import load_runtime_config
 from trading_agent.signals.dsa import run_dsa_scan
 from trading_agent.signals.technical_fallback import build_failed_technical_payload
 
@@ -163,10 +164,11 @@ def run_premarket_pipeline(*, dry_run: bool) -> int:
     if not _is_weekday_pt() and os.environ.get("ALLOW_WEEKEND_RUN", "0") != "1":
         return 0
 
+    runtime = load_runtime_config(agent_root)
     paths = build_runtime_paths(agent_root)
     run_date = paths.run_date
     market_feed_dir = paths.market_feed_dir
-    timeframes = [value.strip() for value in os.environ.get("MARKET_FEED_TIMEFRAMES", "1w,1d,1h,15m").split(",") if value.strip()]
+    timeframes = [value.strip() for value in runtime.market_feed_timeframes.split(",") if value.strip()]
     news_limit = int(os.environ.get("MARKET_FEED_NEWS_LIMIT", "5"))
 
     def run_stage(stage: str, fn: callable, *, snapshot: bool = True) -> None:
@@ -338,8 +340,8 @@ def run_premarket_pipeline(*, dry_run: bool) -> int:
         build_risk_overlay_from_paths(
             agent_root,
             run_date,
-            trading_mode=os.environ.get("TRADING_MODE", "paper"),
-            risk_tier=int(os.environ.get("RISK_TIER", "0")),
+            trading_mode=runtime.trading_mode,
+            risk_tier=runtime.effective_risk_tier,
         )
 
     def run_final_planner() -> None:

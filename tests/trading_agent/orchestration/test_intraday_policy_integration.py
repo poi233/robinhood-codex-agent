@@ -121,7 +121,7 @@ class IntradayPolicyIntegrationTests(unittest.TestCase):
                     mock.patch.object(intraday_module, "load_policy_inputs", return_value=policy_ready_inputs()), \
                     mock.patch.object(intraday_module, "run_codex_prompt") as run_codex_prompt, \
                     mock.patch.object(intraday_module, "send_trade_email_notification") as notify:
-                    load_runtime_config.return_value = mock.Mock(trading_mode="paper", risk_tier=0)
+                    load_runtime_config.return_value = mock.Mock(trading_mode="paper", risk_tier=0, paper_risk_tier=0, effective_risk_tier=0)
 
                     status = intraday_module.run_intraday_pipeline(dry_run=False)
                     decisions = read_decisions(root)
@@ -156,7 +156,7 @@ class IntradayPolicyIntegrationTests(unittest.TestCase):
                     mock.patch.object(intraday_module, "load_runtime_config") as load_runtime_config, \
                     mock.patch.object(intraday_module, "load_policy_inputs", return_value=policy_ready_inputs()) as load_policy_inputs, \
                     mock.patch.object(intraday_module, "send_trade_email_notification"):
-                    load_runtime_config.return_value = mock.Mock(trading_mode="paper", risk_tier=0)
+                    load_runtime_config.return_value = mock.Mock(trading_mode="paper", risk_tier=0, paper_risk_tier=0, effective_risk_tier=0)
                     status = intraday_module.run_intraday_pipeline(dry_run=False)
             finally:
                 os.chdir(original_cwd)
@@ -178,7 +178,7 @@ class IntradayPolicyIntegrationTests(unittest.TestCase):
                     mock.patch.object(intraday_module, "pt_date_string", return_value="2026-06-14"), \
                     mock.patch.object(intraday_module, "load_runtime_config") as load_runtime_config, \
                     mock.patch.object(intraday_module, "load_policy_inputs", return_value=policy_ready_inputs(trading_mode="review")):
-                    load_runtime_config.return_value = mock.Mock(trading_mode="review", risk_tier=0)
+                    load_runtime_config.return_value = mock.Mock(trading_mode="review", risk_tier=0, paper_risk_tier=0, effective_risk_tier=0)
 
                     status = intraday_module.run_intraday_pipeline(dry_run=False)
                     decisions = read_decisions(root)
@@ -255,7 +255,7 @@ class IntradayPolicyIntegrationTests(unittest.TestCase):
                     mock.patch.object(intraday_module, "pt_date_string", return_value="2026-06-14"), \
                     mock.patch.object(intraday_module, "load_runtime_config") as load_runtime_config, \
                     mock.patch.object(intraday_module, "send_trade_email_notification"):
-                    load_runtime_config.return_value = mock.Mock(trading_mode="paper", risk_tier=0)
+                    load_runtime_config.return_value = mock.Mock(trading_mode="paper", risk_tier=0, paper_risk_tier=0, effective_risk_tier=0)
                     status = intraday_module.run_intraday_pipeline(dry_run=False)
                     decisions = read_decisions(root)
             finally:

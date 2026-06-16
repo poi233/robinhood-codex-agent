@@ -66,12 +66,13 @@ def run_intraday_pipeline(*, dry_run: bool) -> int:
         _append_local_decision(agent_root, "kill_switch_skip", "KILL_SWITCH_present", run_date=run_date)
         return 0
     runtime = load_runtime_config(agent_root)
+    effective_risk_tier = runtime.effective_risk_tier
     paper_starting_cash = float(os.environ.get("PAPER_STARTING_CASH", "400000"))
     inputs = load_policy_inputs(
         agent_root,
         run_date=run_date,
         trading_mode=runtime.trading_mode,
-        risk_tier=runtime.risk_tier,
+        risk_tier=effective_risk_tier,
         robinhood_gateway=None,
         quote_provider=fetch_yfinance_live_quotes,
         require_live_quotes=True,
@@ -88,7 +89,7 @@ def run_intraday_pipeline(*, dry_run: bool) -> int:
                 agent_root,
                 run_date=run_date,
                 trading_mode=runtime.trading_mode,
-                risk_tier=runtime.risk_tier,
+                risk_tier=effective_risk_tier,
                 robinhood_gateway=None,
                 quote_provider=fetch_yfinance_live_quotes,
                 require_live_quotes=True,
