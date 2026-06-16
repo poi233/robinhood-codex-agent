@@ -25,9 +25,10 @@
 | 成本/速度优化（并发 / quote 瘦身 / subagent） | ✅ 已加（P3） |
 | 回看分析（fill rate / blocked 分布） | ✅ 本地部分已加 |
 | 回看校准（score 桶 vs 未来收益 / 权重校准） | ⏳ 阻塞于数据积累 |
-| 数据可追溯（run_manifest / analytics.db） | ⬜ 未做（P0，见 roadmap B） |
-| 只读可视化（Strategy Lab dashboard） | ⬜ 未做（见 roadmap C） |
+| 数据可追溯（run_manifest / analytics.db） | ✅ 已加（B1–B4，见 roadmap B） |
+| 只读可视化（Strategy Lab dashboard） | ✅ 已加（C1–C2，dashboard 视觉未人工验证，见 roadmap C） |
 | Token 成本（DSA/Technical 预计算） | ✅ 已加（P4，见 roadmap D1） |
+| 自成长平台（observe→propose→shadow→promote） | ⬜ 规划中（G0–G2 有实现计划，见 roadmap G） |
 | review/live 真实下单 | ⛔ 故意未接线 |
 
 ---
@@ -314,3 +315,8 @@
 - **E 数据驱动校准（阻塞 2–3 周 paper）**：forward/benchmark returns + entry-zone 命中率 +
   component attribution、评分/价格 setup 权重校准、near-miss tracking、bid/ask/spread 成交质量。
 - **F 后期/故意推后**：strategy compare、review/live 真实下单接线、dashboard config editor。
+- **G 自成长平台（paper/shadow only）**：growth_policy 安全边界 + 校验器、growth observations、模块
+  diagnosers + dashboard Self-Growth Lab（G0–G2，已有详细实现计划
+  [`superpowers/plans/2026-06-16-self-growth-platform-g0-g2.md`](./superpowers/plans/2026-06-16-self-growth-platform-g0-g2.md)）；
+  proposal 生成/校验/实验队列（G3–G5）；shadow runner + evaluator + 人工 promote（G6–G8）。
+  详见 roadmap G 阶段。**只提议、不自动改 champion，绝不自动升级 live。**

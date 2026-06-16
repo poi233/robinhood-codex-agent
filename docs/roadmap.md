@@ -1,21 +1,26 @@
 # 未来工作清单（Roadmap · 全局合并版）
 
-> 最后更新：2026-06-15
+> 最后更新：2026-06-16
 > 配套：现状见 [`project-status.md`](./project-status.md)；token 优化详细设计见
-> [`design-prompt-token-optimization.md`](./design-prompt-token-optimization.md)。
+> [`design-prompt-token-optimization.md`](./design-prompt-token-optimization.md)；
+> 自成长平台 G0–G2 详细实现计划见
+> [`superpowers/plans/2026-06-16-self-growth-platform-g0-g2.md`](./superpowers/plans/2026-06-16-self-growth-platform-g0-g2.md)。
 >
-> 本文件已合并三处来源，去重后按全局优先级排序：
+> 本文件已合并四处来源，去重后按全局优先级排序：
 > 1. 旧 roadmap 的 R1–R7（校准 / 配置化 / 性能 / 部分成交 / live 接线）。
 > 2. `design-prompt-token-optimization.md`（DSA / Technical 两层 token 优化，已成设计，未进 roadmap）。
 > 3. `robinhood_codex_agent_strategy_lab_plan`（**Strategy Lab / Dashboard** 新方向 + 若干正确性/观测项）。
+> 4. `robinhood_codex_agent_strategy_lab_self_growth_plan`（**全模块自成长策略平台** G0–G8，见 G 阶段）。
 >
 > 每项给：目标、阻塞依赖、具体步骤、涉及文件、验收标准。
 >
-> **三条贯穿原则**
+> **四条贯穿原则**
 > - **不用魔数换魔数**：任何新权重/阈值在固化前必须经回看数据校准。
 > - **可追溯优先**：先有 `run_manifest` + `analytics.db`，再做任何会改变行为的改动（token 优化、权重校准
 >   都应记为一个**新的 strategy version**），否则积累的 paper 数据无法横向对比。
 > - **paper-only 安全**：review/live 继续不接线，dashboard 第一版只读、不可改交易参数。
+> - **自成长受控**：自成长只能在 paper / shadow paper / replay 内运行，**只提议、不自动改 champion，
+>   绝不自动升级 live**（不动 TRADING_MODE / RISK_TIER / KILL_SWITCH / 真实下单）。详见 G 阶段。
 
 ---
 
@@ -43,6 +48,16 @@
 | **F 后期 / 故意推后** | F1 | strategy compare | docx | 依赖 B1+B2+多 strategy version |
 | | F2 | review/live 真实下单接线 | 旧 R7 | ⛔ 故意推后（人工解锁） |
 | | F3 | config editor（dashboard 可编辑参数） | docx | ⛔ 最后做 |
+| **G 自成长平台 · paper/shadow only** | G-pre | profile 解耦 + 实验账本隔离（可拓展性前置） | 审查新增 | ✅ 可立即做（G6 硬前置） |
+| | G0 | growth_policy + validator 骨架（安全边界） | self-growth | ✅ 可立即做（只读 / 无行为变化） |
+| | G1 | growth observations（全局诊断） | self-growth | ✅ 可立即做 |
+| | G2 | 模块 diagnosers + dashboard Self-Growth Lab | self-growth | ✅ 可立即做 |
+| | G3 | proposal generator（只写 proposal，不启用） | self-growth | 依赖 G0–G2 |
+| | G4 | proposal validator（完整校验） | self-growth | 依赖 G0 / G3 |
+| | G5 | experiment queue（proposed→…→archived） | self-growth | 依赖 G4 |
+| | G6 | shadow paper runner（challenger 隔离并跑） | self-growth | 依赖 G-pre + G5（评估质量依赖 E1） |
+| | G7 | evaluator + promotion recommendation | self-growth | 依赖 G6（+ E1 forward returns） |
+| | G8 | human-in-the-loop promotion（仅人工改 YAML） | self-growth | 依赖 G7 |
 
 > **新旧编号对照**：R1→E1（增 benchmark returns）、R2→E2、R3→A3、R4→D2、R5→D3、R6→D4、R7→F2；
 > token 优化设计→D1；docx 的 run_manifest→B1、registry→B2、analytics.db→B3、changelog→B4、
@@ -55,16 +70,23 @@
 
 数据校准（E 阶段）阻塞于 2–3 周 paper 积累，期间按下面顺序推进；越靠前越「时间敏感或解锁后续」：
 
-1. **A1 / A2 / A3** — 正确性与安全闸，低风险、低成本，先清掉。✅ 已完成（2026-06-15）。
+1. **A1 / A2 / A3** — 正确性与安全闸。✅ 已完成（2026-06-15）。
 2. **B1 → B4** — 数据可追溯基建。✅ 已完成（2026-06-15）：run_manifest、strategy_registry、
    analytics.db、strategy-changelog 全部上线。
-3. **C2 / C1** — 先补 theme 诊断（低成本观测），再做只读 dashboard（看懂每天为什么交易/不交易）。
-   ← **当前阶段**。
-4. **D1 / D2 / D4** — 工程优化挑对当前观察最有用的做；D1 token 优化建议在 B1/B2 之后，作为新
-   strategy version 上线，避免污染正在积累的对比样本。
-5. 持续每天跑 paper，积累 E1 所需数据。
-6. 2–3 周后回到 **E1 → E2**，用真实数据校准；其间补 **E3 / E4**。
-7. **F1 / F2 / F3** 只在以上稳定后，由人工主导推进。
+3. **C1 / C2** — 只读 dashboard + theme 诊断。✅ 已完成（2026-06-15，dashboard 视觉未人工验证）。
+4. **D1 / D3 / D4** ✅ 已完成；**D2** 🟡 跨日缓存已做、batch 未做。
+5. **G-pre → G0 → G1 → G2** ← **建议的当前下一步**：自成长平台的**只读诊断**地基。
+   - G-pre（profile 解耦 + 实验账本隔离）是 G6 shadow 的硬前置，但它是个**小而向后兼容**的重构，
+     越早做越能保证后续 G3–G8 顺滑；G0–G2 本身只读、无任何交易行为变化，最安全。
+   - G0–G2 详细 TDD 实现计划见
+     [`superpowers/plans/2026-06-16-self-growth-platform-g0-g2.md`](./superpowers/plans/2026-06-16-self-growth-platform-g0-g2.md)。
+6. 持续每天跑 paper，积累 E1 所需数据。
+7. **G3 → G4 → G5** — 让系统会「提出安全实验」（只写 proposal、可校验、入队），仍不改 champion。
+8. 2–3 周后回到 **E1 → E2**，用真实数据校准；其间补 **E3 / E4**。E1 的 forward returns 同时是 G7
+   evaluator 的关键输入。
+9. **G6 → G7 → G8** — challenger 在 shadow paper 与 champion 比赛，生成**人工** promote 建议。
+   需 G-pre 重构落地 + 最好已有 E1 forward returns。
+10. **F1 / F2 / F3** 只在以上稳定后，由人工主导推进。
 
 ---
 
@@ -584,3 +606,200 @@ benchmark 对照可见。
 数据充分后再考虑，且需独立的审批/审计设计。
 
 **前置条件**：C1 dashboard 稳定 + E 阶段校准完成 + 明确的写入审批机制。
+
+---
+
+# G 阶段 · 全模块自成长策略平台（paper / shadow only）
+
+> 来源：`robinhood_codex_agent_strategy_lab_self_growth_plan` 第 12 章。在 B（manifest / registry /
+> analytics）与 C（dashboard / replay）的地基上，把每个模块改造成
+> **Observe → Diagnose → Propose → Validate → Shadow Test → Compare → Recommend → Human Approve**
+> 的受控闭环。
+>
+> **核心规则（红线）**：所有模块都可以「自动提议实验」，但**不能自动改 champion 正式策略，绝不自动升级
+> live**。Champion = 当前正式 paper 策略；Challenger = 自动生成、在 **shadow paper** 里评估的实验策略。
+> 永远禁止自动修改：`TRADING_MODE` / `RISK_TIER` / `PAPER_RISK_TIER` / `KILL_SWITCH` / MCP 审批 /
+> `place_equity_order` / `per_trade_risk_pct` / `max_daily_risk_pct` / `max_single_stock_weight`。
+>
+> **能力分级**：L1 自动诊断（只读，先做）→ L2 自动提议（只生成 YAML/报告）→ L3 shadow 多策略并跑 →
+> L4 自动推荐 promote（人工确认）→ ~~L5 自动改 live~~（**明确禁止**）。
+>
+> **与现有代码的契合点（审查结论）**：
+> - `policy/engine.py:generate_order_intent(inputs)` 是**纯函数**（`PolicyInputs → PolicyDecision`，
+>   无 I/O）——这让 challenger 的 shadow 评估天然干净：只要能为 challenger 构造 `PolicyInputs`，就能
+>   无副作用地算出它的决策。
+> - **但** scoring/policy profile 当前通过 **`os.environ` 全局解析**（`load_scoring_profile` /
+>   `load_policy_profile` 读 `SCORING_PROFILE`/`POLICY_PROFILE`；`apply_active_strategy_env_defaults`
+>   写 env）。同一进程里并跑 champion + 多个 challenger 必须先**解除这个全局耦合**——即 **G-pre**。
+> - `analytics.db`（B3）+ `replay/analysis.py`（`build_replay_report` / `discover_run_dates`）已是现成
+>   的观察数据源，G1/G2 直接复用、不重新发明。
+> - CLI（`cli.py` 的嵌套子命令）、dashboard（`app.py` 单页 + `queries.py` 只读函数）都易于扩展。
+
+---
+
+## G-pre — profile 解耦 + 实验账本隔离（可拓展性前置，✅ 可立即做）
+
+**目标**：解除「策略配置只能经 `os.environ` 全局生效」的耦合，让任意 strategy 的 profile 可**按名解析**
+并显式穿过 pipeline；并让 challenger 的 paper 账本写到**隔离目录**。这是 G6 shadow 的硬前置，也是整个
+自成长平台「可拓展性 / 最优化」的关键一笔——小、向后兼容、越早做越好。
+
+**具体步骤**：
+1. `planner/scoring_profiles.py`：`load_scoring_profile(config_dir, *, profile_name: str | None = None)`——
+   传入 `profile_name` 时用它，否则回退现有的 `os.environ["SCORING_PROFILE"]` 行为（默认 `None`，**零行为变化**）。
+2. `policy/profiles.py`：`load_policy_profile(agent_root, *, profile_name: str | None = None)`——同上。
+3. `policy/loaders.py`：`load_policy_inputs(..., policy_profile_name: str | None = None)`，把名字透传给
+   `load_policy_profile`，不再隐式读 env。
+4. `core/context.py`：新增 `experiments_dir`（`run_state_dir / "experiments"`）与一个
+   `build_experiment_paths(agent_root, run_date, strategy_id)`，把 challenger 的
+   `paper_*` / `decisions` / `orders` 根到 `experiments/<strategy_id>/` 子树，**与 champion 账本物理隔离**。
+
+**涉及文件**：`planner/scoring_profiles.py`、`policy/profiles.py`、`policy/loaders.py`、`core/context.py`、
+`strategy/registry.py`（可加 `resolve_strategy(agent_root, strategy_id)` 便于按 id 取 challenger 配置）、对应测试。
+
+**验收**：传 `profile_name` 能在**不触碰 `os.environ`** 的前提下解析到对应 profile；现有调用方（默认
+`None`）行为逐字不变、既有测试全绿；`build_experiment_paths` 的所有路径都落在 `experiments/<id>/` 下、
+不与 champion 路径重叠。
+
+**注意**：这是「YAGNI 例外」——它本身没有直接消费者（消费者是 G6），但它是被审查明确点名的**可拓展性
+瓶颈**；建议作为 G 阶段第一笔重构，避免 G3/G4 校验 proposal 时再绕 env、G6 再被迫大改。
+
+---
+
+## G0 — growth_policy + validator 骨架（安全边界，✅ 可立即做）
+
+**目标**：先立**安全边界**再谈自成长。定义自成长允许/禁止修改的范围，所有 growth 命令默认 `paper_only`，
+任何非 paper 改动一律 fail-closed。
+
+**具体步骤**：
+1. 新增 `src/config/growth_policy.json`（**用 JSON 而非 docx 原写的 yaml**——与 `policy_profiles.json`/
+   `risk_tiers.json` 等**嵌套配置一致**，避免为 4 层嵌套手写脆弱的 YAML 解析器、也不引入 pyyaml 依赖）：
+   `enabled`、`mode: paper_only`、`proposal`（频率限制）、`allowed_mutations`（scoring/policy/setups 的
+   `min`/`max`/`max_delta`、`component_weights` 的和约束）、`forbidden_mutations`（上面那串红线）、`promotion_rules`。
+2. 新增 `src/trading_agent/growth/policy.py`：`load_growth_policy(agent_root)` 读取并带默认值。
+3. 新增 `src/trading_agent/growth/validator.py`（**骨架**，G4 再补全）：`validate_mutation(mutation, policy)
+   -> (ok, violations)`，校验 forbidden 字段、范围、单次 delta、权重和、`paper_only`。
+
+**涉及文件**：新增 `src/config/growth_policy.json`、`growth/__init__.py`、`growth/policy.py`、
+`growth/validator.py`、对应测试。
+
+**验收**：validator 能**拒绝**任何触碰 `forbidden_mutations`（TRADING_MODE/RISK_TIER/KILL_SWITCH/
+place_equity_order/per_trade_risk_pct…）或超范围/超 delta 的 mutation；合法的 paper-only mutation 通过。
+
+---
+
+## G1 — growth observations（全局诊断，✅ 可立即做）
+
+**目标**：读 `analytics.db` + replay report + run state，产出 `runtime/analytics/growth_observations.json`。
+**不改变任何交易行为。**
+
+**具体步骤**：新增 `growth/observations.py`：检测 `low_trade_frequency`、`high_no_trade_rate`、
+`dominant_blocked_reason`、`high_pending_cancel_rate`、`missing_manifest`、`analyzer_failure_rate`；每条
+observation 含 `type`/`module`/`severity`/`evidence`/`suggested_action`。CLI 新增 `growth observe`。
+
+**涉及文件**：新增 `growth/observations.py`，改 `cli.py`，对应测试。
+
+**验收**：对 fixture run 目录产出结构化 observations；阈值可配；纯读、不写任何交易参数。
+
+---
+
+## G2 — 模块 diagnosers + dashboard Self-Growth Lab（✅ 可立即做）
+
+**目标**：把全局诊断细化到**每个模块**（watchlist / analyzers / features / scoring / setups / risk / paper /
+prompt），并在 dashboard 加**只读** Self-Growth Lab 页面展示。
+
+**具体步骤**：新增 `growth/diagnosers/`，用**可拓展的注册表模式**（`DIAGNOSERS: dict[str, Callable[
+[GrowthContext], list[Observation]]]`），共享上下文只算一次再 fan-out（**最优化**：避免每个 diagnoser 各
+读一遍 analytics）。结果写入 `growth_observations.json` 的 `modules` 字段。dashboard `queries.py` 加
+`growth_observations()` 只读函数 + `app.py` 加一段 `st.header("Self-Growth Lab")`。
+
+**涉及文件**：新增 `growth/diagnosers/*`、改 `growth/observations.py`、`dashboard/queries.py`、
+`dashboard/charts.py`、`dashboard/app.py`、对应测试。
+
+**验收**：每模块输出 `type/severity/evidence/suggested_action`；新增一个 diagnoser 只需注册、不动其它；
+dashboard 页面只读。
+
+> **G0–G2 是「下一步」的安全只读地基，已给出逐任务 TDD 实现计划**：见
+> [`superpowers/plans/2026-06-16-self-growth-platform-g0-g2.md`](./superpowers/plans/2026-06-16-self-growth-platform-g0-g2.md)。
+
+---
+
+## G3 — proposal generator（依赖 G0–G2）
+
+**目标**：把 observations 转成 strategy proposal，但**只写** proposed YAML/Markdown，**不自动启用**。
+
+**具体步骤**：新增 `growth/proposals.py`，输出 `runtime/strategy_proposals/<YYYY-MM-DD>/proposal_*.yaml`
+和 `.md`；proposal 只能改 `growth_policy` 白名单参数（threshold / component weights / enabled_setups /
+prompt_pack / watchlist cap / feature lookback）。CLI 新增 `growth propose`。
+
+**验收**：proposal 只触及白名单字段；champion 行为零变化。
+
+---
+
+## G4 — proposal validator（完整校验，依赖 G0 / G3）
+
+**目标**：把 G0 的 validator 骨架补全，对 proposal 做完整安全校验。
+
+**具体步骤**：`growth/validator.py` 读 `growth_policy.json`，校验权重和、单次 delta、threshold 范围、
+禁止字段、`paper_only`；失败标 `rejected` 并写原因，通过标 `validated`（**仍不自动启用**）。CLI
+`growth validate <proposal.yaml>`。
+
+**验收**：能拒绝 live/risk/MCP/safety 相关 mutation；输出 `*_validation.json`。
+
+---
+
+## G5 — experiment queue（依赖 G4）
+
+**目标**：管理实验生命周期 `proposed → human_approved → active_shadow → ready_for_review →
+promoted/rejected/archived`。
+
+**具体步骤**：新增 `src/config/strategy_experiments.yaml`（扁平结构，沿用 registry 风格的极简 YAML
+解析）+ `growth/experiment_queue.py`；CLI `growth experiments list/approve/archive`。**approve 只允许启用
+shadow paper，绝不切 `active_strategy`。**
+
+**验收**：approve 只把状态推到 `active_shadow`，不动 `strategy_registry.yaml` 的 `active_strategy`。
+
+---
+
+## G6 — shadow paper runner（依赖 G-pre + G5；评估质量依赖 E1）
+
+**目标**：用相同输入把 `active_shadow` 的 challenger 在**隔离账本**里跑出 shadow 决策/订单/权益曲线，
+**绝不影响 champion paper account**。
+
+**具体步骤**：新增 `growth/shadow_runner.py`。每次 intraday 之后，对每个 active_shadow strategy：用 G-pre
+的按名 profile 解析 + `build_experiment_paths` 构造该 challenger 的 `PolicyInputs`，调用纯函数
+`generate_order_intent`，把结果写 `runtime/state/runs/<date>/experiments/<strategy_id>/`下的
+`shadow_decisions.jsonl` / `shadow_orders.jsonl` / `shadow_equity_curve.jsonl`。
+- 仅 policy_profile/tier 不同的 challenger：复用 champion 的 premarket 产物（daily_plan/risk_overlay/
+  candidate_scores），只换 policy_profile + 隔离账本，**最省**。
+- scoring_profile/watchlist 不同的 challenger：需用该 challenger 的 scoring_profile 重算 scoring +
+  risk_overlay（复用 `planner/scoring.py` / `risk_overlay.py`，它们也读同一批 signal 文件）。
+
+**验收**：champion 的 `paper/*` 一字不变；challenger 产物只落在 `experiments/<id>/`；同输入可复现。
+
+---
+
+## G7 — evaluator + promotion recommendation（依赖 G6，+ E1 forward returns）
+
+**目标**：对比 champion vs challengers，**只推荐、不自动 promote**。
+
+**具体步骤**：新增 `growth/evaluator.py`，指标：fill_rate、no_trade_rate、blocked_reason、forward returns
+（复用 E1）、max_drawdown、trade frequency、safety violations；产出
+`runtime/analytics/experiment_report.json` + `promotion_recommendation.md`。CLI `growth evaluate` /
+`growth recommend`。
+
+**验收**：报告并排展示 champion/challenger 指标；`promotion_rules`（`min_shadow_days` 等）未满足时不出
+promote 建议。
+
+---
+
+## G8 — human-in-the-loop promotion（仅人工，依赖 G7）
+
+**目标**：真正切换 `active_strategy` **必须由人工改 `strategy_registry.yaml`**；命令只做校验 + 文档生成。
+
+**具体步骤**：新增 `strategy promote check` 命令（只 validation + 生成 changelog 草稿）；每次 promote 必须
+写 `docs/strategy-changelog.md`（已有 B4 的测试强制每个 strategy version 有 changelog 条目）。
+
+**验收**：命令本身**从不**修改 `active_strategy`；promote 后 changelog 有对应条目。
+
+**最终边界**：AI 建议 → Python 校验 → paper 实验 → shadow 并行比较 → dashboard 展示 → **人类决定
+promote** → live 永远不能自动升级。
