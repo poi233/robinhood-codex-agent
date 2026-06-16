@@ -286,13 +286,19 @@ def _hydrate_paper_ledger_if_present(inputs: PolicyInputs, paths: Any) -> None:
         }
     pending_orders = [
         order
-        for payload in pending_paper_orders(paths.agent_root, run_date=paths.run_date)
+        for payload in pending_paper_orders(paths.agent_root, run_date=paths.run_date, paths_override=paths)
         if (order := _parse_open_order(payload)) is not None
     ]
     existing = {(order.symbol, order.side, order.quantity, order.status): order for order in inputs.open_orders}
     for order in pending_orders:
         existing.setdefault((order.symbol, order.side, order.quantity, order.status), order)
     inputs.open_orders = list(existing.values())
+
+
+def hydrate_paper_ledger(inputs: PolicyInputs, paths: Any) -> None:
+    """Public: overlay account/positions/pending-orders from the paper ledger rooted at `paths`.
+    Used by the shadow runner to hydrate a challenger from its own isolated experiment ledger (G9)."""
+    _hydrate_paper_ledger_if_present(inputs, paths)
 
 
 def load_policy_inputs(

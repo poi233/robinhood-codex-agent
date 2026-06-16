@@ -125,8 +125,9 @@ def record_paper_day_start(
     run_date: str,
     starting_cash: float,
     positions: dict[str, Any] | None = None,
+    paths_override: Any | None = None,
 ) -> bool:
-    paths = build_runtime_paths(agent_root, run_date=run_date)
+    paths = paths_override or build_runtime_paths(agent_root, run_date=run_date)
     if paths.paper_day_start_path.exists():
         return False
     account = _initialize_account(paths.paper_account_path, starting_cash)
@@ -141,10 +142,10 @@ def record_paper_day_start(
     return True
 
 
-def record_paper_day_end(agent_root: Path, *, run_date: str) -> bool:
-    paths = build_runtime_paths(agent_root, run_date=run_date)
+def record_paper_day_end(agent_root: Path, *, run_date: str, paths_override: Any | None = None) -> bool:
+    paths = paths_override or build_runtime_paths(agent_root, run_date=run_date)
     if str(os.environ.get("PAPER_CANCEL_PENDING_AT_DAY_END", "1") or "1") == "1":
-        pending = pending_paper_orders(agent_root, run_date=run_date)
+        pending = pending_paper_orders(agent_root, run_date=run_date, paths_override=paths)
         if pending:
             now = datetime.now(tz=PT).isoformat()
             for order in pending:
@@ -398,12 +399,13 @@ def apply_paper_intent(
     run_date: str,
     decision: PolicyDecision,
     starting_cash: float,
+    paths_override: Any | None = None,
 ) -> PaperFillResult:
     if decision.trading_mode != "paper" or decision.decision != "would_trade" or decision.intent is None:
         return PaperFillResult(False, "rejected", "no_paper_fill")
 
-    paths = build_runtime_paths(agent_root, run_date=run_date)
-    record_paper_day_start(agent_root, run_date=run_date, starting_cash=starting_cash)
+    paths = paths_override or build_runtime_paths(agent_root, run_date=run_date)
+    record_paper_day_start(agent_root, run_date=run_date, starting_cash=starting_cash, paths_override=paths)
     account = _initialize_account(paths.paper_account_path, starting_cash)
     positions = _read_json_or(paths.paper_positions_path, {})
     if not isinstance(positions, dict):
@@ -470,8 +472,8 @@ def apply_paper_intent(
     return result
 
 
-def pending_paper_orders(agent_root: Path, *, run_date: str) -> list[dict[str, Any]]:
-    paths = build_runtime_paths(agent_root, run_date=run_date)
+def pending_paper_orders(agent_root: Path, *, run_date: str, paths_override: Any | None = None) -> list[dict[str, Any]]:
+    paths = paths_override or build_runtime_paths(agent_root, run_date=run_date)
     rows = _read_jsonl(paths.paper_orders_log_path)
     latest_by_order_id: dict[str, dict[str, Any]] = {}
     for row in rows:
@@ -515,9 +517,10 @@ def reconcile_pending_paper_orders(
     run_date: str,
     quotes: dict[str, Quote],
     starting_cash: float,
+    paths_override: Any | None = None,
 ) -> list[dict[str, Any]]:
-    paths = build_runtime_paths(agent_root, run_date=run_date)
-    pending_orders = pending_paper_orders(agent_root, run_date=run_date)
+    paths = paths_override or build_runtime_paths(agent_root, run_date=run_date)
+    pending_orders = pending_paper_orders(agent_root, run_date=run_date, paths_override=paths)
     if not pending_orders:
         return []
     account = _initialize_account(paths.paper_account_path, starting_cash)

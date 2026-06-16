@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 from trading_agent.core.time import pt_date_string
@@ -176,4 +176,24 @@ def build_experiment_paths(agent_root: Path, *, run_date: str | None = None, str
         shadow_decisions_log_path=base / "shadow_decisions.jsonl",
         shadow_orders_log_path=base / "shadow_orders.jsonl",
         shadow_equity_curve_path=base / "shadow_equity_curve.jsonl",
+    )
+
+
+def build_experiment_runtime_paths(agent_root: Path, *, run_date: str | None = None, strategy_id: str) -> RuntimePaths:
+    """A RuntimePaths identical to the champion's except the paper ledger + daily_usage are rooted
+    under runtime/state/runs/<date>/experiments/<strategy_id>/paper/. This lets the paper broker
+    simulate a challenger's fills in a fully isolated ledger (G9) — the champion paper/* is never
+    touched. All non-paper paths (configs, signals, planner artifacts) stay shared with the champion."""
+    base = build_runtime_paths(agent_root, run_date=run_date)
+    paper = base.run_state_dir / "experiments" / strategy_id / "paper"
+    return replace(
+        base,
+        paper_account_path=paper / "account.json",
+        paper_positions_path=paper / "positions.json",
+        paper_orders_log_path=paper / "orders.jsonl",
+        paper_equity_curve_path=paper / "equity_curve.jsonl",
+        paper_day_start_path=paper / "day_start.json",
+        paper_day_end_path=paper / "day_end.json",
+        paper_postmarket_summary_path=paper / "postmarket_summary.json",
+        daily_usage_path=paper / "daily_usage.json",
     )
