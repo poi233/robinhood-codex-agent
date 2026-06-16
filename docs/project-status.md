@@ -24,9 +24,9 @@
 | 价格 setup 进排序 | ✅ 已加，权重待校准（P2） |
 | 成本/速度优化（并发 / quote 瘦身 / subagent） | ✅ 已加（P3） |
 | 回看分析（fill rate / blocked 分布） | ✅ 本地部分已加 |
-| 回看校准（score 桶 vs 未来收益 / 权重校准） | ⏳ 阻塞于数据积累 |
+| 回看校准（score 桶 vs 未来收益 / 权重校准） | 🟢 E1 机器已建（forward/benchmark returns + IC attribution + setup outcomes + Calibration tab，见 roadmap E1）；统计显著性待数据积累 |
 | 数据可追溯（run_manifest / analytics.db） | ✅ 已加（B1–B4，见 roadmap B） |
-| 只读可视化（Strategy Lab dashboard） | ✅ C1–C3 已加；C3 v2 = 侧边栏+7 Tab+策略对比（含 F1），首次 headless 渲染验证，像素级视觉仍待人工目测，见 roadmap C3 |
+| 只读可视化（Strategy Lab dashboard） | ✅ C1–C3 已加；侧边栏 + 8 Tab（策略对比含 F1 + Calibration），headless 渲染验证，像素级视觉仍待人工目测，见 roadmap C3 |
 | Token 成本（DSA/Technical 预计算） | ✅ 已加（P4，见 roadmap D1） |
 | 自成长平台（observe→propose→shadow→promote） | ✅ G-pre/G0–G8 全闭环已加（paper/shadow only，promote 仅人工，见 roadmap G） |
 | 自成长诊断/提议/shadow/推荐（growth 全命令树） | ✅ observe/propose/validate/experiments/shadow/evaluate/recommend/promote check 全部上线 |
@@ -346,6 +346,7 @@
 | **G3 + 数据前置** 自成长提议 | `growth/proposals.py` + `growth propose`（白名单、过 validator、只写文件）；intraday 分数落盘 `intraday_rankings.jsonl` + analytics 第 7 张表 | 见 git log |
 | **G4–G8** 自成长全闭环 | proposal 完整校验（`growth validate`）→ 实验队列（`growth experiments`）→ shadow runner + 隔离账本（`growth shadow`，接入 intraday）→ evaluator（`growth evaluate/recommend`）→ 人工 promote check（`growth promote check`，不改 registry） | 见 git log |
 | **C3** Dashboard v2 | 侧边栏 + 7 Tab；8 个只读查询（含 `strategy_comparison`=F1 + `champion_vs_challengers`）；`AppTest` headless 渲染验证 | 见 git log |
+| **E1** 策略校准地基 | `replay/forward_returns`（keystone）+ benchmark + component IC attribution + setup outcomes + `calibration_report.{json,md}` + `analytics calibrate` + dashboard 第 8 Tab Calibration；全离线可测 | 见 git log |
 
 ---
 

@@ -54,7 +54,8 @@ shell wrappers in `src/scripts/entrypoints/` (they export the cron/launchd defau
 | `doctor` | Print effective config (mode, tiers/caps, feature flags) and exit. |
 | `replay [--since --until --output]` | Local paper analytics: fill rate + blocked-reason distribution across run dates. |
 | `analytics build [--since --until]` | (Re)build `runtime/analytics/analytics.db` (SQLite) from run state — feeds the dashboard. |
-| `dashboard` | Read-only Streamlit UI at `localhost:8501`: sidebar + 7 tabs (Today / Candidates / Decisions / Paper / **Strategy Comparison** / Self-Growth / Themes). |
+| `analytics calibrate [--since --until]` | E1 strategy calibration → `calibration_report.{json,md}`: score-bucket forward returns, component IC, benchmark alpha, setup outcomes (needs network for yfinance). |
+| `dashboard` | Read-only Streamlit UI at `localhost:8501`: sidebar + 8 tabs (Today / Candidates / Decisions / Paper / **Strategy Comparison** / **Calibration** / Self-Growth / Themes). |
 
 ### Self-growth (paper/shadow only — proposes, never auto-applies)
 Diagnoses the system, proposes **bounded** experiments, runs challenger strategies in **shadow

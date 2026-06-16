@@ -74,12 +74,12 @@ python3 -m trading_agent growth observe
    ```
    只判断 proposal 合不合理（它只会动白名单参数：threshold / 权重 / enabled setup / watchlist / entry
    zone）。**积累够 10+ 交易日之前不要进 active_shadow。**
-3. **E1 上线后**：每周跑一次校准报告，重点看 Calibration Tab：
+3. **每周跑一次校准报告**（E1 已上线，需联网 yfinance），重点看 dashboard 的 **Calibration Tab**：
    ```bash
-   python3 -m trading_agent analytics calibrate   # E1 落地后
+   python3 -m trading_agent analytics calibrate
    ```
-   看：哪个分数桶最有效（桶单调吗）、哪个分量 IC 最高、哪个 setup 最容易成交/最赚、哪个 blocked reason
-   后续收益证明是真保护 vs 错过。
+   看：哪个分数桶最有效（桶单调吗）、哪个分量 IC 最高、哪个 setup 最容易成交/最赚、benchmark 对照。
+   **注意**：样本 < 15 个 run date 时数字噪声很大，别据此调权重——E1 报告头部也会提醒。
 
 ---
 
