@@ -1,7 +1,7 @@
 # 项目状态总表 — 做了什么 / 没做什么
 
 > 最后更新：2026-06-15
-> 范围：`src/trading_agent/`（约 6500 行 Python）+ 配置 + 编排 + 入口 + 测试（261 passed）
+> 范围：`src/trading_agent/`（约 6500 行 Python）+ 配置 + 编排 + 入口 + 测试（267 passed）
 > 用途：**单一权威的"现状"文档**，按子系统逐块说明已实现与未实现。未来要做的事另见
 > [`roadmap.md`](./roadmap.md)。
 >
@@ -132,6 +132,10 @@
 - 风险覆盖：分离 `watchlist_candidates` 与 `tradable_candidates`；阈值来自 `scoring_profiles.yaml`。
 - 诊断：`premarket_diagnostics.json` 输出分数分布、阈值、覆盖、未映射动作、warning 等。
 - `scoring_profiles.yaml`：3 个 profile（aggressive_growth / balanced / conservative）。
+- **（roadmap C2）** `premarket_diagnostics.json` 新增 `theme_diagnostics`：watchlist/tradable 按
+  `universe_meta.json` 的 `theme` 分组的集中度（count/pct）、dominant theme、speculative 主题占比；
+  超过 `scoring_profiles.yaml` 里 `max_theme_concentration_pct`/`max_speculative_theme_pct` 时进
+  `warnings`。没有 `universe_meta.json` 时只跳过告警，不产生误报。
 
 **没做**
 - 评分权重（0.25/0.30/…）仍是先验设定，未经回看数据校准。
@@ -260,6 +264,7 @@
 | **P5-B1** 数据可追溯 | `strategy/manifest.py`：三个 lifecycle 入口都写 `run_manifest.json` | 见 git log |
 | **P5-B3** 数据可追溯 | `analytics/` 包 + `analytics build` 子命令：6 张表汇总进 `analytics.db` | 见 git log |
 | **P5-B4** 数据可追溯 | `docs/strategy-changelog.md` + `list_strategy_ids()` + 配套测试 | 见 git log |
+| **P5-C2** 观测 | `premarket_diagnostics.json` 新增 theme/speculative 集中度诊断 + 可配置 cap | 见 git log |
 
 ---
 
@@ -271,7 +276,8 @@
   （数据可追溯基建：run_manifest / strategy_registry / analytics.db）。
 - **B 数据可追溯基建（P0）**：✅ 全部完成（B1/B2/B3/B4，见上方 P5-B1~P5-B4 与第 13 节）。
   下一批是 C 阶段（theme 诊断 + 只读 dashboard）。
-- **C 只读可视化与观测**：Strategy Lab dashboard（Streamlit 只读）、theme/speculative 集中度诊断。
+- **C 只读可视化与观测**：Strategy Lab dashboard（Streamlit 只读，C1）。
+  （theme/speculative 集中度诊断已完成，见上方 P5-C2。）
 - **D 工程优化**：market_feed 跨日缓存/batch、Kronos batch 推理、paper 部分成交模型。
   （DSA/Technical token 优化已完成，见上方 P4 与 roadmap D1。）
 - **E 数据驱动校准（阻塞 2–3 周 paper）**：forward/benchmark returns + entry-zone 命中率 +

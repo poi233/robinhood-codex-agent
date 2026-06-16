@@ -50,6 +50,47 @@ def _component_coverage(ranked_items: list[tuple[str, dict[str, Any]]], *, requi
     }
 
 
+def _load_universe_meta(config_dir: Path) -> dict[str, dict[str, Any]]:
+    path = config_dir / "universe_meta.json"
+    if not path.exists():
+        return {}
+    payload = read_json(path)
+    if not isinstance(payload, dict):
+        return {}
+    return {
+        str(symbol).upper(): meta
+        for symbol, meta in payload.items()
+        if isinstance(meta, dict)
+    }
+
+
+def _theme_concentration(
+    symbols: list[str],
+    *,
+    universe_meta: dict[str, dict[str, Any]],
+    speculative_theme_name: str,
+) -> dict[str, Any]:
+    total = len(symbols)
+    theme_counts: Counter[str] = Counter(
+        str((universe_meta.get(symbol.upper()) or {}).get("theme") or "unknown") for symbol in symbols
+    )
+    theme_distribution = {
+        theme: {"count": count, "pct": round(count / total * 100, 1) if total else 0.0}
+        for theme, count in sorted(theme_counts.items(), key=lambda item: (-item[1], item[0]))
+    }
+    dominant_theme = next(iter(theme_distribution), None)
+    max_theme_pct = theme_distribution[dominant_theme]["pct"] if dominant_theme else 0.0
+    speculative_count = theme_counts.get(speculative_theme_name, 0)
+    speculative_pct = round(speculative_count / total * 100, 1) if total else 0.0
+    return {
+        "symbol_count": total,
+        "theme_distribution": theme_distribution,
+        "dominant_theme": dominant_theme,
+        "max_theme_pct": max_theme_pct,
+        "speculative_pct": speculative_pct,
+    }
+
+
 def build_premarket_diagnostics(
     *,
     run_date: str,
@@ -60,6 +101,7 @@ def build_premarket_diagnostics(
     catalyst_snapshot: dict[str, Any] | None = None,
     technical_signals: dict[str, Any] | None = None,
     scoring_profile: dict[str, Any] | None = None,
+    universe_meta: dict[str, dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     scoring_profile = dict(scoring_profile or DEFAULT_SCORING_PROFILE)
     ranked_items = _ranked_candidates(candidate_scores)
@@ -113,6 +155,43 @@ def build_premarket_diagnostics(
 
     watchlist_candidates = list(risk_overlay.get("watchlist_candidates") or [])
     tradable_candidates = list(risk_overlay.get("tradable_candidates") or [])
+    universe_meta = universe_meta or {}
+    max_theme_concentration_pct = _as_float(
+        scoring_profile.get("max_theme_concentration_pct"), DEFAULT_SCORING_PROFILE["max_theme_concentration_pct"]
+    )
+    max_speculative_theme_pct = _as_float(
+        scoring_profile.get("max_speculative_theme_pct"), DEFAULT_SCORING_PROFILE["max_speculative_theme_pct"]
+    )
+    speculative_theme_name = str(
+        scoring_profile.get("speculative_theme_name", DEFAULT_SCORING_PROFILE["speculative_theme_name"])
+    )
+    theme_diagnostics = {
+        "caps": {
+            "max_theme_concentration_pct": max_theme_concentration_pct,
+            "max_speculative_theme_pct": max_speculative_theme_pct,
+            "speculative_theme_name": speculative_theme_name,
+        },
+        "watchlist": _theme_concentration(
+            watchlist_candidates, universe_meta=universe_meta, speculative_theme_name=speculative_theme_name
+        ),
+        "tradable": _theme_concentration(
+            tradable_candidates, universe_meta=universe_meta, speculative_theme_name=speculative_theme_name
+        ),
+    }
+    theme_warnings: list[str] = []
+    if universe_meta:
+        for bucket_name in ("watchlist", "tradable"):
+            bucket = theme_diagnostics[bucket_name]
+            if bucket["symbol_count"] and bucket["max_theme_pct"] > max_theme_concentration_pct:
+                theme_warnings.append(
+                    f"theme_concentration_exceeded:{bucket_name}:{bucket['dominant_theme']}:"
+                    f"{bucket['max_theme_pct']}%>{max_theme_concentration_pct}%"
+                )
+            if bucket["symbol_count"] and bucket["speculative_pct"] > max_speculative_theme_pct:
+                theme_warnings.append(
+                    f"speculative_concentration_exceeded:{bucket_name}:"
+                    f"{bucket['speculative_pct']}%>{max_speculative_theme_pct}%"
+                )
     scored_candidate_count = len(scored_items)
     watchlist_threshold = _as_float(
         risk_overlay.get("watchlist_score_threshold"),
@@ -143,6 +222,7 @@ def build_premarket_diagnostics(
         ]
         if high_insufficient:
             warnings.append(f"high_score_but_insufficient_data:{','.join(high_insufficient)}")
+    warnings.extend(theme_warnings)
 
     final_risk_overlay_state = {
         "market_regime": risk_overlay.get("market_regime"),
@@ -200,6 +280,7 @@ def build_premarket_diagnostics(
             "reason_codes": list((data_status_summary or {}).get("reason_codes") or []),
         },
         "technical_signal_count": len(list(((technical_signals or {}).get("symbols") or {}).keys())),
+        "theme_diagnostics": theme_diagnostics,
         "final_risk_overlay_state": final_risk_overlay_state,
         "final_daily_plan_state": final_daily_plan_state,
         "warnings": warnings,
@@ -217,6 +298,7 @@ def build_premarket_diagnostics_from_paths(agent_root: Path, run_date: str) -> d
         catalyst_snapshot=_read_json_or_empty(paths.catalyst_snapshot_path),
         technical_signals=_read_json_or_empty(paths.technical_signals_path),
         scoring_profile=load_scoring_profile(paths.config_dir),
+        universe_meta=_load_universe_meta(paths.config_dir),
     )
     write_json(paths.premarket_diagnostics_path, payload)
     return payload

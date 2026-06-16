@@ -16,6 +16,9 @@ def test_default_scoring_profile_loads() -> None:
     assert profile["max_scored_candidates"] == 20
     assert profile["max_watchlist"] == 8
     assert profile["max_tradable"] == 8
+    assert profile["max_theme_concentration_pct"] == 50.0
+    assert profile["max_speculative_theme_pct"] == 40.0
+    assert profile["speculative_theme_name"] == "speculative"
 
 
 def test_max_candidate_caps_are_configurable(tmp_path) -> None:

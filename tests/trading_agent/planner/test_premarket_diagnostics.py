@@ -169,3 +169,133 @@ def test_premarket_diagnostics_file_is_created_with_final_daily_plan_state(tmp_p
     assert saved["top_candidate"] == "AVGO"
     assert saved["thresholds"]["watchlist_threshold"] == 35.0
     assert saved["final_daily_plan_state"]["plan_state"] == "observe_only"
+
+
+def _risk_overlay_with_watchlist(symbols: list[str]) -> dict:
+    return {
+        "watchlist_score_threshold": 35.0,
+        "trade_score_threshold": 50.0,
+        "market_regime": "normal",
+        "watchlist_candidates": symbols,
+        "tradable_candidates": symbols,
+        "today_watchlist": symbols,
+        "allowed_actions": ["small_limit_buy"],
+        "risk_level": "normal",
+        "no_trade_reasons": [],
+    }
+
+
+def test_theme_concentration_flags_dominant_theme_above_cap() -> None:
+    symbols = ["AVGO", "NVDA", "AMD"]
+    payload = build_premarket_diagnostics(
+        run_date="2026-06-15",
+        candidate_scores={"symbols": {s: _candidate_payload(70.0) for s in symbols}},
+        risk_overlay=_risk_overlay_with_watchlist(symbols),
+        daily_plan={"plan_state": "normal", "market_regime": "normal", "allowed_actions": []},
+        universe_meta={
+            "AVGO": {"theme": "ai_semiconductor"},
+            "NVDA": {"theme": "ai_semiconductor"},
+            "AMD": {"theme": "ai_semiconductor"},
+        },
+    )
+
+    watchlist_theme = payload["theme_diagnostics"]["watchlist"]
+    assert watchlist_theme["dominant_theme"] == "ai_semiconductor"
+    assert watchlist_theme["max_theme_pct"] == 100.0
+    assert any(w.startswith("theme_concentration_exceeded:watchlist:ai_semiconductor") for w in payload["warnings"])
+
+
+def test_theme_concentration_flags_speculative_share_above_cap() -> None:
+    symbols = ["RKLB", "JOBY", "SPY"]
+    payload = build_premarket_diagnostics(
+        run_date="2026-06-15",
+        candidate_scores={"symbols": {s: _candidate_payload(70.0) for s in symbols}},
+        risk_overlay=_risk_overlay_with_watchlist(symbols),
+        daily_plan={"plan_state": "normal", "market_regime": "normal", "allowed_actions": []},
+        universe_meta={
+            "RKLB": {"theme": "speculative"},
+            "JOBY": {"theme": "speculative"},
+            "SPY": {"theme": "broad_beta"},
+        },
+    )
+
+    watchlist_theme = payload["theme_diagnostics"]["watchlist"]
+    assert watchlist_theme["speculative_pct"] > 40.0
+    assert any(w.startswith("speculative_concentration_exceeded:watchlist:") for w in payload["warnings"])
+
+
+def test_theme_concentration_no_warning_when_diversified_and_under_caps() -> None:
+    symbols = ["SPY", "NVDA"]
+    payload = build_premarket_diagnostics(
+        run_date="2026-06-15",
+        candidate_scores={"symbols": {s: _candidate_payload(70.0) for s in symbols}},
+        risk_overlay=_risk_overlay_with_watchlist(symbols),
+        daily_plan={"plan_state": "normal", "market_regime": "normal", "allowed_actions": []},
+        universe_meta={
+            "SPY": {"theme": "broad_beta"},
+            "NVDA": {"theme": "ai_semiconductor"},
+        },
+    )
+
+    assert not [w for w in payload["warnings"] if "concentration_exceeded" in w]
+    assert payload["theme_diagnostics"]["watchlist"]["max_theme_pct"] == 50.0
+
+
+def test_theme_concentration_skips_warnings_when_universe_meta_missing() -> None:
+    symbols = ["AVGO", "NVDA", "AMD"]
+    payload = build_premarket_diagnostics(
+        run_date="2026-06-15",
+        candidate_scores={"symbols": {s: _candidate_payload(70.0) for s in symbols}},
+        risk_overlay=_risk_overlay_with_watchlist(symbols),
+        daily_plan={"plan_state": "normal", "market_regime": "normal", "allowed_actions": []},
+    )
+
+    assert not [w for w in payload["warnings"] if "concentration_exceeded" in w]
+    assert payload["theme_diagnostics"]["watchlist"]["dominant_theme"] == "unknown"
+
+
+def test_theme_concentration_cap_is_configurable_via_scoring_profile() -> None:
+    symbols = ["SPY", "NVDA"]
+    payload = build_premarket_diagnostics(
+        run_date="2026-06-15",
+        candidate_scores={"symbols": {s: _candidate_payload(70.0) for s in symbols}},
+        risk_overlay=_risk_overlay_with_watchlist(symbols),
+        daily_plan={"plan_state": "normal", "market_regime": "normal", "allowed_actions": []},
+        universe_meta={
+            "SPY": {"theme": "broad_beta"},
+            "NVDA": {"theme": "ai_semiconductor"},
+        },
+        scoring_profile={
+            "name": "tight",
+            "watchlist_threshold": 35.0,
+            "trade_threshold": 50.0,
+            "high_conviction_threshold": 80.0,
+            "min_effective_coverage": 0.5,
+            "max_theme_concentration_pct": 30.0,
+        },
+    )
+
+    assert any(w.startswith("theme_concentration_exceeded:watchlist:") for w in payload["warnings"])
+
+
+def test_build_premarket_diagnostics_from_paths_reads_real_universe_meta(tmp_path: Path) -> None:
+    root = tmp_path
+    paths = build_runtime_paths(root, run_date="2026-06-15")
+    symbols = ["AVGO", "NVDA"]
+    write_json(
+        paths.candidate_scores_path,
+        {"symbols": {s: _candidate_payload(70.0) for s in symbols}},
+    )
+    write_json(paths.risk_overlay_path, _risk_overlay_with_watchlist(symbols))
+    write_json(paths.daily_plan_path, {"plan_state": "normal", "market_regime": "normal", "allowed_actions": []})
+    (paths.config_dir).mkdir(parents=True, exist_ok=True)
+    write_json(
+        paths.config_dir / "universe_meta.json",
+        {"AVGO": {"theme": "ai_semiconductor"}, "NVDA": {"theme": "ai_semiconductor"}},
+    )
+
+    result = build_premarket_diagnostics_from_paths(root, "2026-06-15")
+
+    assert result["theme_diagnostics"]["watchlist"]["dominant_theme"] == "ai_semiconductor"
+    assert result["theme_diagnostics"]["watchlist"]["max_theme_pct"] == 100.0
+    assert any(w.startswith("theme_concentration_exceeded:watchlist:") for w in result["warnings"])

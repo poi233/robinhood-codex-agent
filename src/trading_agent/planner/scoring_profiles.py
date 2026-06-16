@@ -14,6 +14,9 @@ DEFAULT_SCORING_PROFILE = {
     "max_scored_candidates": 20,
     "max_watchlist": 8,
     "max_tradable": 8,
+    "max_theme_concentration_pct": 50.0,
+    "max_speculative_theme_pct": 40.0,
+    "speculative_theme_name": "speculative",
 }
 
 
@@ -79,4 +82,7 @@ def load_scoring_profile(config_dir: Path) -> dict[str, Any]:
         "max_scored_candidates": int(payload.get("max_scored_candidates", DEFAULT_SCORING_PROFILE["max_scored_candidates"])),
         "max_watchlist": int(payload.get("max_watchlist", DEFAULT_SCORING_PROFILE["max_watchlist"])),
         "max_tradable": int(payload.get("max_tradable", DEFAULT_SCORING_PROFILE["max_tradable"])),
+        "max_theme_concentration_pct": float(payload.get("max_theme_concentration_pct", DEFAULT_SCORING_PROFILE["max_theme_concentration_pct"])),
+        "max_speculative_theme_pct": float(payload.get("max_speculative_theme_pct", DEFAULT_SCORING_PROFILE["max_speculative_theme_pct"])),
+        "speculative_theme_name": str(payload.get("speculative_theme_name", DEFAULT_SCORING_PROFILE["speculative_theme_name"])),
     }

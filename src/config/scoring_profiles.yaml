@@ -2,6 +2,9 @@ default_profile: aggressive_growth
 max_scored_candidates: 20
 max_watchlist: 8
 max_tradable: 8
+max_theme_concentration_pct: 50
+max_speculative_theme_pct: 40
+speculative_theme_name: speculative
 profiles:
   aggressive_growth:
     watchlist_threshold: 35
