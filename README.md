@@ -146,6 +146,32 @@ symbols that receive expensive analysis):
 
 ---
 
+## Token Optimization (DSA / Technical precompute)
+
+Both Codex-driven signal layers used to read raw inputs (full OHLCV arrays, charts, per-symbol
+fetches) and let the LLM do arithmetic the code can do exactly and far more cheaply. Two
+deterministic precompute modules now run before each prompt; **the prompts' output JSON schemas
+are unchanged**, so `scoring.py`, `risk_overlay.py`, and the contracts validators are unaffected —
+only the *inputs* the prompts read changed.
+
+- `planner/technical_features.py` — pure-Python (no numpy) indicator computation over the
+  market_feed OHLCV already collected for the active watchlist: SMA/EMA/RSI/MACD/ATR, swing
+  high/low levels, trend label, pattern flags, multi-timeframe alignment, and relative strength vs
+  SPY, per symbol per timeframe (daily/weekly/hourly/intraday_15m). Daily also keeps the most
+  recent `TECHNICAL_RECENT_BARS` raw candles so the LLM can still apply chan/Brooks structural
+  reasoning. Written to `TECHNICAL_FEATURES_PATH` (`signals/technical_features.json`).
+- `signals/dsa_metrics.py` — one batched cross-sectional yfinance download covering the full
+  88-symbol universe + benchmark, producing per-symbol return/relative-strength/trend/above-SMA/
+  distance-from-highs/volume-surge/ATR%/theme/liquidity, plus theme aggregates and market breadth.
+  Written to `DSA_METRICS_PATH` (`signals/dsa_metrics.json`).
+- Both fall back gracefully: a symbol with `data_quality="failed"` tells the prompt to fetch that
+  one symbol's data itself instead of trusting the precomputed entry.
+- Toggle with `ENABLE_TECHNICAL_FEATURES_PRECOMPUTE` / `ENABLE_DSA_METRICS_PRECOMPUTE` (default
+  `1`); setting either to `0` reverts that layer to the old prompt-only behavior instantly.
+- Full design: [`docs/design-prompt-token-optimization.md`](docs/design-prompt-token-optimization.md).
+
+---
+
 ## Risk Tiers
 
 `src/config/risk_tiers.json` defines notional caps. The **effective tier** depends on
@@ -250,6 +276,14 @@ MARKET_FEED_MAX_WORKERS=4   # market_context concurrency
 PAPER_FILL_MODEL=conservative
 PAPER_SLIPPAGE_BPS=10       # 0.1% slippage on paper fills
 PAPER_CANCEL_PENDING_AT_DAY_END=1
+
+# Token optimization: precompute indicators/metrics in Python so prompts read a compact
+# feature pack instead of raw charts/OHLCV/per-symbol fetches. Output schemas are unchanged;
+# set either flag to 0 to roll back to the old prompt-only behavior instantly.
+ENABLE_TECHNICAL_FEATURES_PRECOMPUTE=1
+TECHNICAL_RECENT_BARS=30            # daily candles included verbatim in the feature pack
+ENABLE_DSA_METRICS_PRECOMPUTE=1
+DSA_METRICS_LOOKBACK_DAYS=180       # yfinance lookback window for the cross-sectional table
 ```
 
 ---
@@ -271,6 +305,9 @@ Steps:
 4. Local `market_context` (active watchlist only, concurrent yfinance fetch + charts) → `market_feed/`.
 5. Parallel advisory layers: DSA scan (full universe), Kronos forecast (active), technical research
    (active, may fan out to `TECHNICAL_MAX_SUBAGENTS` read-only subagents), market calendar, core quotes.
+   Before the DSA and technical prompts run, Python precomputes their numeric inputs so the Codex
+   layer reads a compact feature pack instead of raw OHLCV/charts or per-symbol fetches (see
+   **Token Optimization** below).
 6. Local `trader_watch_levels` (schema normalization of technical levels).
 7. Local `candidate_snapshot` from holdings + open orders + advisory signals.
 8. Local candidate quote snapshot, then parallel tradability + catalyst enrichment.
@@ -417,7 +454,8 @@ Each run date uses the same shape (all git-ignored):
 ```text
 runtime/state/runs/YYYY-MM-DD/
   market_feed/   manifest.json, charts/, ohlcv/, news/
-  signals/       dsa_signals.json, kronos_signals.json, technical_signals.json
+  signals/       dsa_signals.json, kronos_signals.json, technical_signals.json,
+                 dsa_metrics.json, technical_features.json
   planner/       account_snapshot, capital_snapshot, market_calendar, quote_snapshot_core,
                  candidate_snapshot, candidate_scores, quote_snapshot_candidates,
                  tradability_snapshot, catalyst_snapshot, trader_watch_levels,
@@ -520,7 +558,7 @@ ALLOW_OUTSIDE_MARKET_TEST=1 ./src/scripts/entrypoints/run_all_paper_once.sh
 ./src/scripts/safety/check_safety.sh
 ALLOW_WEEKEND_RUN=1 KRONOS_USE_MOCK=1 ./src/scripts/kronos/run_kronos_premarket_scan.sh
 
-# Unit tests (197 tests)
+# Unit tests (222 tests)
 python3 -m pytest tests/ -q
 python3 -m unittest discover -s tests -v
 ```

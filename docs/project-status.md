@@ -1,7 +1,7 @@
 # 项目状态总表 — 做了什么 / 没做什么
 
 > 最后更新：2026-06-15
-> 范围：`src/trading_agent/`（约 6500 行 Python）+ 配置 + 编排 + 入口 + 测试（197 passed）
+> 范围：`src/trading_agent/`（约 6500 行 Python）+ 配置 + 编排 + 入口 + 测试（222 passed）
 > 用途：**单一权威的"现状"文档**，按子系统逐块说明已实现与未实现。未来要做的事另见
 > [`roadmap.md`](./roadmap.md)。
 >
@@ -25,6 +25,9 @@
 | 成本/速度优化（并发 / quote 瘦身 / subagent） | ✅ 已加（P3） |
 | 回看分析（fill rate / blocked 分布） | ✅ 本地部分已加 |
 | 回看校准（score 桶 vs 未来收益 / 权重校准） | ⏳ 阻塞于数据积累 |
+| 数据可追溯（run_manifest / analytics.db） | ⬜ 未做（P0，见 roadmap B） |
+| 只读可视化（Strategy Lab dashboard） | ⬜ 未做（见 roadmap C） |
+| Token 成本（DSA/Technical 预计算） | ✅ 已加（P4，见 roadmap D1） |
 | review/live 真实下单 | ⛔ 故意未接线 |
 
 ---
@@ -90,9 +93,18 @@
 - Kronos 本地预测（active watchlist），失败时写 `build_failed_kronos_payload` 并 fail-closed。
 - Technical research（Codex，active watchlist，可 fan-out 到 `TECHNICAL_MAX_SUBAGENTS` 子代理）。
 - Technical fallback：market feed 不完整或 prompt 失败时写保守 watch-only 价格层。
+- **Token 优化（P4）**：`planner/technical_features.py` 在跑 technical prompt 前，从已收集的
+  market_feed OHLCV 纯 Python 算出 SMA/EMA/RSI/MACD/ATR/swing 高低点/趋势/形态标记/多周期一致性/
+  相对强度，写 `TECHNICAL_FEATURES_PATH`；technical prompt 改读这份特征包而不是原始图表/OHLCV。
+  `signals/dsa_metrics.py` 在跑 DSA prompt 前，对全 88 个 universe symbol 做一次批量 yfinance 下载，
+  算出横截面表（return/相对强度/趋势/距高点/量能/ATR%/主题/流动性）+ 主题聚合 + market breadth，
+  写 `DSA_METRICS_PATH`；DSA prompt 改读这份表，催化剂查询只针对 promote/reconsider 候选。
+  两者都有 `ENABLE_*_PRECOMPUTE` 开关可秒回退；**输出 schema 不变**，scoring/risk_overlay 不受影响。
 
 **没做**
 - Kronos 仍是单标的串行推理（本地模型，受 active watchlist 降到 ≤30 缓解，但未做 batch 推理）。
+- token 优化上线时 B1/B2（run_manifest/strategy_registry）尚未实现，没有按设计登记为新的
+  strategy version，因此目前无法区分优化前后的 paper 样本（见 roadmap D1 遗留注意）。
 
 ### 6. 评分与风险覆盖（`planner/scoring.py`, `risk_overlay.py`, `data_status.py`, `premarket_diagnostics.py`）
 
@@ -197,16 +209,21 @@
 | **P1-B** 选股池分层 | active_watchlist + universe_meta；Kronos/market_feed 按 active 跑 | `96a5a8f` |
 | **P2** 策略质量 | price_setup_score 进排序（权重待校准） | `8134271` |
 | **P3** 成本速度 | market_feed 并发；intraday quote 瘦身；subagents 10→3 | `ebd756a` |
+| **P4** Token 优化 | technical_features.py + dsa_metrics.py 预计算；technical/DSA prompt 改读特征包/横截面表；env flag + doctor 回显 | (本次未提交 commit hash 待补) |
 
 ---
 
 ## 四、明确未做的事（去向 roadmap）
 
-1. replay 的 score 桶 vs 未来收益 / component attribution（阻塞：需 2–3 周 paper 数据）。
-2. P2 价格 setup 权重校准（阻塞：依赖上一条）。
-3. review/live 真实下单接线（故意推后，需先有干净 review 日志）。
-4. 配置化魔数（`selected[:20]`、`[:8]`、doctor 默认值）。
-5. market_feed 跨日缓存 / batch 拉取；Kronos batch 推理。
-6. paper 部分成交模型。
+按 roadmap 全局阶段归类（详细步骤/验收/依赖见 [`roadmap.md`](./roadmap.md)）：
 
-详细清单、验收标准与依赖关系见 [`roadmap.md`](./roadmap.md)。
+- **A 正确性与安全闸**：env 加载早于 early gate；Tier 4 非 paper fail-closed；配置化魔数
+  （`selected[:20]`、`[:8]`、doctor/runtime_block 默认值）。
+- **B 数据可追溯基建（P0）**：run_manifest（每次 lifecycle run）、strategy_registry、
+  analytics.db builder、strategy-changelog。
+- **C 只读可视化与观测**：Strategy Lab dashboard（Streamlit 只读）、theme/speculative 集中度诊断。
+- **D 工程优化**：market_feed 跨日缓存/batch、Kronos batch 推理、paper 部分成交模型。
+  （DSA/Technical token 优化已完成，见上方 P4 与 roadmap D1。）
+- **E 数据驱动校准（阻塞 2–3 周 paper）**：forward/benchmark returns + entry-zone 命中率 +
+  component attribution、评分/价格 setup 权重校准、near-miss tracking、bid/ask/spread 成交质量。
+- **F 后期/故意推后**：strategy compare、review/live 真实下单接线、dashboard config editor。

@@ -14,7 +14,16 @@ Read these local files first:
 - `src/config/risk.md`
 - `src/config/dsa_strategy_weights.json`
 - `runtime/state/wash_sale_blocks.json` if it exists
+- `DSA_METRICS_PATH` — this is the primary data source for this run
 - `PROGRESS_LOG_PATH` from the runtime block
+
+`DSA_METRICS_PATH` contains one pre-computed cross-sectional table for the entire universe: per-symbol
+return (1d/5d/20d/60d), relative strength vs SPY, trend, above/below SMA50/SMA200, distance from
+20-day and 52-week highs, volume surge ratio, ATR%, theme tag, and liquidity tier — plus theme-level
+aggregates (avg relative strength, % uptrend, member count, leaders) and market breadth (% above
+SMA50/200, advance/decline ratio). Do not re-fetch quotes/historicals/news for the full universe
+yourself to compute these numbers — they are already calculated and exact. Use this table as your
+primary read for theme strength, relative-strength context, and crowding/breadth context.
 
 Progress logging:
 - Append a JSON line to `PROGRESS_LOG_PATH` after each symbol or small symbol batch is checked:
@@ -23,16 +32,22 @@ Progress logging:
 
 Parallel execution:
 - Prefer one main DSA prompt run, not multiple outer prompt files.
-- If a subagent/task delegation tool is available, split `src/config/universe.txt` into non-overlapping symbol groups and launch up to `DSA_MAX_SUBAGENTS` read-only subagents.
-- Each subagent should analyze only its assigned symbols and return structured notes back to the main DSA agent.
+- `DSA_METRICS_PATH` already covers the per-symbol numeric scan, so subagents are no longer needed to
+  split up data fetching. If a subagent/task delegation tool is available, you may still launch up to
+  `DSA_MAX_SUBAGENTS` read-only subagents to split *judgment* work (theme classification, catalyst
+  credibility checks for candidates) across symbol groups, but this is optional now that the heavy
+  per-symbol fetch is gone.
 - Only the main DSA agent may write `DSA_SIGNALS_PATH` and append the single final decision record to `DECISIONS_LOG_PATH`.
-- If subagent/task delegation is unavailable, continue sequentially in small symbol groups and log progress after each group.
 
 Allowed data behavior:
-- You may use public web/search tools if available.
-- You may use read-only Robinhood MCP quote, historical, index, and tradability tools if available.
+- You may use public web/search tools, but scope news/catalyst lookups to symbols you are about to
+  classify as `promote` (or are reconsidering out of a `block`) — not the full universe. Use
+  `DSA_METRICS_PATH` numbers for everyone else.
+- You may use read-only Robinhood MCP quote, historical, index, and tradability tools if you need to
+  spot-check a symbol where `DSA_METRICS_PATH` shows `data_quality != "ok"`.
 - Do not call Robinhood account, portfolio, position, order, review, place, cancel, option, transfer, card, bank, profile, or watchlist-write tools in this run.
-- If live/current data is missing, label the affected symbol `data_quality="partial"` or `failed`; do not invent data.
+- If `DSA_METRICS_PATH` itself is missing or `data_status="failed"`, fall back to fetching quotes
+  yourself for the universe; otherwise trust its `data_quality` per symbol and label accordingly.
 
 Boundary rules:
 - Focus DSA on theme strength, cross-symbol priority, relative-strength context, crowding risk, macro sensitivity, and promote/demote/block classification.
@@ -51,7 +66,7 @@ Daily Stock Analysis strategy lenses to apply:
 7. `dragon_head`: true sector leader behavior, not just a crowded high-beta move.
 
 Hard-block before scoring:
-- missing or stale quote data;
+- missing or stale quote data (`DSA_METRICS_PATH` symbol entry has `data_quality="failed"` or is absent);
 - unverified catalyst after a large move;
 - major negative news;
 - earnings today or next trading day when known;

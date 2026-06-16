@@ -9,10 +9,20 @@ Read these local files first:
 - `src/config/runtime.env`
 - `DSA_SIGNALS_PATH` if it exists
 - the manifest at `MARKET_FEED_DIR/manifest.json`
-- the artifacts under `MARKET_FEED_DIR/charts/`
-- the artifacts under `MARKET_FEED_DIR/ohlcv/`
+- `TECHNICAL_FEATURES_PATH` — this is the primary data source for this run
 - the artifacts under `MARKET_FEED_DIR/news/`
 - `PROGRESS_LOG_PATH` from the runtime block
+
+`TECHNICAL_FEATURES_PATH` contains, per symbol and per timeframe (daily/weekly/hourly/intraday_15m),
+already-computed SMA/EMA/RSI/MACD/ATR, 20-day range, distance from recent high, volume surge ratio,
+swing-high/swing-low levels (support/resistance candidates), trend label, pattern flags, multi-timeframe
+alignment, and relative strength vs SPY. The daily timeframe also includes `recent_bars` (the most
+recent `TECHNICAL_RECENT_BARS` daily candles) so you can read price structure directly.
+
+Do not recompute SMA/EMA/RSI/MACD/ATR/swing points yourself — they are already calculated and exact.
+Use them as given. Use `recent_bars` (and the swing levels) to apply chan/Brooks structural reasoning.
+Only fall back to `MARKET_FEED_DIR/charts/` or `MARKET_FEED_DIR/ohlcv/` for a symbol if its entry in
+`TECHNICAL_FEATURES_PATH` is missing or `data_quality="failed"`.
 
 Before analysis, read these repo-owned skills as the authoritative framework:
 - `.agents/skills/chan-structure-trading/SKILL.md`
