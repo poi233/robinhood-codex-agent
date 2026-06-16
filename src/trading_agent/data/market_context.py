@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import os
 import shutil
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta, timezone
 from pathlib import Path
@@ -159,6 +161,63 @@ def build_news_payload(symbol: str, run_date: str, limit: int, mock: bool) -> di
     return build_live_news_payload(symbol, run_date, limit)
 
 
+def _process_one_symbol(
+    symbol: str,
+    date_value: date,
+    run_date: str,
+    timeframes: list[str],
+    news_limit: int,
+    mock: bool,
+    output_dir: Path,
+) -> tuple[str, dict[str, str], bool]:
+    notes: list[str] = []
+    ohlcv_status = "ok"
+    chart_status = "ok"
+    news_status = "ok"
+    earnings_status = "ok"
+    filings_status = "ok"
+
+    try:
+        for timeframe in timeframes:
+            label = TIMEFRAME_MAP[timeframe]["label"]
+            rows = build_mock_rows(date_value, timeframe) if mock else fetch_live_rows(symbol, timeframe)
+            write_json(output_dir / "ohlcv" / symbol / f"{label}.json", rows)
+            write_chart(rows, output_dir / "charts" / symbol / f"{label}.png", f"{symbol} {label}")
+    except Exception as exc:
+        ohlcv_status = "failed"
+        chart_status = "failed"
+        notes.append(str(exc))
+
+    try:
+        news_payload = build_news_payload(symbol, run_date, news_limit, mock)
+        write_json(output_dir / "news" / f"{symbol}.json", news_payload)
+        if not mock:
+            news_status = str((news_payload.get("news") or {}).get("status", "ok"))
+            earnings_status = str((news_payload.get("earnings") or {}).get("status", "ok"))
+            filings_status = str((news_payload.get("filings") or {}).get("status", "ok"))
+            if news_status != "ok":
+                notes.append(str((news_payload.get("news") or {}).get("error", "news fetch failed")))
+            if earnings_status != "ok":
+                notes.append(str((news_payload.get("earnings") or {}).get("error", "earnings fetch failed")))
+            if filings_status != "ok":
+                notes.append(str((news_payload.get("filings") or {}).get("error", "filings fetch failed")))
+    except Exception as exc:
+        news_status = "failed"
+        earnings_status = "failed"
+        filings_status = "failed"
+        notes.append(str(exc))
+
+    status = SymbolArtifacts(
+        ohlcv_status,
+        chart_status,
+        news_status,
+        earnings_status,
+        filings_status,
+        "; ".join(note for note in notes if note),
+    ).__dict__
+    return symbol, status, ohlcv_status == "ok" and chart_status == "ok"
+
+
 def collect_market_context(
     universe_file: Path,
     output_dir: Path,
@@ -170,9 +229,17 @@ def collect_market_context(
 ) -> dict[str, object]:
     date_value = date.fromisoformat(run_date)
     requested_symbols = symbols if symbols is not None else parse_universe(universe_file)
+    requested_set = set(requested_symbols)
 
-    if output_dir.exists():
-        shutil.rmtree(output_dir)
+    # Selectively remove stale symbol dirs (symbols no longer in the run)
+    # rather than rmtree-ing the entire output dir every time.
+    for subdir in ("ohlcv", "charts"):
+        base = output_dir / subdir
+        if base.exists():
+            for sym_dir in base.iterdir():
+                if sym_dir.is_dir() and sym_dir.name not in requested_set:
+                    shutil.rmtree(sym_dir)
+
     ensure_dir(output_dir)
     ensure_dir(output_dir / "charts")
     ensure_dir(output_dir / "ohlcv")
@@ -182,57 +249,21 @@ def collect_market_context(
     failed_symbols: list[str] = []
     symbol_status: dict[str, dict[str, str]] = {}
 
-    for symbol in requested_symbols:
-        notes: list[str] = []
-        ohlcv_status = "ok"
-        chart_status = "ok"
-        news_status = "ok"
-        earnings_status = "ok"
-        filings_status = "ok"
-
-        try:
-            for timeframe in timeframes:
-                label = TIMEFRAME_MAP[timeframe]["label"]
-                rows = build_mock_rows(date_value, timeframe) if mock else fetch_live_rows(symbol, timeframe)
-                write_json(output_dir / "ohlcv" / symbol / f"{label}.json", rows)
-                write_chart(rows, output_dir / "charts" / symbol / f"{label}.png", f"{symbol} {label}")
-        except Exception as exc:
-            ohlcv_status = "failed"
-            chart_status = "failed"
-            notes.append(str(exc))
-
-        try:
-            news_payload = build_news_payload(symbol, run_date, news_limit, mock)
-            write_json(output_dir / "news" / f"{symbol}.json", news_payload)
-            if not mock:
-                news_status = str((news_payload.get("news") or {}).get("status", "ok"))
-                earnings_status = str((news_payload.get("earnings") or {}).get("status", "ok"))
-                filings_status = str((news_payload.get("filings") or {}).get("status", "ok"))
-                if news_status != "ok":
-                    notes.append(str((news_payload.get("news") or {}).get("error", "news fetch failed")))
-                if earnings_status != "ok":
-                    notes.append(str((news_payload.get("earnings") or {}).get("error", "earnings fetch failed")))
-                if filings_status != "ok":
-                    notes.append(str((news_payload.get("filings") or {}).get("error", "filings fetch failed")))
-        except Exception as exc:
-            news_status = "failed"
-            earnings_status = "failed"
-            filings_status = "failed"
-            notes.append(str(exc))
-
-        symbol_status[symbol] = SymbolArtifacts(
-            ohlcv_status,
-            chart_status,
-            news_status,
-            earnings_status,
-            filings_status,
-            "; ".join(note for note in notes if note),
-        ).__dict__
-
-        if ohlcv_status == "ok" and chart_status == "ok":
-            completed_symbols.append(symbol)
-        else:
-            failed_symbols.append(symbol)
+    max_workers = int(os.environ.get("MARKET_FEED_MAX_WORKERS", "4") or "4")
+    with ThreadPoolExecutor(max_workers=min(max_workers, max(1, len(requested_symbols)))) as executor:
+        futures = {
+            executor.submit(
+                _process_one_symbol, sym, date_value, run_date, timeframes, news_limit, mock, output_dir
+            ): sym
+            for sym in requested_symbols
+        }
+        for future in as_completed(futures):
+            sym, status, is_complete = future.result()
+            symbol_status[sym] = status
+            if is_complete:
+                completed_symbols.append(sym)
+            else:
+                failed_symbols.append(sym)
 
     market_summary = {
         "date": run_date,

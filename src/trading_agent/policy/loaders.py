@@ -195,7 +195,6 @@ def _quote_symbols(inputs: PolicyInputs) -> list[str]:
     if inputs.daily_plan and isinstance(inputs.daily_plan.get("today_watchlist"), list):
         candidates.extend(str(symbol) for symbol in inputs.daily_plan["today_watchlist"])
     candidates.extend(inputs.today_allowlist)
-    candidates.extend(inputs.universe)
     candidates.extend(inputs.positions)
     for order in inputs.open_orders:
         candidates.append(order.symbol)
