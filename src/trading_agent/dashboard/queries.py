@@ -154,3 +154,10 @@ def orders_table(agent_root: Path, run_date: str) -> list[dict[str, Any]]:
 def replay_summary(agent_root: Path, *, since: str | None = None, until: str | None = None) -> dict[str, Any]:
     """Fill-rate + blocked-reason replay report, reusing the existing replay module."""
     return build_replay_report(agent_root, since_date=since, until_date=until)
+
+
+def growth_observations(agent_root: Path) -> dict[str, Any]:
+    """Read-only: runtime/analytics/growth_observations.json (empty if not built yet)."""
+    from trading_agent.growth.observations import default_growth_observations_path
+
+    return _read_json_or_empty(default_growth_observations_path(agent_root))

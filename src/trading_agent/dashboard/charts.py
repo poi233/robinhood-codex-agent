@@ -70,3 +70,21 @@ def replay_summary_view(report: dict[str, Any]) -> None:
             [{"symbol": symbol, **counts} for symbol, counts in by_symbol.items()],
             use_container_width=True,
         )
+
+
+def growth_observations_view(payload: dict) -> None:
+    if not payload:
+        st.info("No growth observations yet. Run: python3 -m trading_agent growth observe")
+        return
+    st.caption(f"generated_at: {payload.get('generated_at', '?')}  ·  run dates: {payload.get('run_date_count', 0)}")
+    glob = payload.get("global") or []
+    if glob:
+        st.subheader("Global")
+        st.dataframe(glob, use_container_width=True)
+    modules = payload.get("modules") or {}
+    flat = [{"module": m, **o} for m, obs in modules.items() for o in obs]
+    if flat:
+        st.subheader("By module")
+        st.dataframe(flat, use_container_width=True)
+    if not glob and not flat:
+        st.success("No issues detected.")

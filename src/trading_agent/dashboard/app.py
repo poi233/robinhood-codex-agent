@@ -37,3 +37,6 @@ charts.orders_table_view(queries.orders_table(AGENT_ROOT, selected_run_date))
 
 st.header("Replay (fill rate + blocked reasons, across all run dates)")
 charts.replay_summary_view(queries.replay_summary(AGENT_ROOT))
+
+st.header("Self-Growth Lab (read-only diagnostics)")
+charts.growth_observations_view(queries.growth_observations(AGENT_ROOT))

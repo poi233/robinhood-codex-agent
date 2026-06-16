@@ -175,3 +175,22 @@ def test_replay_summary_delegates_to_replay_module(tmp_path: Path) -> None:
 
     assert report["run_dates"] == ["2026-06-15"]
     assert report["fill_rate"]["total_orders"] == 1
+
+
+def test_growth_observations_missing_returns_empty(tmp_path):
+    from trading_agent.dashboard.queries import growth_observations
+
+    assert growth_observations(tmp_path) == {}
+
+
+def test_growth_observations_reads_artifact(tmp_path):
+    import json
+    from trading_agent.dashboard.queries import growth_observations
+
+    out = tmp_path / "runtime" / "analytics"
+    out.mkdir(parents=True)
+    (out / "growth_observations.json").write_text(
+        json.dumps({"global": [{"type": "high_no_trade_rate"}], "modules": {}}), encoding="utf-8"
+    )
+    payload = growth_observations(tmp_path)
+    assert payload["global"][0]["type"] == "high_no_trade_rate"
