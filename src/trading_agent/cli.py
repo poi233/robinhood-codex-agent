@@ -26,6 +26,9 @@ def build_parser() -> argparse.ArgumentParser:
     analytics_build_parser = analytics_subparsers.add_parser("build", help="(Re)build runtime/analytics/analytics.db.")
     analytics_build_parser.add_argument("--since", metavar="YYYY-MM-DD", default=None, help="Only include run dates on or after this date.")
     analytics_build_parser.add_argument("--until", metavar="YYYY-MM-DD", default=None, help="Only include run dates on or before this date.")
+    analytics_calibrate_parser = analytics_subparsers.add_parser("calibrate", help="Write runtime/analytics/calibration_report.{json,md} (E1: forward returns + attribution; needs network for yfinance).")
+    analytics_calibrate_parser.add_argument("--since", metavar="YYYY-MM-DD", default=None)
+    analytics_calibrate_parser.add_argument("--until", metavar="YYYY-MM-DD", default=None)
 
     subparsers.add_parser("dashboard", help="Launch the read-only Streamlit dashboard at http://localhost:8501.")
 
@@ -308,6 +311,15 @@ def _run_growth_promote_check(agent_root: Path, *, experiment_id: str) -> int:
     return 0
 
 
+def _run_analytics_calibrate(agent_root: Path, *, since: str | None, until: str | None) -> int:
+    from trading_agent.replay.calibration import write_calibration_report
+
+    json_path, md_path = write_calibration_report(agent_root, since=since, until=until)
+    print(f"Wrote {json_path}")
+    print(f"Wrote {md_path}")
+    return 0
+
+
 def _run_dashboard(agent_root: Path) -> int:
     import subprocess
     import sys
@@ -348,6 +360,8 @@ def main(argv: list[str] | None = None) -> int:
         return _run_replay(Path.cwd(), since=args.since, until=args.until, output=args.output)
     if args.command == "analytics" and args.analytics_command == "build":
         return _run_analytics_build(Path.cwd(), since=args.since, until=args.until)
+    if args.command == "analytics" and args.analytics_command == "calibrate":
+        return _run_analytics_calibrate(Path.cwd(), since=args.since, until=args.until)
     if args.command == "dashboard":
         return _run_dashboard(Path.cwd())
     if args.command == "growth" and args.growth_command == "observe":

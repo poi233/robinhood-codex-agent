@@ -217,3 +217,37 @@ def theme_diagnostics_view(diagnostics: dict[str, Any]) -> None:
         if isinstance(distribution, dict) and distribution:
             st.bar_chart({theme: (info.get("pct") if isinstance(info, dict) else info) for theme, info in distribution.items()})
         st.json({k: v for k, v in payload.items() if k != "theme_distribution"})
+
+
+def calibration_view(report: dict) -> None:
+    if not report or not report.get("sample_size"):
+        st.info("No calibration data yet. Run: python3 -m trading_agent analytics calibrate "
+                "(needs network for yfinance; meaningful after ~15+ run dates).")
+        return
+    st.caption(f"generated_at: {report.get('generated_at', '?')}  ·  run dates: {report.get('run_date_count', 0)}  "
+               f"·  samples: {report.get('sample_size', 0)}  ·  horizons(d): {report.get('horizons')}")
+    st.warning("Small samples are noisy — trust bucket monotonicity / IC only after 15–30 run dates.")
+
+    st.subheader("Score buckets vs forward return")
+    for field, per_h in (report.get("score_buckets") or {}).items():
+        for horizon, buckets in per_h.items():
+            if not buckets:
+                continue
+            st.markdown(f"**{field} · {horizon}d** (does higher score → higher return?)")
+            st.dataframe(buckets, use_container_width=True)
+            st.bar_chart({f"b{b['bucket']}": b["mean_return"] for b in buckets})
+
+    st.subheader("Component attribution (Spearman IC, ranked)")
+    for horizon, rows in (report.get("attribution") or {}).items():
+        st.markdown(f"**{horizon}d**")
+        st.dataframe(rows, use_container_width=True)
+
+    st.subheader("Benchmark returns (alpha vs beta)")
+    bench_rows = [{"benchmark": sym, **{f"{h}d": v.get("mean_return") for h, v in per.items()}}
+                  for sym, per in (report.get("benchmarks") or {}).items()]
+    if bench_rows:
+        st.dataframe(bench_rows, use_container_width=True)
+
+    st.subheader("Setup outcomes (target_1 before stop)")
+    if report.get("setup_outcomes"):
+        st.dataframe(report["setup_outcomes"], use_container_width=True)

@@ -27,8 +27,9 @@ with st.sidebar:
     st.caption(f"{len(run_dates)} run date(s) available")
     st.caption("All views are read-only.")
 
-today_tab, candidates_tab, decisions_tab, paper_tab, compare_tab, growth_tab, themes_tab = st.tabs(
-    ["① Today", "② Candidates", "③ Decisions", "④ Paper", "⑤ Strategy Comparison", "⑥ Self-Growth", "⑦ Themes"]
+today_tab, candidates_tab, decisions_tab, paper_tab, compare_tab, calibration_tab, growth_tab, themes_tab = st.tabs(
+    ["① Today", "② Candidates", "③ Decisions", "④ Paper", "⑤ Strategy Comparison",
+     "⑥ Calibration", "⑦ Self-Growth", "⑧ Themes"]
 )
 
 with today_tab:
@@ -61,6 +62,10 @@ with compare_tab:
     st.header("Strategy Comparison")
     charts.strategy_comparison_view(queries.strategy_comparison(AGENT_ROOT))
     charts.champion_vs_challengers_view(queries.champion_vs_challengers(AGENT_ROOT))
+
+with calibration_tab:
+    st.header("Calibration (E1: which scores / setups actually work)")
+    charts.calibration_view(queries.calibration_report(AGENT_ROOT))
 
 with growth_tab:
     st.header("Self-Growth Lab (read-only)")

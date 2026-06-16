@@ -368,3 +368,10 @@ def theme_diagnostics(agent_root: Path, run_date: str) -> dict[str, Any]:
     paths = build_runtime_paths(agent_root, run_date=run_date)
     payload = _read_json_or_empty(paths.premarket_diagnostics_path)
     return payload.get("theme_diagnostics") or {}
+
+
+def calibration_report(agent_root: Path) -> dict[str, Any]:
+    """Read-only: the E1 calibration_report.json (empty until `analytics calibrate` is run)."""
+    from trading_agent.replay.calibration import default_calibration_report_path
+
+    return _read_json_or_empty(default_calibration_report_path(agent_root))

@@ -39,6 +39,13 @@ def _seed(root: Path) -> None:
     (paper / "orders.jsonl").write_text(json.dumps({"order_id": "o1", "symbol": "NVDA", "side": "buy", "quantity": 1, "limit_price": 100.0, "notional": 100.0, "status": "filled", "fill_price": 100.0, "reason_codes": ["breakout"], "timestamp": f"{rd}T09:31:05"}) + "\n", encoding="utf-8")
     (paper / "equity_curve.jsonl").write_text(json.dumps({"timestamp": f"{rd}T13:00:00", "date": rd, "event": "day_end", "cash": 900.0, "positions_market_value": 100.0, "total_equity": 1005.0, "realized_pnl": 5.0}) + "\n", encoding="utf-8")
     write_json(root / "runtime" / "analytics" / "experiment_report.json", {"champion": {"fill_rate_pct": 100.0, "no_trade_rate_pct": 0.0, "run_date_count": 1}, "challengers": [{"challenger_strategy_id": "c1", "status": "active_shadow", "metrics": {"shadow_days": 1, "total_evaluations": 1, "would_trade": 1, "no_trade_rate_pct": 0.0}, "recommendation": {"recommend_promote": False, "blocking_reasons": ["min_shadow_days_not_met: 1 < 10"]}}]})
+    write_json(root / "runtime" / "analytics" / "calibration_report.json", {
+        "generated_at": "x", "run_date_count": 1, "sample_size": 1, "horizons": [1],
+        "score_buckets": {"candidate_score": {"1": [{"bucket": 1, "count": 1, "score_min": 66.0, "score_max": 66.0, "mean_return": 0.01, "hit_rate": 1.0}]},
+                          "trade_readiness_score": {"1": []}, "price_setup_score": {"1": []}},
+        "attribution": {"1": [{"component": "technical", "n": 1, "ic": None}]},
+        "benchmarks": {"SPY": {"1": {"count": 1, "mean_return": 0.002}}},
+        "setup_outcomes": [{"setup_type": "breakout", "fills": 1, "target_first": 1, "stop_first": 0, "undecided": 0, "win_rate": 1.0}]})
     build_analytics_db(root)
 
 
@@ -48,7 +55,8 @@ def test_dashboard_renders_all_tabs_without_error(tmp_path, monkeypatch):
     app = AppTest.from_file(str(APP_PATH), default_timeout=60)
     app.run()
     assert not app.exception, app.exception
-    assert len(app.tabs) == 7
+    assert len(app.tabs) == 8
     headers = [h.value for h in app.header]
     assert any("Strategy Comparison" in h for h in headers)
+    assert any("Calibration" in h for h in headers)
     assert any("Today" in h for h in headers)

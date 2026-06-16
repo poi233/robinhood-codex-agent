@@ -236,3 +236,21 @@ def test_growth_promote_check_drafts_without_touching_registry(tmp_path, monkeyp
     assert (tmp_path / "runtime" / "analytics" / "promotion_drafts" / "exp_x.md").exists()
     # The command must never modify the champion registry.
     assert registry.read_text(encoding="utf-8") == registry_before
+
+
+def test_analytics_calibrate_writes_report(tmp_path, monkeypatch, capsys):
+    from trading_agent.cli import main
+    from trading_agent.core.io import write_json
+    rd = "2026-06-15"
+    write_json(tmp_path / "runtime" / "state" / "runs" / rd / "planner" / "candidate_scores.json",
+               {"symbols": {"NVDA": {"score": 66.0, "total_score": 66.0, "score_status": "scored", "components": {}}}})
+    monkeypatch.chdir(tmp_path)
+    # Inject an offline price loader so no network is needed.
+    import trading_agent.replay.forward_returns as fr
+    import trading_agent.replay.benchmark_returns as br
+    monkeypatch.setattr(fr, "default_price_loader", lambda s, a, b: [(rd, 100.0), ("2026-06-16", 101.0)])
+    monkeypatch.setattr(br, "default_price_loader", lambda s, a, b: [(rd, 100.0), ("2026-06-16", 101.0)])
+    rc = main(["analytics", "calibrate"])
+    assert rc == 0
+    assert (tmp_path / "runtime" / "analytics" / "calibration_report.json").exists()
+    assert "calibration_report" in capsys.readouterr().out

@@ -309,3 +309,12 @@ def test_proposals_and_queue_and_theme_overviews(tmp_path: Path) -> None:
     _seed_run_files(tmp_path, "2026-06-15", strategy_id="baseline_v1", score=66.0,
                     decision="would_trade", order_status="filled", realized_pnl=5.0)
     assert queries.theme_diagnostics(tmp_path, "2026-06-15")["watchlist"]["dominant_theme"] == "ai_semiconductor"
+
+
+def test_calibration_report_missing_and_present(tmp_path):
+    import json
+    from trading_agent.dashboard.queries import calibration_report
+    assert calibration_report(tmp_path) == {}
+    out = tmp_path / "runtime" / "analytics"; out.mkdir(parents=True)
+    (out / "calibration_report.json").write_text(json.dumps({"sample_size": 3, "horizons": [1, 3, 5]}), encoding="utf-8")
+    assert calibration_report(tmp_path)["sample_size"] == 3

@@ -302,6 +302,13 @@ def _order_payload(intent: OrderIntent, *, now: str, status: str, unfilled_reaso
         "unfilled_reason": unfilled_reason or None,
         "reason_codes": list(intent.reason_codes),
         "confidence": intent.confidence,
+        # Setup levels carried through so replay/setup_outcomes (E1) can score target-vs-stop
+        # outcomes without re-joining the decision log.
+        "setup_type": intent.setup_type,
+        "stop_price": intent.stop_price,
+        "target_1": intent.target_1,
+        "target_2": intent.target_2,
+        "reward_risk": intent.reward_risk,
     }
 
 
