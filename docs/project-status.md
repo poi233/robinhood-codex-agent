@@ -26,7 +26,7 @@
 | 回看分析（fill rate / blocked 分布） | ✅ 本地部分已加 |
 | 回看校准（score 桶 vs 未来收益 / 权重校准） | ⏳ 阻塞于数据积累 |
 | 数据可追溯（run_manifest / analytics.db） | ✅ 已加（B1–B4，见 roadmap B） |
-| 只读可视化（Strategy Lab dashboard） | ✅ 已加（C1–C2，dashboard 视觉未人工验证，见 roadmap C） |
+| 只读可视化（Strategy Lab dashboard） | ✅ C1–C2 已加（视觉未人工验证）；📐 C3 v2（可读性重构 + 策略对比）设计中，见 roadmap C3 |
 | Token 成本（DSA/Technical 预计算） | ✅ 已加（P4，见 roadmap D1） |
 | 自成长平台（observe→propose→shadow→promote） | ✅ G-pre/G0–G8 全闭环已加（paper/shadow only，promote 仅人工，见 roadmap G） |
 | 自成长诊断/提议/shadow/推荐（growth 全命令树） | ✅ observe/propose/validate/experiments/shadow/evaluate/recommend/promote check 全部上线 |

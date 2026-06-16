@@ -37,6 +37,7 @@
 | | B4 | strategy-changelog.md | docx | ✅ **已完成**（2026-06-15） |
 | **C 只读可视化与观测** | C1 | Dashboard MVP（Streamlit 只读） | docx | ✅ **已完成**（2026-06-15，视觉未验证） |
 | | C2 | theme exposure / speculative cap 诊断 | docx | ✅ **已完成**（2026-06-15） |
+| | C3 | Dashboard v2（可读性重构 + 策略对比，含 F1） | 用户新增 | 📐 设计中（2026-06-16，见下方 C3 设计） |
 | **D 工程优化 · 不阻塞** | D1 | DSA/Technical token 优化 | design doc | ✅ **已完成**（2026-06-15，见下方实现记录） |
 | | D2 | market_feed 跨日缓存 / batch | 旧 R4 | 🟡 部分完成（2026-06-15，缓存做了，batch 未做） |
 | | D3 | Kronos batch 推理 | 旧 R5 | ✅ **已完成**（2026-06-16） |
@@ -380,6 +381,83 @@ speculative 占比分别有独立 cap）；阈值通过 `scoring_profiles.yaml` 
 
 ---
 
+## C3 — Dashboard v2（可读性重构 + 策略对比）— 📐 设计中（2026-06-16）
+
+> **背景**：C1 的 dashboard 是单页瀑布流（Overview / Candidates / Decisions / Orders / Replay /
+> Self-Growth Lab 六块从上往下平铺），`charts.py` 全是 `st.dataframe`/`st.metric` 的薄封装，**视觉
+> 从未人工验证**。现在 B/C/G 阶段已经攒下足够多的数据源（`analytics.db` 7 张表 + replay + growth
+> 产物 + registry），值得把 dashboard 从「能看」升级到「好读、且能回答问题」。本条是**设计**，待拍板
+> 后再实现。**全程只读，不写任何交易参数**（与 C1 同约束；可编辑参数仍是 F3，最后做）。
+
+**三个目标**
+1. **可读性**：从单页瀑布流改成**侧边栏导航 + 多 Tab**，每个 Tab 聚焦一个问题，不用滚一面墙；
+   状态用颜色编码（plan_state / fill rate / no-trade rate 的绿/黄/红），金额/百分比/分数统一格式化，
+   metric 卡片带 delta（环比昨日 / 对比 champion）。
+2. **有用内容**：每屏直接回答一个具体问题（今天为什么交易/不交易、分数和结果的关系、阻断原因趋势、
+   paper 表现曲线、自成长在干嘛），而不是甩一堆原始表。
+3. **策略对比**：新增一个 **Strategy Comparison** Tab，覆盖两种对比（见下）。
+
+**页面/Tab 设计（建议 7 个 Tab，侧边栏选 run-date / 日期区间 / strategy 过滤）**
+
+| Tab | 回答的问题 | 主要内容（数据源） |
+|---|---|---|
+| **① Today** | 今天发生了什么、为什么 | plan_state / market_regime 徽章；watchlist/tradable 计数；当日**唯一决策 + 原因叙述**（would_trade/blocked + blocked_reasons 人话化）；当日订单；当日权益快照。源：`daily_plan`/`risk_overlay` + `decisions`/`orders`/`paper_equity` 表 |
+| **② Candidates & Scores** | 候选怎么排的、各分量贡献 | 候选表（五分量 dsa/technical/kronos/quote/catalyst + `is_watchlist`/`is_tradable`）**join `intraday_rankings`**（`trade_readiness_score`/`price_setup_score`）；分数分布直方图；score vs 是否 tradable 的散点/分桶。源：`candidates` + `intraday_rankings` 表 |
+| **③ Decisions & Blocks** | 为什么大多不交易、卡在哪 | 决策时间线；**blocked-reason 分布（当日）+ 趋势（跨日堆叠）**；no-trade rate 折线。源：`decisions`/`blocked_reasons` 表 + replay |
+| **④ Paper Performance** | paper 跑得好不好 | **多日权益曲线**（total_equity / realized_pnl）；max drawdown；fill rate 趋势；按 symbol 的成交统计；部分成交占比。源：`paper_equity`/`orders` 表 + replay |
+| **⑤ Strategy Comparison** | 不同策略哪个更好（**本条重点**） | 见下方两节 |
+| **⑥ Self-Growth Lab** | 自成长在提什么、实验进展 | 现有 observations + 模块 diagnoser；**新增**：proposals 列表（`runtime/strategy_proposals/`）、实验队列状态（`strategy_experiments.yaml` 的生命周期）、promotion recommendation 摘要（`experiment_report.json`/`promotion_recommendation.md`）。源：growth 全套产物 |
+| **⑦ Themes & Exposure** | 主题集中度风险 | C2 的 `theme_diagnostics`（每主题占比、dominant theme、speculative 占比、超 cap 告警）。源：`premarket_diagnostics.json` |
+
+**⑤ Strategy Comparison — 两种对比（核心诉求「不同策略对比」）**
+
+- **(a) Champion 版本横向对比（实现 F1）**：按 `runs` 表的 `strategy_id` 分组，并排展示每个 strategy
+  version 的：run 天数、日期区间、fill rate、no-trade rate、平均每日 realized PnL、累计 PnL、top
+  blocked reasons、平均 candidate score、平均 trade_readiness_score。表格 + 并排柱状图。
+  - **依赖**：至少 2 个 strategy version 各自积累过 run（B1 manifest 已给每个 run 打了 `strategy_id`）。
+    现在只有 `baseline_v1`，所以这块**先做出 UI 框架 + 查询**，等真正切过一次策略才有第二条对比。
+- **(b) Champion vs Challenger（shadow 实验，G7 数据现在就有）**：直接读 `experiment_report.json`，
+  并排展示 champion 与每个 active_shadow/ready_for_review challenger 的：shadow 天数、evaluations、
+  would-trade 数/率、no-trade rate、blocked-reason 分布差异、**决策分歧**（challenger 想交易而 champion
+  没有的 symbol/日期）、evaluator 裁决（recommend_promote + blocking reasons）。
+  - 这是**当下最有信息量**的对比，G6/G7 一跑就有数据。
+  - 明确标注**缺失指标**：challenger 的 fill rate / drawdown（G6 只产决策流、订单/权益 shadow 仿真未做）
+    和 forward returns（E1 未建）显示为 “待补”，并解释为什么 evaluator 暂不出 promote 建议。
+
+**实现要点（待批准后做）**
+- `dashboard/queries.py` 新增纯查询函数（沿用现有「纯函数 + 单测」风格，全部只读）：
+  `strategy_comparison(agent_root)`（按 `strategy_id` 聚合 runs/orders/decisions）、
+  `champion_vs_challengers(agent_root)`（读 `experiment_report.json`）、
+  `equity_timeseries(agent_root, *, since, until)`（跨日权益曲线）、
+  `blocked_reason_trend(agent_root)`（跨日堆叠）、
+  `candidates_with_rankings(agent_root, run_date)`（candidates join intraday_rankings）、
+  `proposals_overview` / `experiment_queue_overview`（读 growth 产物）。
+- `dashboard/app.py` 从单页改为 `st.tabs([...])` + `st.sidebar`（run-date / 日期区间 / strategy 过滤）。
+- `dashboard/charts.py` 增可复用组件：`status_badge`（颜色编码）、`metric_card_with_delta`、
+  `comparison_table`（并排 + 高亮更优值）、`equity_curve_chart`、`stacked_reason_chart`。
+- 可选小依赖：仍只用 streamlit 内置图表（`st.bar_chart`/`st.line_chart`/`st.dataframe` 带列格式化）；
+  如需更好看的对比图再评估 `altair`（streamlit 自带）——不引入重依赖。
+
+**涉及文件**：`dashboard/app.py`、`queries.py`、`charts.py`；新增 `tests/.../dashboard/test_queries.py`
+对新查询的单测；可能给 `analytics` 加一个按 `strategy_id` 聚合的 view/查询。**不动任何交易代码路径。**
+
+**验收标准**
+- 侧边栏导航 + 7 个 Tab，每个 Tab 单屏可读、空数据有友好提示。
+- **Strategy Comparison Tab**：实验存在时能并排看 champion vs ≥1 challenger 的关键指标（含决策分歧
+  与 evaluator 裁决）；存在 ≥2 个 strategy version 时能并排看版本对比（F1）。
+- 所有新增查询是纯函数、有单测；`queries.py`/`charts.py` **零写交易参数路径**。
+- 状态色编码、金额/百分比格式化、metric delta 到位。
+- ⚠️ 同 C1：**页面视觉效果仍需人工跑 `python3 -m trading_agent dashboard` 目测**（沙箱无法截屏）；
+  本条验收只保证查询正确性 + 结构，视觉留给用户确认。
+
+**依赖与现状**
+- 数据源全部就绪：`analytics.db`（B3，含 G 阶段新增的 `intraday_rankings`）、replay、growth 产物、
+  registry。**(b) champion-vs-challenger 现在就能做**；**(a) 版本横向对比**框架能做、但要等切过第二个
+  strategy version 才有可比数据。
+- **本条实现后，roadmap 的 F1（strategy compare）即由 ⑤(a) 落地**，F1 不再单列实现，只保留为概念入口。
+
+---
+
 # D 阶段 · 工程优化（不阻塞，边等数据边做）
 
 ## D1 — DSA / Technical 两层 token 优化 — ✅ 已完成（2026-06-15）
@@ -578,15 +656,15 @@ benchmark 对照可见。
 
 # F 阶段 · 后期 / 故意推后
 
-## F1 — strategy compare
+## F1 — strategy compare — ↦ 并入 C3 ⑤(a)
 
 **目标**：对比不同 `strategy_id` 的 run count、fill rate、PnL、blocked reasons、平均分，判断新版本是否更好。
 
 **依赖**：B1（manifest）+ B2（registry）+ 至少两个 strategy version 的积累数据。
 
-**具体步骤**：dashboard 增 Strategy Compare 页 / `analytics` 增对比查询。
-
-**验收**：能并排看两个版本的关键指标差异。
+**现状**：用户要求把策略对比并入 dashboard 改造，已在 **C3 ⑤ Strategy Comparison** Tab 的 (a) 节中设计
+落地（按 `strategy_id` 聚合 runs/orders/decisions 并排展示）。F1 不再单列实现，保留为概念入口；具体设计与
+验收见 C3。仍受「至少 2 个 strategy version 才有可比数据」约束。
 
 ---
 
