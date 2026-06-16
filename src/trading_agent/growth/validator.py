@@ -1,8 +1,32 @@
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from typing import Any
 
 _EPS = 1e-9
+
+
+def validate_proposal(proposal: dict[str, Any], policy: dict[str, Any]) -> dict[str, Any]:
+    """Full safety validation of a G3 proposal against growth_policy. Fail-closed.
+
+    Reuses validate_mutation on the proposal's mutation and wraps the result in a
+    machine-readable record. A proposal with no mutation, or whose mutation touches a
+    forbidden field / leaves the whitelist / exceeds a range or delta / runs under a
+    non-paper-only policy, is marked "rejected"; otherwise "validated". Never enables
+    anything — this only produces a verdict.
+    """
+    mutation = proposal.get("mutation")
+    if not isinstance(mutation, dict):
+        ok, violations = False, ["missing_mutation: proposal has no 'mutation' object"]
+    else:
+        ok, violations = validate_mutation(mutation, policy)
+    return {
+        "proposal_id": proposal.get("proposal_id"),
+        "validated_at": datetime.now(timezone.utc).isoformat(),
+        "status": "validated" if ok else "rejected",
+        "ok": ok,
+        "violations": violations,
+    }
 
 
 def validate_mutation(mutation: dict[str, Any], policy: dict[str, Any]) -> tuple[bool, list[str]]:

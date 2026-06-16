@@ -37,6 +37,8 @@ def build_parser() -> argparse.ArgumentParser:
     growth_propose_parser = growth_subparsers.add_parser("propose", help="Write validated, whitelist-only strategy proposals (never auto-enabled).")
     growth_propose_parser.add_argument("--since", metavar="YYYY-MM-DD", default=None)
     growth_propose_parser.add_argument("--until", metavar="YYYY-MM-DD", default=None)
+    growth_validate_parser = growth_subparsers.add_parser("validate", help="Validate a proposal JSON (or a whole proposals dir) against growth_policy.")
+    growth_validate_parser.add_argument("path", metavar="PROPOSAL_OR_DIR", help="Path to a proposal_*.json file or a runtime/strategy_proposals/<date>/ directory.")
 
     return parser
 
@@ -165,6 +167,25 @@ def _run_growth_propose(agent_root: Path, *, since: str | None, until: str | Non
     return 0
 
 
+def _run_growth_validate(agent_root: Path, *, path: str) -> int:
+    from trading_agent.growth.proposal_review import validate_proposal_file, validate_proposals_dir
+
+    target = Path(path)
+    if not target.exists():
+        print(f"No such path: {target}")
+        return 1
+    written = [validate_proposal_file(agent_root, target)] if target.is_file() else validate_proposals_dir(agent_root, target)
+    if not written:
+        print("No proposal_*.json files found to validate.")
+        return 0
+    import json as _json
+
+    for out_path in written:
+        result = _json.loads(out_path.read_text(encoding="utf-8"))
+        print(f"  {result.get('status', '?'):<10} {out_path}")
+    return 0
+
+
 def _run_dashboard(agent_root: Path) -> int:
     import subprocess
     import sys
@@ -211,4 +232,6 @@ def main(argv: list[str] | None = None) -> int:
         return _run_growth_observe(Path.cwd(), since=args.since, until=args.until)
     if args.command == "growth" and args.growth_command == "propose":
         return _run_growth_propose(Path.cwd(), since=args.since, until=args.until)
+    if args.command == "growth" and args.growth_command == "validate":
+        return _run_growth_validate(Path.cwd(), path=args.path)
     return 0
