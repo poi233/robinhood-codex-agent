@@ -16,6 +16,11 @@ def build_parser() -> argparse.ArgumentParser:
 
     subparsers.add_parser("doctor", help="Print effective runtime configuration and exit.")
 
+    replay_parser = subparsers.add_parser("replay", help="Print local fill-rate and blocked-reason replay report.")
+    replay_parser.add_argument("--since", metavar="YYYY-MM-DD", default=None, help="Only include run dates on or after this date.")
+    replay_parser.add_argument("--until", metavar="YYYY-MM-DD", default=None, help="Only include run dates on or before this date.")
+    replay_parser.add_argument("--output", metavar="PATH", default=None, help="Write JSON report to this path instead of printing text.")
+
     return parser
 
 
@@ -77,6 +82,18 @@ def _run_doctor(agent_root: Path) -> int:
     return 0
 
 
+def _run_replay(agent_root: Path, *, since: str | None, until: str | None, output: str | None) -> int:
+    from trading_agent.replay.analysis import build_replay_report, format_replay_report
+
+    report = build_replay_report(agent_root, since_date=since, until_date=until)
+    if output:
+        Path(output).write_text(json.dumps(report, indent=2), encoding="utf-8")
+        print(f"Replay report written to {output}")
+    else:
+        print(format_replay_report(report))
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     if args.command == "premarket":
@@ -100,4 +117,6 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     if args.command == "doctor":
         return _run_doctor(Path.cwd())
+    if args.command == "replay":
+        return _run_replay(Path.cwd(), since=args.since, until=args.until, output=args.output)
     return 0
