@@ -151,3 +151,27 @@ def build_runtime_paths(agent_root: Path, *, run_date: str | None = None) -> Run
         error_log_path=_resolve_env_path(agent_root, "ERROR_LOG_PATH", run_logs_dir / "system" / "errors.log"),
         postmarket_summary_path=_resolve_env_path(agent_root, "POSTMARKET_SUMMARY_PATH", run_logs_dir / "reports" / "postmarket_summary.md"),
     )
+
+
+@dataclass(frozen=True)
+class ExperimentPaths:
+    """Isolated ledger paths for one shadow challenger (G-pre remainder for G6).
+
+    Everything roots under runtime/state/runs/<date>/experiments/<strategy_id>/ so a
+    challenger's shadow decisions/orders/equity can never overlap the champion's paper ledger.
+    """
+
+    experiment_dir: Path
+    shadow_decisions_log_path: Path
+    shadow_orders_log_path: Path
+    shadow_equity_curve_path: Path
+
+
+def build_experiment_paths(agent_root: Path, *, run_date: str | None = None, strategy_id: str) -> ExperimentPaths:
+    base = build_runtime_paths(agent_root, run_date=run_date).run_state_dir / "experiments" / strategy_id
+    return ExperimentPaths(
+        experiment_dir=base,
+        shadow_decisions_log_path=base / "shadow_decisions.jsonl",
+        shadow_orders_log_path=base / "shadow_orders.jsonl",
+        shadow_equity_curve_path=base / "shadow_equity_curve.jsonl",
+    )

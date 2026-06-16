@@ -51,6 +51,9 @@ def build_parser() -> argparse.ArgumentParser:
         exp_action = experiments_subparsers.add_parser(action, help=f"{action} an experiment by id.")
         exp_action.add_argument("experiment_id", metavar="EXPERIMENT_ID")
 
+    growth_shadow_parser = growth_subparsers.add_parser("shadow", help="Run active_shadow challengers over the current run's champion inputs (isolated ledgers).")
+    growth_shadow_parser.add_argument("--run-date", metavar="YYYY-MM-DD", default=None)
+
     return parser
 
 
@@ -231,6 +234,40 @@ def _run_growth_experiments(agent_root: Path, args) -> int:
     return 0
 
 
+def _run_growth_shadow(agent_root: Path, *, run_date: str | None) -> int:
+    from trading_agent.core.config import load_runtime_config
+    from trading_agent.core.time import pt_date_string
+    from trading_agent.data.live_quotes import fetch_yfinance_live_quotes
+    from trading_agent.growth.experiment_queue import list_experiments
+    from trading_agent.growth.shadow_runner import run_active_shadow_experiments
+    from trading_agent.policy.loaders import load_policy_inputs
+
+    resolved_run_date = run_date or pt_date_string()
+    active = list_experiments(agent_root, status="active_shadow")
+    if not active:
+        print("No active_shadow experiments to run.")
+        return 0
+    runtime = load_runtime_config(agent_root)
+    inputs = load_policy_inputs(
+        agent_root,
+        run_date=resolved_run_date,
+        trading_mode=runtime.trading_mode,
+        risk_tier=runtime.effective_risk_tier,
+        quote_provider=fetch_yfinance_live_quotes,
+        require_live_quotes=True,
+    )
+    results = run_active_shadow_experiments(
+        agent_root, run_date=resolved_run_date, champion_inputs=inputs,
+        trading_mode=runtime.trading_mode, risk_tier=runtime.effective_risk_tier,
+    )
+    for result in results:
+        if result.get("error"):
+            print(f"  ERROR {result.get('experiment_id')}: {result['error']}")
+        else:
+            print(f"  {result.get('decision', '?'):<12} {result.get('challenger_strategy_id')} (symbol: {result.get('symbol')})")
+    return 0
+
+
 def _run_dashboard(agent_root: Path) -> int:
     import subprocess
     import sys
@@ -281,4 +318,6 @@ def main(argv: list[str] | None = None) -> int:
         return _run_growth_validate(Path.cwd(), path=args.path)
     if args.command == "growth" and args.growth_command == "experiments":
         return _run_growth_experiments(Path.cwd(), args)
+    if args.command == "growth" and args.growth_command == "shadow":
+        return _run_growth_shadow(Path.cwd(), run_date=args.run_date)
     return 0

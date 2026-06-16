@@ -185,4 +185,23 @@ def run_intraday_pipeline(*, dry_run: bool) -> int:
             decision.blocked_reasons.append(paper_result.reason)
     _append_intraday_rankings(agent_root, inputs, run_date=run_date)
     _append_policy_decision(agent_root, decision, run_date=run_date)
+    _run_shadow_experiments_safely(agent_root, run_date, inputs, runtime.trading_mode, effective_risk_tier)
     return 0
+
+
+def _run_shadow_experiments_safely(agent_root: Path, run_date: str, inputs, trading_mode: str, risk_tier: int) -> None:
+    """Run active_shadow challengers over the champion's inputs. Best-effort: any failure
+    here must never affect the champion run, so the whole block is swallowed."""
+    try:
+        from trading_agent.growth.experiment_queue import list_experiments
+
+        if not list_experiments(agent_root, status="active_shadow"):
+            return
+        from trading_agent.growth.shadow_runner import run_active_shadow_experiments
+
+        run_active_shadow_experiments(
+            agent_root, run_date=run_date, champion_inputs=inputs,
+            trading_mode=trading_mode, risk_tier=risk_tier,
+        )
+    except Exception:  # noqa: BLE001 - shadow experiments are never allowed to break champion intraday
+        pass
