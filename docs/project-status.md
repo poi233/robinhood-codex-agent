@@ -214,7 +214,7 @@
 | **P2** 策略质量 | price_setup_score 进排序（权重待校准） | `8134271` |
 | **P3** 成本速度 | market_feed 并发；intraday quote 瘦身；subagents 10→3 | `ebd756a` |
 | **P4** Token 优化 | technical_features.py + dsa_metrics.py 预计算；technical/DSA prompt 改读特征包/横截面表；env flag + doctor 回显 | `bd456f7` `1b1a079` |
-| **P5-A1** 正确性 | env 加载提前到 skip-gate 判断之前（premarket/intraday/postmarket） | (待补) |
+| **P5-A1** 正确性 | env 加载提前到 skip-gate 判断之前（premarket/intraday/postmarket） | `7f69775` |
 
 ---
 
