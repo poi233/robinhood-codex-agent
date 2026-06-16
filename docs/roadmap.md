@@ -44,7 +44,7 @@
 | | D4 | paper 部分成交模型 | 旧 R6 + docx P3 | ✅ **已完成**（2026-06-15） |
 | **E 数据驱动校准** | E1 | replay 校准：forward/benchmark returns + 命中率 + attribution + Calibration tab | 旧 R1 + docx P1 | ✅ **机器已建（2026-06-16）**；统计显著性待 paper 数据积累 |
 | | E2 | 评分 / 价格 setup 权重校准 | 旧 R2 | ⏳ 依赖 E1（P5） |
-| | E3 | near-miss tracking | docx P2 | ⏳ 复用 E1 forward returns（P2） |
+| | E3 | near-miss tracking | docx P2 | ✅ **机器已建（2026-06-16，near-threshold 版）**；entry-zone/no-chase 版待 per-candidate 落盘 |
 | | E4 | bid/ask/spread 成交质量 | docx P2 | 可选（paper 阶段弱依赖） |
 | **新增 · 校准期补强** | G9 | challenger 隔离 paper 账本（shadow orders/equity） | 我的建议 | ⏳ 待做（P3，G7 真实指标前置） |
 | | B5 | strategy_registry.watchlist → active watchlist resolver | 我的建议 | ⏳ 待做（P4，多策略选股层） |
@@ -728,16 +728,20 @@ E1 做 fill quality 时要一并处理（D4 实现记录里已预告）。
 
 ---
 
-## E3 — near-miss tracking（docx P2）
+## E3 — near-miss tracking（docx P2）— ✅ 机器已建（2026-06-16，near-threshold 版）
 
-**目标**：记录「差一点到 entry zone / 差一点过 threshold / 被 no-chase block」的候选及其后续表现，
-用于优化 entry/threshold，而不是只看成交单。
+**实现记录**：`replay/near_miss.py`：`load_trade_thresholds` 从每个 run 的 `risk_overlay.json` 读
+`trade_score_threshold`；`near_threshold_analysis(records, thresholds, margin=5)` 把每个候选按 score vs
+当天阈值分成 `cleared`（≥阈值）/ `near_miss`（[阈值−margin, 阈值)）/ `below`，复用 **E1 的
+forward-return records**（只算一次）对比三类的后续收益 + 命中率——**直接回答「trade_threshold 是不是太严」**
+（若 near_miss 收益 ≈ 或 > cleared，门槛在错过赢家）。已折进 `calibration_report` + dashboard Calibration
+Tab。离线可测（`test_near_miss.py` 3 个）。
 
-**具体步骤**：在 decisions/replay 里标记 near-miss 类别，E1 forward returns 对其同样回算后续收益。
+**未做（留作后续）**：「差一点到 entry zone / 被 no-chase block / reward_risk_too_low」这类**逐候选**
+near-miss 需要先把 per-candidate 的 price/size 阶段 block reason 落盘（现在只有单条决策的聚合
+blocked_reasons），是个独立的小落盘改动；本次先做了**完全可从现有数据算出**的 near-threshold 版。
 
-**涉及文件**：`policy/engine.py`（标记）、`replay/*`、测试。
-
-**验收**：near-miss 候选有分类计数与后续收益分布。
+**原计划（保留）**：在 decisions/replay 里标记 near-miss 类别，E1 forward returns 对其同样回算后续收益。
 
 ---
 
