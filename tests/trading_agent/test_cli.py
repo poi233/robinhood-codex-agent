@@ -20,6 +20,7 @@ class PackageCliTests(unittest.TestCase):
         self.assertIn("premarket", result.stdout)
         self.assertIn("intraday", result.stdout)
         self.assertIn("postmarket", result.stdout)
+        self.assertIn("dashboard", result.stdout)
 
     def test_parser_accepts_runtime_subcommands(self) -> None:
         result = subprocess.run(

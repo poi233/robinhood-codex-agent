@@ -1,7 +1,7 @@
 # 项目状态总表 — 做了什么 / 没做什么
 
 > 最后更新：2026-06-15
-> 范围：`src/trading_agent/`（约 6500 行 Python）+ 配置 + 编排 + 入口 + 测试（267 passed）
+> 范围：`src/trading_agent/`（约 6500 行 Python）+ 配置 + 编排 + 入口 + 测试（275 passed）
 > 用途：**单一权威的"现状"文档**，按子系统逐块说明已实现与未实现。未来要做的事另见
 > [`roadmap.md`](./roadmap.md)。
 >
@@ -245,6 +245,20 @@
 - `analytics.db` 的 `candidates` 表没有 `trade_readiness_score`/`price_setup_score`——这两个分数
   目前只在 intraday policy 引擎里临时计算，没有持久化到任何文件，等以后需要才补。
 
+### 14. Dashboard（`dashboard/`）
+
+**已做**
+- **（roadmap C1）** `python3 -m trading_agent dashboard` 拉起 Streamlit，单页面（无需点击）依次显示
+  Overview / Candidates / Decisions / Orders / Replay 五个区块。`queries.py` 是纯函数层，对
+  `analytics.db` 做 sqlite3 查询 + 少量直接读 `daily_plan.json`/`risk_overlay.json`，8 个单测覆盖。
+  `streamlit` 作为 `pyproject.toml` 的可选依赖（`dashboard` extra），不影响其余命令。
+
+**没做 / 注意**
+- **视觉效果未经人工核实**：本次实现时沙箱环境没有 macOS 截屏权限，无法用 computer-use 截图验证
+  页面渲染效果，用户已知情并决定先这样、以后再改可视化部分。只验证了 query helper 的正确性和
+  streamlit 进程能正常启动监听 8501，没有验证页面实际显示是否符合预期。**这是本节中唯一一个"测试
+  通过"不代表"功能已验证"的例外，使用前建议先手动跑一次确认。**
+
 ---
 
 ## 三、按优先级批次的完成记录（commit 索引）
@@ -265,6 +279,7 @@
 | **P5-B3** 数据可追溯 | `analytics/` 包 + `analytics build` 子命令：6 张表汇总进 `analytics.db` | 见 git log |
 | **P5-B4** 数据可追溯 | `docs/strategy-changelog.md` + `list_strategy_ids()` + 配套测试 | 见 git log |
 | **P5-C2** 观测 | `premarket_diagnostics.json` 新增 theme/speculative 集中度诊断 + 可配置 cap | 见 git log |
+| **P5-C1** 可视化 | `dashboard/` 包 + `dashboard` 子命令（Streamlit，视觉未人工验证） | 见 git log |
 
 ---
 
@@ -276,8 +291,8 @@
   （数据可追溯基建：run_manifest / strategy_registry / analytics.db）。
 - **B 数据可追溯基建（P0）**：✅ 全部完成（B1/B2/B3/B4，见上方 P5-B1~P5-B4 与第 13 节）。
   下一批是 C 阶段（theme 诊断 + 只读 dashboard）。
-- **C 只读可视化与观测**：Strategy Lab dashboard（Streamlit 只读，C1）。
-  （theme/speculative 集中度诊断已完成，见上方 P5-C2。）
+- **C 只读可视化与观测**：✅ 全部完成（C1/C2，见上方 P5-C1/P5-C2；C2 见第 6 节，C1 见第 14 节）。
+  C1 的页面视觉效果尚未人工核实——见第 14 节"没做/注意"。
 - **D 工程优化**：market_feed 跨日缓存/batch、Kronos batch 推理、paper 部分成交模型。
   （DSA/Technical token 优化已完成，见上方 P4 与 roadmap D1。）
 - **E 数据驱动校准（阻塞 2–3 周 paper）**：forward/benchmark returns + entry-zone 命中率 +
