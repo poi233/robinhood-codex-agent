@@ -88,3 +88,132 @@ def growth_observations_view(payload: dict) -> None:
         st.dataframe(flat, use_container_width=True)
     if not glob and not flat:
         st.success("No issues detected.")
+
+
+# --- C3 Dashboard v2 components (read-only) ---
+
+_PLAN_STATE_ICON = {"trade_ready": "🟢", "observe_only": "🟡", "no_trade": "🔴", "normal": "🟢"}
+
+
+def plan_state_badge(plan_state: str | None) -> str:
+    icon = _PLAN_STATE_ICON.get(str(plan_state or "").lower(), "⚪️")
+    return f"{icon} {plan_state or '-'}"
+
+
+def today_view(overview: dict[str, Any], decisions: list[dict[str, Any]], orders: list[dict[str, Any]]) -> None:
+    columns = st.columns(4)
+    columns[0].metric("Plan state", plan_state_badge(overview.get("plan_state")))
+    columns[1].metric("Market regime", overview.get("market_regime") or "-")
+    columns[2].metric("Watchlist / Tradable", f"{overview.get('watchlist_count', 0)} / {overview.get('tradable_count', 0)}")
+    pnl = overview.get("today_pnl")
+    columns[3].metric("Realized PnL", f"${pnl:,.2f}" if pnl is not None else "-")
+
+    st.subheader("Today's decision — why we did / didn't trade")
+    if not decisions:
+        st.info("No intraday decision logged yet for this run date.")
+    else:
+        latest = decisions[-1]
+        verdict = str(latest.get("decision") or "-")
+        if verdict == "would_trade":
+            st.success(f"**would_trade** — {latest.get('symbol') or ''} {latest.get('side') or ''} "
+                       f"({latest.get('setup_type') or ''})")
+        else:
+            reasons = latest.get("blocked_reasons")
+            try:
+                reasons = ", ".join(__import__("json").loads(reasons)) if isinstance(reasons, str) else ", ".join(reasons or [])
+            except Exception:
+                pass
+            st.warning(f"**{verdict}** — blocked by: {reasons or 'n/a'}")
+        st.dataframe(decisions, use_container_width=True)
+
+    st.subheader("Orders")
+    st.dataframe(orders, use_container_width=True) if orders else st.info("No paper orders for this run date.")
+
+
+def candidates_with_rankings_view(rows: list[dict[str, Any]]) -> None:
+    if not rows:
+        st.info("No scored candidates for this run date.")
+        return
+    st.bar_chart({row["symbol"]: row.get("candidate_score") or 0 for row in rows})
+    st.dataframe(rows, use_container_width=True)
+
+
+def equity_curve_view(series: list[dict[str, Any]]) -> None:
+    if not series:
+        st.info("No paper equity history yet.")
+        return
+    equity = {row["timestamp"]: row.get("total_equity") for row in series if row.get("total_equity") is not None}
+    pnl = {row["timestamp"]: row.get("realized_pnl") for row in series if row.get("realized_pnl") is not None}
+    if equity:
+        st.subheader("Total equity")
+        st.line_chart(equity)
+    if pnl:
+        st.subheader("Realized PnL")
+        st.line_chart(pnl)
+
+
+def blocked_reason_trend_view(trend: list[dict[str, Any]]) -> None:
+    if not trend:
+        st.info("No blocked-reason history yet.")
+        return
+    st.dataframe(trend, use_container_width=True)
+
+
+def strategy_comparison_view(rows: list[dict[str, Any]]) -> None:
+    st.subheader("Champion versions (by strategy_id)")
+    if not rows:
+        st.info("No strategy versions with runs yet. This fills in once ≥1 run is tagged with a strategy_id "
+                "(and becomes a real comparison after you switch to a second strategy version).")
+        return
+    if len(rows) == 1:
+        st.caption("Only one strategy version so far — side-by-side comparison appears after a second version accrues runs.")
+    st.dataframe(rows, use_container_width=True)
+    st.bar_chart({row["strategy_id"]: row.get("fill_rate_pct") or 0 for row in rows})
+
+
+def champion_vs_challengers_view(report: dict[str, Any]) -> None:
+    st.subheader("Champion vs shadow challengers")
+    if not report or not report.get("challengers"):
+        st.info("No shadow experiments evaluated yet. Run: python3 -m trading_agent growth evaluate")
+        return
+    champion = report.get("champion") or {}
+    columns = st.columns(3)
+    columns[0].metric("Champion fill rate", f"{champion.get('fill_rate_pct', 0)}%")
+    columns[1].metric("Champion no-trade rate", f"{champion.get('no_trade_rate_pct', 0)}%")
+    columns[2].metric("Champion trading days", champion.get("run_date_count", 0))
+    flat = []
+    for chal in report["challengers"]:
+        metrics = chal.get("metrics") or {}
+        rec = chal.get("recommendation") or {}
+        flat.append({
+            "challenger": chal.get("challenger_strategy_id"),
+            "status": chal.get("status"),
+            "shadow_days": metrics.get("shadow_days"),
+            "evaluations": metrics.get("total_evaluations"),
+            "would_trade": metrics.get("would_trade"),
+            "no_trade_rate_pct": metrics.get("no_trade_rate_pct"),
+            "recommend_promote": rec.get("recommend_promote"),
+            "blocking_reasons": "; ".join(rec.get("blocking_reasons") or []),
+        })
+    st.dataframe(flat, use_container_width=True)
+
+
+def proposals_and_queue_view(proposals: list[dict[str, Any]], queue: list[dict[str, Any]]) -> None:
+    st.subheader("Proposals")
+    st.dataframe(proposals, use_container_width=True) if proposals else st.info("No proposals written yet.")
+    st.subheader("Experiment queue")
+    st.dataframe(queue, use_container_width=True) if queue else st.info("No experiments queued yet.")
+
+
+def theme_diagnostics_view(diagnostics: dict[str, Any]) -> None:
+    if not diagnostics:
+        st.info("No theme diagnostics for this run date.")
+        return
+    for bucket, payload in diagnostics.items():
+        if not isinstance(payload, dict):
+            continue
+        st.subheader(f"{bucket}")
+        distribution = payload.get("theme_distribution")
+        if isinstance(distribution, dict) and distribution:
+            st.bar_chart({theme: (info.get("pct") if isinstance(info, dict) else info) for theme, info in distribution.items()})
+        st.json({k: v for k, v in payload.items() if k != "theme_distribution"})

@@ -194,3 +194,118 @@ def test_growth_observations_reads_artifact(tmp_path):
     )
     payload = growth_observations(tmp_path)
     assert payload["global"][0]["type"] == "high_no_trade_rate"
+
+
+# --- C3 Dashboard v2 query tests ---
+
+def _seed_run_files(agent_root: Path, run_date: str, *, strategy_id: str, score: float,
+                    decision: str, order_status: str, realized_pnl: float) -> None:
+    """Write one run's source files (no DB build) with intraday rankings + theme diagnostics."""
+    run_dir = agent_root / "runtime" / "state" / "runs" / run_date
+    paper_dir = run_dir / "paper"
+    logs_dir = agent_root / "runtime" / "logs" / "runs" / run_date / "audit"
+    write_json(run_dir / "run_manifest.json", {"run_date": run_date, "strategy_id": strategy_id,
+                                               "trading_mode": "paper", "effective_risk_tier": 4})
+    write_json(run_dir / "planner" / "candidate_scores.json", {"symbols": {
+        "NVDA": {"score": score, "score_status": "scored",
+                 "components": {"technical": score, "catalyst": 50.0, "dsa": 60.0, "kronos": 55.0, "quote": 50.0}}}})
+    write_json(run_dir / "planner" / "risk_overlay.json",
+               {"watchlist_candidates": ["NVDA"], "tradable_candidates": ["NVDA"]})
+    write_json(run_dir / "planner" / "premarket_diagnostics.json",
+               {"theme_diagnostics": {"watchlist": {"dominant_theme": "ai_semiconductor", "max_theme_pct": 70.0}}})
+    _write_jsonl(logs_dir / "decisions.jsonl", [
+        {"timestamp": f"{run_date}T09:31:00", "decision": decision,
+         "proposed_order": {"symbol": "NVDA", "side": "buy", "setup_type": "breakout", "confidence": 0.8},
+         "blocked_reasons": [] if decision == "would_trade" else ["below_trade_threshold"]}])
+    _write_jsonl(logs_dir / "intraday_rankings.jsonl", [
+        {"timestamp": f"{run_date}T09:31:00", "run_date": run_date, "symbol": "NVDA",
+         "trade_readiness_score": 72.5, "price_setup_score": 70.0, "candidate_score": score,
+         "technical_score": score, "research_score": 60.0, "catalyst_score": 50.0, "liquidity_score": 80.0}])
+    _write_jsonl(paper_dir / "orders.jsonl", [
+        {"order_id": f"paper-{run_date}", "symbol": "NVDA", "side": "buy", "quantity": 1, "limit_price": 100.0,
+         "notional": 100.0, "status": order_status, "fill_price": 100.0 if order_status == "filled" else None,
+         "reason_codes": ["breakout"], "timestamp": f"{run_date}T09:31:05"}])
+    _write_jsonl(paper_dir / "equity_curve.jsonl", [
+        {"timestamp": f"{run_date}T13:00:00", "date": run_date, "event": "day_end", "cash": 900.0,
+         "positions_market_value": 100.0, "total_equity": 1000.0 + realized_pnl, "realized_pnl": realized_pnl}])
+
+
+def test_candidates_with_rankings_joins_intraday_scores(tmp_path: Path) -> None:
+    _seed_run_files(tmp_path, "2026-06-15", strategy_id="baseline_v1", score=66.0,
+                    decision="would_trade", order_status="filled", realized_pnl=5.0)
+    build_analytics_db(tmp_path)
+    rows = queries.candidates_with_rankings(tmp_path, "2026-06-15")
+    assert rows and rows[0]["symbol"] == "NVDA"
+    assert rows[0]["trade_readiness_score"] == 72.5
+    assert rows[0]["price_setup_score"] == 70.0
+
+
+def test_strategy_comparison_groups_by_strategy_id(tmp_path: Path) -> None:
+    _seed_run_files(tmp_path, "2026-06-15", strategy_id="baseline_v1", score=66.0,
+                    decision="would_trade", order_status="filled", realized_pnl=5.0)
+    _seed_run_files(tmp_path, "2026-06-16", strategy_id="challenger_v2", score=40.0,
+                    decision="no_trade", order_status="pending", realized_pnl=-2.0)
+    build_analytics_db(tmp_path)
+    rows = queries.strategy_comparison(tmp_path)
+    assert {r["strategy_id"] for r in rows} == {"baseline_v1", "challenger_v2"}
+    baseline = next(r for r in rows if r["strategy_id"] == "baseline_v1")
+    challenger = next(r for r in rows if r["strategy_id"] == "challenger_v2")
+    assert baseline["fill_rate_pct"] == 100.0
+    assert baseline["no_trade_rate_pct"] == 0.0
+    assert challenger["no_trade_rate_pct"] == 100.0
+    assert baseline["total_realized_pnl"] == 5.0
+    assert challenger["total_realized_pnl"] == -2.0
+
+
+def test_strategy_comparison_empty_without_db(tmp_path: Path) -> None:
+    assert queries.strategy_comparison(tmp_path) == []
+
+
+def test_equity_timeseries_ordered_and_filtered(tmp_path: Path) -> None:
+    _seed_run_files(tmp_path, "2026-06-15", strategy_id="baseline_v1", score=66.0,
+                    decision="would_trade", order_status="filled", realized_pnl=5.0)
+    _seed_run_files(tmp_path, "2026-06-16", strategy_id="baseline_v1", score=66.0,
+                    decision="would_trade", order_status="filled", realized_pnl=3.0)
+    build_analytics_db(tmp_path)
+    series = queries.equity_timeseries(tmp_path)
+    assert [row["run_date"] for row in series] == ["2026-06-15", "2026-06-16"]
+    only_16 = queries.equity_timeseries(tmp_path, since="2026-06-16")
+    assert [row["run_date"] for row in only_16] == ["2026-06-16"]
+
+
+def test_blocked_reason_trend(tmp_path: Path) -> None:
+    _seed_run_files(tmp_path, "2026-06-16", strategy_id="baseline_v1", score=40.0,
+                    decision="no_trade", order_status="pending", realized_pnl=0.0)
+    build_analytics_db(tmp_path)
+    trend = queries.blocked_reason_trend(tmp_path)
+    assert any(r["reason"] == "below_trade_threshold" for r in trend)
+
+
+def test_champion_vs_challengers_reads_report(tmp_path: Path) -> None:
+    assert queries.champion_vs_challengers(tmp_path) == {}
+    out = tmp_path / "runtime" / "analytics"
+    out.mkdir(parents=True)
+    (out / "experiment_report.json").write_text(json.dumps(
+        {"champion": {"fill_rate_pct": 50.0}, "challengers": [{"challenger_strategy_id": "c1"}]}), encoding="utf-8")
+    payload = queries.champion_vs_challengers(tmp_path)
+    assert payload["challengers"][0]["challenger_strategy_id"] == "c1"
+
+
+def test_proposals_and_queue_and_theme_overviews(tmp_path: Path) -> None:
+    # proposals
+    pdir = tmp_path / "runtime" / "strategy_proposals" / "2026-06-16"
+    pdir.mkdir(parents=True)
+    (pdir / "proposal_001_scoring_trade_threshold.json").write_text(json.dumps(
+        {"proposal_id": "p1", "mutation": {"module": "scoring", "field": "trade_threshold"}, "status": "proposed"}),
+        encoding="utf-8")
+    assert queries.proposals_overview(tmp_path)[0]["proposal_id"] == "p1"
+    # queue
+    cfg = tmp_path / "src" / "config"
+    cfg.mkdir(parents=True)
+    (cfg / "strategy_experiments.yaml").write_text(
+        "experiments:\n  exp_x:\n    status: active_shadow\n    challenger_strategy_id: \"c1\"\n", encoding="utf-8")
+    assert queries.experiment_queue_overview(tmp_path)[0]["status"] == "active_shadow"
+    # theme
+    _seed_run_files(tmp_path, "2026-06-15", strategy_id="baseline_v1", score=66.0,
+                    decision="would_trade", order_status="filled", realized_pnl=5.0)
+    assert queries.theme_diagnostics(tmp_path, "2026-06-15")["watchlist"]["dominant_theme"] == "ai_semiconductor"
