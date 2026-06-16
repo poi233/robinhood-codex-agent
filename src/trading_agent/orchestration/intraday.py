@@ -35,6 +35,44 @@ def _append_local_decision(agent_root: Path, decision: str, reason: str, *, run_
         handle.write(json.dumps(payload) + "\n")
 
 
+def _append_intraday_rankings(agent_root: Path, inputs, *, run_date: str | None = None) -> None:
+    """Persist the intraday ranking scores (trade_readiness / price_setup / components).
+
+    These are computed transiently during ranking and were never written before, so E1
+    forward-return attribution and E2 weight calibration had no historical data for the
+    intraday six-component scores. One JSONL row per ranked candidate per intraday run,
+    using the same pure rank_candidates() the buy policy uses, so the persisted scores
+    match the decision's view of the world. Read-only w.r.t. trading behavior.
+    """
+    from trading_agent.policy.candidate_selector import rank_candidates
+
+    ranked, _blocked = rank_candidates(inputs)
+    if not ranked:
+        return
+    log_path = build_runtime_paths(agent_root, run_date=run_date).intraday_rankings_log_path
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    timestamp = datetime.now(tz=PT).strftime("%Y-%m-%dT%H:%M:%S%z")
+    with log_path.open("a", encoding="utf-8") as handle:
+        for candidate in ranked:
+            handle.write(
+                json.dumps(
+                    {
+                        "timestamp": timestamp,
+                        "run_date": run_date,
+                        "symbol": candidate.symbol,
+                        "trade_readiness_score": candidate.trade_readiness_score,
+                        "price_setup_score": candidate.price_setup_score,
+                        "candidate_score": candidate.candidate_score,
+                        "technical_score": candidate.technical_score,
+                        "research_score": candidate.research_score,
+                        "catalyst_score": candidate.catalyst_score,
+                        "liquidity_score": candidate.liquidity_score,
+                    }
+                )
+                + "\n"
+            )
+
+
 def _append_policy_decision(agent_root: Path, decision: PolicyDecision, *, run_date: str | None = None) -> None:
     log_path = build_runtime_paths(agent_root, run_date=run_date).decisions_log_path
     log_path.parent.mkdir(parents=True, exist_ok=True)
@@ -145,5 +183,6 @@ def run_intraday_pipeline(*, dry_run: bool) -> int:
             decision = replace(decision, action_taken="paper_pending")
         elif paper_result.reason:
             decision.blocked_reasons.append(paper_result.reason)
+    _append_intraday_rankings(agent_root, inputs, run_date=run_date)
     _append_policy_decision(agent_root, decision, run_date=run_date)
     return 0

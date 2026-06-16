@@ -38,6 +38,7 @@ def build_analytics_db(
         "orders": loaders.load_orders(agent_root, run_dates),
         "paper_equity": loaders.load_paper_equity(agent_root, run_dates),
         "blocked_reasons": loaders.load_blocked_reasons(decisions_rows),
+        "intraday_rankings": loaders.load_intraday_rankings(agent_root, run_dates),
     }
 
     connection = sqlite3.connect(db_path)

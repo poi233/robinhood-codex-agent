@@ -117,6 +117,23 @@ def _make_sample_run(agent_root: Path, run_date: str) -> None:
             },
         ],
     )
+    _write_jsonl(
+        logs_dir / "audit" / "intraday_rankings.jsonl",
+        [
+            {
+                "timestamp": f"{run_date}T09:31:00",
+                "run_date": run_date,
+                "symbol": "NVDA",
+                "trade_readiness_score": 72.5,
+                "price_setup_score": 70.0,
+                "candidate_score": 66.1,
+                "technical_score": 70.0,
+                "research_score": 60.0,
+                "catalyst_score": 55.0,
+                "liquidity_score": 80.0,
+            }
+        ],
+    )
 
 
 def _query_all(db_path: Path, table: str) -> list[tuple]:
@@ -139,6 +156,7 @@ def test_build_analytics_db_creates_six_tables_with_correct_row_counts(tmp_path:
         "orders": 1,
         "paper_equity": 2,
         "blocked_reasons": 2,
+        "intraday_rankings": 1,
     }
     db_path = tmp_path / "runtime" / "analytics" / "analytics.db"
     assert db_path.exists()
@@ -195,6 +213,23 @@ def test_build_analytics_db_aggregates_blocked_reasons_per_run_date(tmp_path: Pa
     ]
 
 
+def test_build_analytics_db_loads_intraday_ranking_scores(tmp_path: Path) -> None:
+    _make_sample_run(tmp_path, "2026-06-15")
+
+    build_analytics_db(tmp_path)
+
+    db_path = tmp_path / "runtime" / "analytics" / "analytics.db"
+    connection = sqlite3.connect(db_path)
+    try:
+        rows = connection.execute(
+            "SELECT symbol, trade_readiness_score, price_setup_score FROM intraday_rankings"
+        ).fetchall()
+    finally:
+        connection.close()
+
+    assert rows == [("NVDA", 72.5, 70.0)]
+
+
 def test_build_analytics_db_handles_run_dates_with_no_data(tmp_path: Path) -> None:
     (tmp_path / "runtime" / "state" / "runs" / "2026-06-15").mkdir(parents=True)
 
@@ -207,4 +242,5 @@ def test_build_analytics_db_handles_run_dates_with_no_data(tmp_path: Path) -> No
         "orders": 0,
         "paper_equity": 0,
         "blocked_reasons": 0,
+        "intraday_rankings": 0,
     }

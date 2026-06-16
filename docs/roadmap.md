@@ -265,11 +265,15 @@ strategy version，供 B1 manifest 引用、F1 strategy compare 对比。
   `collect_decisions()`（同一套多事件订单合并 + JSONL 解析逻辑，不重新发明）。
   `candidates` 表的 `is_watchlist`/`is_tradable` 是用同一 run_date 的 `risk_overlay.json` 的
   `watchlist_candidates`/`tradable_candidates` 反查得到的。
-- **字段范围调整**：roadmap 原列的 `trade_readiness_score`/`price_setup_score` 目前只在 intraday
-  policy 引擎里临时计算（`policy/candidate_selector.py`），从未持久化到任何文件，所以这次没法从
-  现有 JSON 拼出这两列。改用 `candidate_scores.json` 里确实存在的
+- **字段范围调整**：roadmap 原列的 `trade_readiness_score`/`price_setup_score` 当时只在 intraday
+  policy 引擎里临时计算（`policy/candidate_selector.py`），从未持久化，所以 B3 的 `candidates` 表
+  改用 `candidate_scores.json` 里确实存在的
   `technical_score`/`catalyst_score`/`dsa_score`/`kronos_score`/`quote_score`（components 字段）。
-  以后如果要做 strategy compare，需要先让 candidate_selector 把这两个分数落盘。
+  **更新（2026-06-16）**：已补上落盘——intraday pipeline 现在每次 run 用同一个纯函数
+  `rank_candidates(inputs)` 把每个候选的 `trade_readiness_score`/`price_setup_score` + 六分量写到
+  `runtime/logs/runs/<date>/audit/intraday_rankings.jsonl`，`analytics build` 新增第 7 张表
+  `intraday_rankings`。这样 E1 的 component attribution / E2 的 `price_setup` 权重校准从这天起有
+  真实历史数据；之前的样本仍缺这两个分数。
 - **幂等实现**：每次 build 都 `DROP TABLE IF EXISTS` + 重新 `CREATE TABLE` + 全量重新 `INSERT`，
   不做增量 upsert——因为源数据是 JSON/JSONL 文件本身，全量重建最简单也最不会有脏数据残留。
 

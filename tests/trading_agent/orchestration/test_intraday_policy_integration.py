@@ -216,6 +216,34 @@ class IntradayPolicyIntegrationTests(unittest.TestCase):
         notify.assert_called_once()
         self.assertEqual(notify.call_args.kwargs["event_tag"], "TRADE_EXECUTED")
 
+    def test_intraday_persists_ranking_scores(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            original_cwd = os.getcwd()
+            os.chdir(root)
+            try:
+                with mock.patch.object(intraday_module, "_is_weekday_pt", return_value=True), \
+                    mock.patch.object(intraday_module, "_is_intraday_window_pt", return_value=True), \
+                    mock.patch.object(intraday_module, "pt_date_string", return_value="2026-06-14"), \
+                    mock.patch.object(intraday_module, "load_runtime_config") as load_runtime_config, \
+                    mock.patch.object(intraday_module, "load_policy_inputs", return_value=policy_ready_inputs()), \
+                    mock.patch.object(intraday_module, "send_trade_email_notification"):
+                    load_runtime_config.return_value = mock.Mock(trading_mode="paper", risk_tier=0, paper_risk_tier=0, effective_risk_tier=0)
+
+                    status = intraday_module.run_intraday_pipeline(dry_run=False)
+                    rankings_path = root / "runtime" / "logs" / "runs" / "2026-06-14" / "audit" / "intraday_rankings.jsonl"
+                    rankings = [json.loads(line) for line in rankings_path.read_text(encoding="utf-8").splitlines()]
+            finally:
+                os.chdir(original_cwd)
+
+        self.assertEqual(status, 0)
+        self.assertEqual(len(rankings), 1)
+        self.assertEqual(rankings[0]["symbol"], "NVDA")
+        # The two scores that were never persisted before: both present and numeric.
+        self.assertIn("trade_readiness_score", rankings[0])
+        self.assertIn("price_setup_score", rankings[0])
+        self.assertGreater(rankings[0]["price_setup_score"], 0)
+
     def test_intraday_requires_live_quotes_in_loader(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)

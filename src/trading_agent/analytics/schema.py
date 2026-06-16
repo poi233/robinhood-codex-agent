@@ -71,4 +71,18 @@ TABLE_DDL: dict[str, str] = {
             count INTEGER
         )
     """,
+    "intraday_rankings": """
+        CREATE TABLE intraday_rankings (
+            timestamp TEXT,
+            run_date TEXT,
+            symbol TEXT,
+            trade_readiness_score REAL,
+            price_setup_score REAL,
+            candidate_score REAL,
+            technical_score REAL,
+            research_score REAL,
+            catalyst_score REAL,
+            liquidity_score REAL
+        )
+    """,
 }

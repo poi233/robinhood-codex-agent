@@ -60,6 +60,7 @@ class RuntimePaths:
     paper_equity_curve_path: Path
     paper_postmarket_summary_path: Path
     decisions_log_path: Path
+    intraday_rankings_log_path: Path
     orders_log_path: Path
     codex_run_log_path: Path
     error_log_path: Path
@@ -144,6 +145,7 @@ def build_runtime_paths(agent_root: Path, *, run_date: str | None = None) -> Run
         paper_equity_curve_path=_resolve_env_path(agent_root, "PAPER_EQUITY_CURVE_PATH", paper_dir / "equity_curve.jsonl"),
         paper_postmarket_summary_path=_resolve_env_path(agent_root, "PAPER_POSTMARKET_SUMMARY_PATH", paper_dir / "postmarket_summary.json"),
         decisions_log_path=_resolve_env_path(agent_root, "DECISIONS_LOG_PATH", run_logs_dir / "audit" / "decisions.jsonl"),
+        intraday_rankings_log_path=_resolve_env_path(agent_root, "INTRADAY_RANKINGS_LOG_PATH", run_logs_dir / "audit" / "intraday_rankings.jsonl"),
         orders_log_path=_resolve_env_path(agent_root, "ORDERS_LOG_PATH", run_logs_dir / "audit" / "orders.jsonl"),
         codex_run_log_path=_resolve_env_path(agent_root, "CODEX_RUN_LOG_PATH", run_logs_dir / "outputs" / "codex_runs.log"),
         error_log_path=_resolve_env_path(agent_root, "ERROR_LOG_PATH", run_logs_dir / "system" / "errors.log"),

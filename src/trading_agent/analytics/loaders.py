@@ -159,6 +159,34 @@ def load_paper_equity(agent_root: Path, run_dates: list[str]) -> list[dict[str, 
     return rows
 
 
+def load_intraday_rankings(agent_root: Path, run_dates: list[str]) -> list[dict[str, Any]]:
+    """One row per ranked candidate per intraday run, from intraday_rankings.jsonl.
+
+    These are the intraday six-component scores (trade_readiness_score / price_setup_score
+    + components) the policy ranker computes per run; persisted by the intraday pipeline so
+    E1 forward-return attribution and E2 weight calibration have historical data.
+    """
+    rows: list[dict[str, Any]] = []
+    for run_date in run_dates:
+        paths = build_runtime_paths(agent_root, run_date=run_date)
+        for row in _read_jsonl_or_empty(paths.intraday_rankings_log_path):
+            rows.append(
+                {
+                    "timestamp": row.get("timestamp"),
+                    "run_date": row.get("run_date", run_date),
+                    "symbol": row.get("symbol"),
+                    "trade_readiness_score": row.get("trade_readiness_score"),
+                    "price_setup_score": row.get("price_setup_score"),
+                    "candidate_score": row.get("candidate_score"),
+                    "technical_score": row.get("technical_score"),
+                    "research_score": row.get("research_score"),
+                    "catalyst_score": row.get("catalyst_score"),
+                    "liquidity_score": row.get("liquidity_score"),
+                }
+            )
+    return rows
+
+
 def load_blocked_reasons(decisions_rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Aggregate decisions_rows' blocked_reasons into per-(run_date, reason) counts."""
     counts: dict[tuple[str, str], int] = {}
