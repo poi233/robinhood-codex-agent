@@ -6,6 +6,7 @@ from typing import Any
 from trading_agent.core.context import build_runtime_paths
 from trading_agent.core.io import read_json, write_json
 from trading_agent.data.universe import parse_universe
+from trading_agent.planner.scoring_profiles import DEFAULT_SCORING_PROFILE, load_scoring_profile
 
 
 CORE_MARKET_SYMBOLS = ("SPY", "QQQ", "IWM", "SMH")
@@ -41,6 +42,10 @@ def _append_payload_symbols(symbols: list[str], values: object, universe: set[st
 def build_candidate_snapshot(agent_root: Path, run_date: str) -> dict[str, Any]:
     paths = build_runtime_paths(agent_root, run_date=run_date)
     universe = set(parse_universe(paths.config_dir / "universe.txt"))
+    scoring_profile = load_scoring_profile(paths.config_dir)
+    max_scored_candidates = int(
+        scoring_profile.get("max_scored_candidates", DEFAULT_SCORING_PROFILE["max_scored_candidates"])
+    )
     account = _read_json_or_empty(paths.account_snapshot_path)
     dsa = _read_json_or_empty(paths.dsa_signals_path)
     kronos = _read_json_or_empty(paths.kronos_signals_path)
@@ -75,7 +80,7 @@ def build_candidate_snapshot(agent_root: Path, run_date: str) -> dict[str, Any]:
         "date": run_date,
         "source_universe": str(paths.config_dir / "universe.txt"),
         "core_symbols": core_symbols,
-        "selected_symbols": selected[:20],
+        "selected_symbols": selected[:max_scored_candidates],
         "blocked_symbols": blocked,
         "source_status": {
             "account_snapshot": "ok" if paths.account_snapshot_path.exists() else "missing",

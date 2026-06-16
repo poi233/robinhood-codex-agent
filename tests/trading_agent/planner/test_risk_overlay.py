@@ -201,3 +201,33 @@ def test_risk_overlay_uses_configured_scoring_thresholds() -> None:
     assert overlay["high_conviction_threshold"] == 82.0
     assert overlay["min_effective_coverage"] == 0.55
     assert overlay["tradable_candidates"] == ["AVGO"]
+
+
+def test_risk_overlay_respects_configured_max_watchlist_and_max_tradable() -> None:
+    symbols = {
+        f"SYM{i}": {"score": 90 - i, "blocked": False, "score_status": "scored"}
+        for i in range(5)
+    }
+    overlay = build_risk_overlay(
+        run_date="2026-06-15",
+        trading_mode="paper",
+        risk_tier=3,
+        risk_caps={"max_single_order_notional": 5000, "max_daily_notional": 20000},
+        market_calendar={"data_status": "ok", "is_trading_day": True, "session": "premarket"},
+        capital_snapshot={"sizing_buying_power": 400000.0, "sizing_source": "paper_starting_cash"},
+        account_snapshot={"agentic_account_identified": True, "data_status": "ok", "buying_power": 100.0},
+        candidate_scores={"symbols": symbols},
+        data_status_summary={"execution_blocking": False, "reason_codes": []},
+        scoring_profile={
+            "name": "aggressive_growth",
+            "watchlist_threshold": 0.0,
+            "trade_threshold": 0.0,
+            "high_conviction_threshold": 80.0,
+            "min_effective_coverage": 0.5,
+            "max_watchlist": 2,
+            "max_tradable": 1,
+        },
+    )
+
+    assert overlay["watchlist_candidates"] == ["SYM0", "SYM1"]
+    assert overlay["tradable_candidates"] == ["SYM0"]

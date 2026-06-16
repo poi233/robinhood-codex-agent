@@ -11,6 +11,9 @@ DEFAULT_SCORING_PROFILE = {
     "trade_threshold": 50.0,
     "high_conviction_threshold": 80.0,
     "min_effective_coverage": 0.5,
+    "max_scored_candidates": 20,
+    "max_watchlist": 8,
+    "max_tradable": 8,
 }
 
 
@@ -36,6 +39,10 @@ def _parse_scoring_profiles_yaml(path: Path) -> dict[str, Any]:
             payload["default_profile"] = stripped.split(":", 1)[1].strip()
             continue
         if stripped == "profiles:":
+            continue
+        if not line.startswith(" ") and ":" in stripped:
+            key, value = stripped.split(":", 1)
+            payload[key.strip()] = _parse_scalar(value)
             continue
         if line.startswith("  ") and not line.startswith("    ") and stripped.endswith(":"):
             current_profile = stripped[:-1].strip()
@@ -69,4 +76,7 @@ def load_scoring_profile(config_dir: Path) -> dict[str, Any]:
         "trade_threshold": float(selected.get("trade_threshold", DEFAULT_SCORING_PROFILE["trade_threshold"])),
         "high_conviction_threshold": float(selected.get("high_conviction_threshold", DEFAULT_SCORING_PROFILE["high_conviction_threshold"])),
         "min_effective_coverage": float(selected.get("min_effective_coverage", DEFAULT_SCORING_PROFILE["min_effective_coverage"])),
+        "max_scored_candidates": int(payload.get("max_scored_candidates", DEFAULT_SCORING_PROFILE["max_scored_candidates"])),
+        "max_watchlist": int(payload.get("max_watchlist", DEFAULT_SCORING_PROFILE["max_watchlist"])),
+        "max_tradable": int(payload.get("max_tradable", DEFAULT_SCORING_PROFILE["max_tradable"])),
     }

@@ -123,6 +123,8 @@ def build_risk_overlay(
     watchlist_threshold = float(scoring_profile.get("watchlist_threshold", DEFAULT_SCORING_PROFILE["watchlist_threshold"]))
     trade_threshold = float(scoring_profile.get("trade_threshold", DEFAULT_SCORING_PROFILE["trade_threshold"]))
     high_conviction_threshold = float(scoring_profile.get("high_conviction_threshold", DEFAULT_SCORING_PROFILE["high_conviction_threshold"]))
+    max_watchlist = int(scoring_profile.get("max_watchlist", DEFAULT_SCORING_PROFILE["max_watchlist"]))
+    max_tradable = int(scoring_profile.get("max_tradable", DEFAULT_SCORING_PROFILE["max_tradable"]))
     no_trade_reasons: list[str] = []
     hard_block_reasons: list[str] = []
     if not _is_trading_day(market_calendar):
@@ -140,14 +142,14 @@ def build_risk_overlay(
             key=lambda item: (-_candidate_score(item[1] or {}), item[0]),
         )
         if isinstance(payload, dict) and not payload.get("blocked") and payload.get("score_status") != "blocked"
-    ][:8]
-    watchlist_candidates = [symbol for symbol in scored_candidates if _candidate_score(symbols_payload[symbol]) >= watchlist_threshold][:8]
+    ][:max_watchlist]
+    watchlist_candidates = [symbol for symbol in scored_candidates if _candidate_score(symbols_payload[symbol]) >= watchlist_threshold][:max_watchlist]
     tradable_candidates = [
         symbol
         for symbol in watchlist_candidates
         if _candidate_score(symbols_payload[symbol]) >= trade_threshold
         and (symbols_payload[symbol] or {}).get("score_status") == "scored"
-    ][:8]
+    ][:max_tradable]
 
     if not scored_candidates:
         no_trade_reasons.append("no_scored_candidates")

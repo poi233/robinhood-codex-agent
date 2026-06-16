@@ -1,7 +1,7 @@
 # 项目状态总表 — 做了什么 / 没做什么
 
 > 最后更新：2026-06-15
-> 范围：`src/trading_agent/`（约 6500 行 Python）+ 配置 + 编排 + 入口 + 测试（238 passed）
+> 范围：`src/trading_agent/`（约 6500 行 Python）+ 配置 + 编排 + 入口 + 测试（242 passed）
 > 用途：**单一权威的"现状"文档**，按子系统逐块说明已实现与未实现。未来要做的事另见
 > [`roadmap.md`](./roadmap.md)。
 >
@@ -80,7 +80,9 @@
 
 **没做**
 - `universe_meta.json` 目前是手动维护的参考，没有自动构建（如 ETF holdings 自动展开）。
-- `candidates.py` 的 `selected[:20]`、`risk_overlay.py` 的 `[:8]` 仍是硬编码魔数，未配置化。
+- **（roadmap A3 已完成）** `candidates.py` 的 `selected[:20]`、`risk_overlay.py` 的三处 `[:8]` 已改读
+  `scoring_profiles.yaml` 的 `max_scored_candidates` / `max_watchlist` / `max_tradable`，改配置即可调
+  上限，不再需要改代码。
 
 ### 4. Market feed（`data/market_context.py`）
 
@@ -221,6 +223,7 @@
 | **P4** Token 优化 | technical_features.py + dsa_metrics.py 预计算；technical/DSA prompt 改读特征包/横截面表；env flag + doctor 回显 | `bd456f7` `1b1a079` |
 | **P5-A1** 正确性 | env 加载提前到 skip-gate 判断之前（premarket/intraday/postmarket） | `7f69775` |
 | **P5-A2** 正确性 | Tier 4 非 paper fail-closed（`TierMisconfigurationError` + doctor 退出码 2） | 见 git log |
+| **P5-A3** 正确性 | 配置化魔数：`max_scored_candidates`/`max_watchlist`/`max_tradable` 进 `scoring_profiles.yaml` | 见 git log |
 
 ---
 
@@ -228,8 +231,8 @@
 
 按 roadmap 全局阶段归类（详细步骤/验收/依赖见 [`roadmap.md`](./roadmap.md)）：
 
-- **A 正确性与安全闸**：配置化魔数（`selected[:20]`、`[:8]`、doctor/runtime_block 默认值，A3）。
-  （A1 env 加载提前、A2 Tier 4 fail-closed 已完成，见上方 P5-A1/P5-A2。）
+- **A 正确性与安全闸**：A1/A2/A3 均已完成（见上方 P5-A1/P5-A2/P5-A3）。下一批是 B 阶段
+  （数据可追溯基建：run_manifest / strategy_registry / analytics.db）。
 - **B 数据可追溯基建（P0）**：run_manifest（每次 lifecycle run）、strategy_registry、
   analytics.db builder、strategy-changelog。
 - **C 只读可视化与观测**：Strategy Lab dashboard（Streamlit 只读）、theme/speculative 集中度诊断。

@@ -1,4 +1,7 @@
 default_profile: aggressive_growth
+max_scored_candidates: 20
+max_watchlist: 8
+max_tradable: 8
 profiles:
   aggressive_growth:
     watchlist_threshold: 35

@@ -25,7 +25,7 @@
 |---|---|---|---|---|
 | **A 立即做 · 正确性与安全闸** | A1 | env 加载早于 early gate | docx | ✅ **已完成**（2026-06-15） |
 | | A2 | Tier 4 非 paper → fail-closed | docx | ✅ **已完成**（2026-06-15） |
-| | A3 | 配置化魔数 + doctor/runtime_block 默认值 | 旧 R3 + docx | ✅ 可立即做 |
+| | A3 | 配置化魔数 + doctor/runtime_block 默认值 | 旧 R3 + docx | ✅ **已完成**（2026-06-15） |
 | **B 数据可追溯基建（P0）** | B1 | run_manifest（每次 lifecycle run） | docx | ✅ 可立即做 · 时间敏感 |
 | | B2 | strategy_registry + registry.py | docx | ✅ 可立即做 |
 | | B3 | analytics DB builder（analytics.db） | docx | ✅ 可立即做（依赖 B1 落盘） |
@@ -121,23 +121,30 @@
 
 ---
 
-## A3 — 配置化魔数 + doctor/runtime_block 默认值（旧 R3）
+## A3 — 配置化魔数 + doctor/runtime_block 默认值（旧 R3） — ✅ 已完成（2026-06-15）
 
 **目标**：消除散落硬编码常数，统一到配置；修正 doctor/runtime_block 回显默认值。
 
-**具体项**：
-1. `planner/candidates.py` 的 `selected[:20]` → `scoring_profiles.yaml` 的 `max_scored_candidates`。
-2. `planner/risk_overlay.py` 的 `[:8]`（scored/watchlist/tradable）→ 配置项 `max_watchlist` / `max_tradable`。
-3. `cli.py` `_run_doctor` 里 `DSA_MAX_SUBAGENTS`/`TECHNICAL_MAX_SUBAGENTS` 回显默认 `'10'` → `'3'`，
-   与 runtime.env 当前值一致。
-4. `prompts/runtime_block.py` 同名默认值同步为 `'3'`。
+**实现记录**：
+- 项 3/4（`DSA_MAX_SUBAGENTS`/`TECHNICAL_MAX_SUBAGENTS` 回显默认值）在更早的 P3 commit（`ebd756a`，
+  subagents 10→3）里已经同步改成 `'3'`，`cli.py`/`prompts/runtime_block.py`/`runtime.env` 三处一致，
+  本次确认后无需再改。
+- `src/config/scoring_profiles.yaml` 新增三个顶层（非 per-profile）配置项：`max_scored_candidates: 20`、
+  `max_watchlist: 8`、`max_tradable: 8`。`planner/scoring_profiles.py` 的极简 YAML 解析器新增对顶层
+  scalar key（非 `default_profile:`/`profiles:`）的通用解析；`DEFAULT_SCORING_PROFILE`、
+  `load_scoring_profile()` 返回值都带上这三个字段（无配置文件时回退默认值）。
+- `planner/candidates.py` 的 `selected[:20]` → `selected[:max_scored_candidates]`，从
+  `load_scoring_profile(paths.config_dir)` 读取。
+- `planner/risk_overlay.py` 的三处 `[:8]`（`scored_candidates`/`watchlist_candidates` 用
+  `max_watchlist`；`tradable_candidates` 用 `max_tradable`）改为读取已经存在的 `scoring_profile`
+  参数（`build_risk_overlay_from_paths` 早已加载它，调用点无需改动）。
 
-**涉及文件**：`planner/candidates.py`、`planner/risk_overlay.py`、`cli.py`、`prompts/runtime_block.py`、
-`scoring_profiles.yaml`、测试。
+**涉及文件**：`planner/candidates.py`、`planner/risk_overlay.py`、`planner/scoring_profiles.py`、
+`scoring_profiles.yaml`、`tests/trading_agent/planner/test_candidates.py`（新建）、
+`test_scoring_profiles.py`、`test_risk_overlay.py`。
 
-**验收**：改配置即可调上限，无需改代码；`doctor` 在 env 缺失时回显与 runtime.env 一致。
-
-**注意**：改 `[:8]` 要确认下游消费者（final planner prompt、policy 交集）对数量无隐含假设。
+**验收**：✅ 改 `scoring_profiles.yaml` 即可调上限，无需改代码（已用临时配置文件测试验证）；
+`doctor`/`runtime_block` 默认值与 runtime.env 当前值一致（确认未漂移）。242 测试通过（+4 新增）。
 
 ---
 
