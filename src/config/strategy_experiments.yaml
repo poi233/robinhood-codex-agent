@@ -1,0 +1,5 @@
+# Self-growth experiment queue (G5). Human-reviewed via git.
+# Lifecycle: proposed -> human_approved -> active_shadow -> ready_for_review -> promoted/rejected/archived.
+# `growth experiments approve` only enables shadow paper; it NEVER switches active_strategy
+# in strategy_registry.yaml. Promotion to the champion is always a manual YAML edit (G8).
+experiments:

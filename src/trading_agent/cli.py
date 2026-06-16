@@ -40,6 +40,17 @@ def build_parser() -> argparse.ArgumentParser:
     growth_validate_parser = growth_subparsers.add_parser("validate", help="Validate a proposal JSON (or a whole proposals dir) against growth_policy.")
     growth_validate_parser.add_argument("path", metavar="PROPOSAL_OR_DIR", help="Path to a proposal_*.json file or a runtime/strategy_proposals/<date>/ directory.")
 
+    experiments_parser = growth_subparsers.add_parser("experiments", help="Manage the shadow-experiment queue (approve only enables shadow, never live).")
+    experiments_subparsers = experiments_parser.add_subparsers(dest="experiments_command", required=True)
+    exp_list = experiments_subparsers.add_parser("list", help="List queued experiments.")
+    exp_list.add_argument("--status", default=None, help="Filter by lifecycle status.")
+    exp_add = experiments_subparsers.add_parser("add", help="Enqueue a validated proposal JSON as a new experiment (state: proposed).")
+    exp_add.add_argument("proposal", metavar="PROPOSAL_JSON")
+    exp_add.add_argument("--parent", default=None, help="Parent (champion) strategy_id; defaults to the active strategy.")
+    for action in ("approve", "reject", "archive"):
+        exp_action = experiments_subparsers.add_parser(action, help=f"{action} an experiment by id.")
+        exp_action.add_argument("experiment_id", metavar="EXPERIMENT_ID")
+
     return parser
 
 
@@ -186,6 +197,40 @@ def _run_growth_validate(agent_root: Path, *, path: str) -> int:
     return 0
 
 
+def _run_growth_experiments(agent_root: Path, args) -> int:
+    from trading_agent.growth import experiment_queue as eq
+
+    command = args.experiments_command
+    if command == "list":
+        rows = eq.list_experiments(agent_root, status=args.status)
+        if not rows:
+            print("No experiments queued.")
+            return 0
+        for row in rows:
+            print(f"  {row['status']:<16} {row['experiment_id']}  (challenger: {row.get('challenger_strategy_id')})")
+        return 0
+    if command == "add":
+        import json as _json
+        from trading_agent.strategy.registry import load_active_strategy
+
+        proposal = _json.loads(Path(args.proposal).read_text(encoding="utf-8"))
+        parent = args.parent or load_active_strategy(agent_root)["strategy_id"]
+        exp = eq.add_experiment(agent_root, proposal, parent_strategy_id=parent)
+        print(f"Queued {exp['experiment_id']} (status: {exp['status']}, parent: {parent})")
+        return 0
+    handler = {"approve": eq.approve_experiment, "reject": eq.reject_experiment, "archive": eq.archive_experiment}[command]
+    try:
+        exp = handler(agent_root, args.experiment_id)
+    except KeyError:
+        print(f"No such experiment: {args.experiment_id}")
+        return 1
+    except eq.ExperimentTransitionError as exc:
+        print(f"Refused: {exc}")
+        return 2
+    print(f"{args.experiment_id} -> {exp['status']}")
+    return 0
+
+
 def _run_dashboard(agent_root: Path) -> int:
     import subprocess
     import sys
@@ -234,4 +279,6 @@ def main(argv: list[str] | None = None) -> int:
         return _run_growth_propose(Path.cwd(), since=args.since, until=args.until)
     if args.command == "growth" and args.growth_command == "validate":
         return _run_growth_validate(Path.cwd(), path=args.path)
+    if args.command == "growth" and args.growth_command == "experiments":
+        return _run_growth_experiments(Path.cwd(), args)
     return 0

@@ -156,3 +156,38 @@ def test_growth_propose_writes_validated_proposals(tmp_path, monkeypatch, capsys
     payload = json.loads(proposals[0].read_text(encoding="utf-8"))
     assert payload["validation"]["ok"] is True
     assert payload["status"] == "proposed"
+
+
+def test_growth_experiments_add_approve_archive_flow(tmp_path, monkeypatch, capsys):
+    import json
+    from trading_agent.cli import main
+    from trading_agent.growth.experiment_queue import load_experiments
+
+    config_dir = tmp_path / "src" / "config"
+    config_dir.mkdir(parents=True)
+    (config_dir / "strategy_registry.yaml").write_text(
+        "active_strategy: baseline_v1\nstrategies:\n  baseline_v1:\n    status: active\n", encoding="utf-8"
+    )
+    registry_before = (config_dir / "strategy_registry.yaml").read_text(encoding="utf-8")
+    proposal_path = tmp_path / "proposal.json"
+    proposal_path.write_text(json.dumps({
+        "proposal_id": "2026-06-16_scoring_trade_threshold",
+        "mutation": {"module": "scoring", "field": "trade_threshold", "current": 50.0, "proposed": 40.0},
+    }), encoding="utf-8")
+    monkeypatch.chdir(tmp_path)
+
+    assert main(["growth", "experiments", "add", str(proposal_path)]) == 0
+    rows = load_experiments(tmp_path)
+    assert len(rows) == 1
+    exp_id = next(iter(rows))
+
+    assert main(["growth", "experiments", "approve", exp_id]) == 0
+    assert load_experiments(tmp_path)[exp_id]["status"] == "active_shadow"
+    # approve must never touch the champion registry.
+    assert (config_dir / "strategy_registry.yaml").read_text(encoding="utf-8") == registry_before
+
+    assert main(["growth", "experiments", "list"]) == 0
+    assert "active_shadow" in capsys.readouterr().out
+
+    assert main(["growth", "experiments", "archive", exp_id]) == 0
+    assert load_experiments(tmp_path)[exp_id]["status"] == "archived"
