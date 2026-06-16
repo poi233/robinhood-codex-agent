@@ -23,7 +23,7 @@
 
 | 阶段 | 项 | 主题 | 来源 | 状态 / 阻塞 |
 |---|---|---|---|---|
-| **A 立即做 · 正确性与安全闸** | A1 | env 加载早于 early gate | docx | ✅ 可立即做（低风险） |
+| **A 立即做 · 正确性与安全闸** | A1 | env 加载早于 early gate | docx | ✅ **已完成**（2026-06-15） |
 | | A2 | Tier 4 非 paper → fail-closed | docx | ✅ 可立即做（低风险） |
 | | A3 | 配置化魔数 + doctor/runtime_block 默认值 | 旧 R3 + docx | ✅ 可立即做 |
 | **B 数据可追溯基建（P0）** | B1 | run_manifest（每次 lifecycle run） | docx | ✅ 可立即做 · 时间敏感 |
@@ -69,22 +69,28 @@
 
 # A 阶段 · 正确性与安全闸（立即做）
 
-## A1 — env 加载早于 early gate
+## A1 — env 加载早于 early gate — ✅ 已完成（2026-06-15）
 
 **目标**：确保 `runtime.env` / `runtime.env.local` 在任何 premarket/intraday/postmarket 的 skip-gate
 判断**之前**加载。当前部分 `ALLOW_*` 判定发生在 `load_runtime_config` 之前，Python 直跑时
 `runtime.env.local` 里的 `ALLOW_WEEKEND_RUN`、`ALLOW_OUTSIDE_MARKET_TEST` 可能不生效。
 
-**具体步骤**：
-1. 在每个 lifecycle function 入口（或 CLI `main` 进入处）第一步先 `load_runtime_config()`，
-   再做任何 gate 检查。
-2. 加测试：从 `runtime.env.local` 读到 `ALLOW_WEEKEND_RUN` / `ALLOW_OUTSIDE_MARKET_TEST` 后
-   gate 行为正确。
+**实现记录**：
+1. ✅ `core/config.py` 把原来的私有 `_load_env_files` 改成公开的 `load_env_files(agent_root)`，
+   `load_runtime_config()` 内部仍调用它（保持向后兼容）。
+2. ✅ `orchestration/premarket.py` / `intraday.py` / `postmarket.py` 的三个 lifecycle 入口函数，
+   现在第一行就调用 `load_env_files(agent_root)`，在 `_is_weekday_pt()` / `_is_intraday_window_pt()` /
+   `KILL_SWITCH` 等任何 gate 判断之前完成。`postmarket.py` 里 `build_runtime_paths()` 也顺带挪到
+   gate 检查之后，避免同一个排序问题影响路径覆盖。
+3. ✅ 测试：`tests/trading_agent/core/test_runtime.py` 三个 `load_env_files` 单测（local 覆盖 base、
+   shell export 优先、文件缺失时静默跳过）+ 每个 lifecycle 各 2 个测试（仅在 `runtime.env.local`
+   写入 `ALLOW_WEEKEND_RUN=1`、不触碰 `os.environ`，验证周末 gate 被正确放行；以及没有该 override
+   时仍正确跳过）。
 
-**涉及文件**：`orchestration/premarket.py`、`orchestration/intraday.py`、`orchestration/postmarket.py`、
-`cli.py`、对应测试。
+**涉及文件**：`core/config.py`、`orchestration/premarket.py`、`orchestration/intraday.py`、
+`orchestration/postmarket.py`、三个对应测试文件、`tests/trading_agent/core/test_runtime.py`。
 
-**验收**：周末/盘外用 `runtime.env.local` 开关可正确放行；测试覆盖两个 flag。
+**验收**：周末/盘外用 `runtime.env.local` 开关可正确放行；测试覆盖两个 flag。✅ 231 测试通过。
 
 ---
 

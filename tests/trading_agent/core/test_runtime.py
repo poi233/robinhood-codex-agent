@@ -1,7 +1,10 @@
+import os
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
+from trading_agent.core.config import load_env_files
 from trading_agent.core.context import RuntimePaths, build_runtime_paths
 from trading_agent.core.time import pt_date_string
 
@@ -33,3 +36,31 @@ class CoreRuntimeTests(unittest.TestCase):
             root = Path(tmpdir)
             paths = build_runtime_paths(root)
             self.assertIsInstance(paths, RuntimePaths)
+
+    def test_load_env_files_applies_local_override_not_already_in_environ(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            (root / "src" / "config").mkdir(parents=True)
+            (root / "src" / "config" / "runtime.env").write_text("FOO=base\n", encoding="utf-8")
+            (root / "src" / "config" / "runtime.env.local").write_text("FOO=local\n", encoding="utf-8")
+
+            with mock.patch.dict(os.environ, {}, clear=False):
+                os.environ.pop("FOO", None)
+                load_env_files(root)
+                self.assertEqual(os.environ["FOO"], "local")
+
+    def test_load_env_files_never_overrides_existing_shell_export(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            (root / "src" / "config").mkdir(parents=True)
+            (root / "src" / "config" / "runtime.env").write_text("FOO=base\n", encoding="utf-8")
+            (root / "src" / "config" / "runtime.env.local").write_text("FOO=local\n", encoding="utf-8")
+
+            with mock.patch.dict(os.environ, {"FOO": "shell"}, clear=False):
+                load_env_files(root)
+                self.assertEqual(os.environ["FOO"], "shell")
+
+    def test_load_env_files_is_a_noop_when_config_files_are_absent(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            load_env_files(root)

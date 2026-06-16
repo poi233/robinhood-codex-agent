@@ -33,7 +33,7 @@ from trading_agent.signals.kronos import (
     build_live_kronos_payload,
     build_mock_kronos_payload,
 )
-from trading_agent.core.config import load_runtime_config
+from trading_agent.core.config import load_env_files, load_runtime_config
 from trading_agent.data.universe import parse_active_watchlist
 from trading_agent.signals.dsa import run_dsa_scan
 from trading_agent.signals.technical_fallback import build_failed_technical_payload
@@ -164,6 +164,7 @@ def _write_kronos_signals(agent_root: Path, active_universe_file: Path | None = 
 
 def run_premarket_pipeline(*, dry_run: bool) -> int:
     agent_root = Path.cwd()
+    load_env_files(agent_root)
     if not _is_weekday_pt() and os.environ.get("ALLOW_WEEKEND_RUN", "0") != "1":
         return 0
 

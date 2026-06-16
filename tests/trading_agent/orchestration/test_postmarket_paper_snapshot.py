@@ -9,6 +9,63 @@ from trading_agent.orchestration import postmarket as postmarket_module
 
 
 class PostmarketPaperSnapshotTests(unittest.TestCase):
+    def test_weekend_gate_honors_runtime_env_local_override(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            paper_dir = root / "runtime" / "state" / "runs" / "2026-06-14" / "paper"
+            paper_dir.mkdir(parents=True)
+            (root / "src" / "config").mkdir(parents=True)
+            (root / "src" / "config" / "runtime.env").write_text("TRADING_MODE=paper\n", encoding="utf-8")
+            (root / "src" / "config" / "runtime.env.local").write_text(
+                "ALLOW_WEEKEND_RUN=1\n", encoding="utf-8"
+            )
+            (paper_dir / "account.json").write_text(
+                json.dumps({"cash": 15.0, "starting_cash": 25.0, "realized_pnl": 0.0}),
+                encoding="utf-8",
+            )
+            (paper_dir / "positions.json").write_text(json.dumps({}), encoding="utf-8")
+
+            original_cwd = os.getcwd()
+            os.chdir(root)
+            try:
+                with mock.patch.object(postmarket_module, "_is_weekday_pt", return_value=False), \
+                    mock.patch.dict(os.environ, {"RUN_DATE_PT": "2026-06-14"}, clear=False), \
+                    mock.patch.object(postmarket_module, "run_codex_prompt", return_value=0), \
+                    mock.patch.object(postmarket_module, "send_trade_email_notification"):
+                    os.environ.pop("ALLOW_WEEKEND_RUN", None)
+                    status = postmarket_module.run_postmarket_pipeline(dry_run=False)
+                day_end_written = (paper_dir / "day_end.json").exists()
+            finally:
+                os.chdir(original_cwd)
+
+        # ALLOW_WEEKEND_RUN only lives in runtime.env.local (never exported
+        # to os.environ here), so day_end.json only gets written if the
+        # pipeline loaded that file before checking the weekend gate.
+        self.assertEqual(status, 0)
+        self.assertTrue(day_end_written)
+
+    def test_weekend_gate_skips_without_override(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            paper_dir = root / "runtime" / "state" / "runs" / "2026-06-14" / "paper"
+            paper_dir.mkdir(parents=True)
+            (root / "src" / "config").mkdir(parents=True)
+            (root / "src" / "config" / "runtime.env").write_text("TRADING_MODE=paper\n", encoding="utf-8")
+
+            original_cwd = os.getcwd()
+            os.chdir(root)
+            try:
+                with mock.patch.object(postmarket_module, "_is_weekday_pt", return_value=False), \
+                    mock.patch.dict(os.environ, {"RUN_DATE_PT": "2026-06-14"}, clear=False):
+                    os.environ.pop("ALLOW_WEEKEND_RUN", None)
+                    status = postmarket_module.run_postmarket_pipeline(dry_run=False)
+                day_end_written = (paper_dir / "day_end.json").exists()
+            finally:
+                os.chdir(original_cwd)
+
+        self.assertEqual(status, 0)
+        self.assertFalse(day_end_written)
+
     def test_postmarket_records_paper_day_end_snapshot(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)

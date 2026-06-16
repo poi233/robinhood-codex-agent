@@ -217,6 +217,55 @@ class PremarketOrchestrationTests(unittest.TestCase):
         self.assertEqual(collect_market_context.call_count, 1)
         self.assertTrue(collect_market_context.call_args.kwargs["mock"])
 
+    def test_weekend_gate_honors_runtime_env_local_override(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            (root / "src" / "config").mkdir(parents=True)
+            (root / "src" / "config" / "universe.txt").write_text("NVDA\n", encoding="utf-8")
+            (root / "src" / "config" / "runtime.env.local").write_text(
+                "ALLOW_WEEKEND_RUN=1\n", encoding="utf-8"
+            )
+
+            with mock.patch.object(premarket_module, "_is_weekday_pt", return_value=False), \
+                mock.patch.object(premarket_module, "collect_market_context") as collect_market_context, \
+                mock.patch.object(premarket_module, "run_codex_prompt", return_value=0), \
+                mock.patch.object(premarket_module, "_write_kronos_signals"), \
+                mock.patch.object(premarket_module, "send_trade_email_notification"):
+                original_cwd = os.getcwd()
+                os.chdir(root)
+                try:
+                    with mock.patch.dict(premarket_module.os.environ, {}, clear=False):
+                        premarket_module.os.environ.pop("ALLOW_WEEKEND_RUN", None)
+                        status = premarket_module.run_premarket_pipeline(dry_run=False)
+                finally:
+                    os.chdir(original_cwd)
+
+        # The override lives only in runtime.env.local (never exported to the
+        # shell), so the pipeline must load it itself before the weekend gate
+        # check runs, not just rely on a pre-populated os.environ.
+        self.assertEqual(collect_market_context.call_count, 1)
+        self.assertNotEqual(status, None)
+
+    def test_weekend_gate_skips_without_override(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            (root / "src" / "config").mkdir(parents=True)
+            (root / "src" / "config" / "universe.txt").write_text("NVDA\n", encoding="utf-8")
+
+            with mock.patch.object(premarket_module, "_is_weekday_pt", return_value=False), \
+                mock.patch.object(premarket_module, "collect_market_context") as collect_market_context:
+                original_cwd = os.getcwd()
+                os.chdir(root)
+                try:
+                    with mock.patch.dict(premarket_module.os.environ, {}, clear=False):
+                        premarket_module.os.environ.pop("ALLOW_WEEKEND_RUN", None)
+                        status = premarket_module.run_premarket_pipeline(dry_run=False)
+                finally:
+                    os.chdir(original_cwd)
+
+        self.assertEqual(status, 0)
+        self.assertEqual(collect_market_context.call_count, 0)
+
     def test_write_kronos_signals_uses_repo_defaults_when_env_is_missing(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)

@@ -1,7 +1,7 @@
 # 项目状态总表 — 做了什么 / 没做什么
 
 > 最后更新：2026-06-15
-> 范围：`src/trading_agent/`（约 6500 行 Python）+ 配置 + 编排 + 入口 + 测试（222 passed）
+> 范围：`src/trading_agent/`（约 6500 行 Python）+ 配置 + 编排 + 入口 + 测试（231 passed）
 > 用途：**单一权威的"现状"文档**，按子系统逐块说明已实现与未实现。未来要做的事另见
 > [`roadmap.md`](./roadmap.md)。
 >
@@ -44,6 +44,10 @@
 - CLI 子命令：`premarket` / `intraday` / `postmarket` / `dsa` / `doctor` / `replay`。
 - `doctor` 打印生效值：mode、KILL_SWITCH、两个 tier + 各自 notional caps、effective tier、
   Codex 配置、各信号层开关、paper 配置、通知开关。
+- **（roadmap A1）** `core/config.py` 暴露公开的 `load_env_files()`；premarket/intraday/postmarket
+  三个 lifecycle 入口现在第一行就调用它，早于 `ALLOW_WEEKEND_RUN`/`ALLOW_OUTSIDE_MARKET_TEST`/
+  `ALLOW_KILL_SWITCH_PAPER_TEST` 等任何 skip-gate 判断；只在 `runtime.env.local` 设置、未 export
+  到 shell 的 override 现在对直接 `python -m trading_agent` 调用同样生效。
 
 **没做 / 注意**
 - `doctor` 默认值字符串仍写 `'10'`（DSA/TECHNICAL subagents 旧默认），实际 runtime.env 已是 3；
@@ -209,7 +213,8 @@
 | **P1-B** 选股池分层 | active_watchlist + universe_meta；Kronos/market_feed 按 active 跑 | `96a5a8f` |
 | **P2** 策略质量 | price_setup_score 进排序（权重待校准） | `8134271` |
 | **P3** 成本速度 | market_feed 并发；intraday quote 瘦身；subagents 10→3 | `ebd756a` |
-| **P4** Token 优化 | technical_features.py + dsa_metrics.py 预计算；technical/DSA prompt 改读特征包/横截面表；env flag + doctor 回显 | (本次未提交 commit hash 待补) |
+| **P4** Token 优化 | technical_features.py + dsa_metrics.py 预计算；technical/DSA prompt 改读特征包/横截面表；env flag + doctor 回显 | `bd456f7` `1b1a079` |
+| **P5-A1** 正确性 | env 加载提前到 skip-gate 判断之前（premarket/intraday/postmarket） | (待补) |
 
 ---
 
@@ -217,8 +222,8 @@
 
 按 roadmap 全局阶段归类（详细步骤/验收/依赖见 [`roadmap.md`](./roadmap.md)）：
 
-- **A 正确性与安全闸**：env 加载早于 early gate；Tier 4 非 paper fail-closed；配置化魔数
-  （`selected[:20]`、`[:8]`、doctor/runtime_block 默认值）。
+- **A 正确性与安全闸**：Tier 4 非 paper fail-closed；配置化魔数（`selected[:20]`、`[:8]`、
+  doctor/runtime_block 默认值）。（A1 env 加载提前已完成，见上方 P5-A1。）
 - **B 数据可追溯基建（P0）**：run_manifest（每次 lifecycle run）、strategy_registry、
   analytics.db builder、strategy-changelog。
 - **C 只读可视化与观测**：Strategy Lab dashboard（Streamlit 只读）、theme/speculative 集中度诊断。

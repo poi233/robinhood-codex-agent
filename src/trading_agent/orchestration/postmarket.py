@@ -7,7 +7,7 @@ from pathlib import Path
 from trading_agent.core.context import build_runtime_paths
 from trading_agent.core.io import ensure_dir, write_json
 from trading_agent.core.time import PT
-from trading_agent.core.config import load_runtime_config
+from trading_agent.core.config import load_env_files, load_runtime_config
 from trading_agent.notifications.email import send_trade_email_notification
 from trading_agent.paper.broker import record_paper_day_end
 from trading_agent.prompts.codex import run_codex_prompt
@@ -21,9 +21,10 @@ def _is_weekday_pt() -> bool:
 def run_postmarket_pipeline(*, dry_run: bool) -> int:
     del dry_run
     agent_root = Path.cwd()
-    paths = build_runtime_paths(agent_root)
+    load_env_files(agent_root)
     if not _is_weekday_pt() and os.environ.get("ALLOW_WEEKEND_RUN", "0") != "1":
         return 0
+    paths = build_runtime_paths(agent_root)
     runtime = load_runtime_config(agent_root)
     if runtime.trading_mode == "paper":
         record_paper_day_end(agent_root, run_date=paths.run_date)

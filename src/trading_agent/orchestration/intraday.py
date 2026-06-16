@@ -6,7 +6,7 @@ from dataclasses import replace
 from datetime import datetime
 from pathlib import Path
 
-from trading_agent.core.config import load_runtime_config
+from trading_agent.core.config import load_env_files, load_runtime_config
 from trading_agent.core.context import build_runtime_paths
 from trading_agent.core.time import PT
 from trading_agent.core.time import pt_date_string
@@ -55,6 +55,7 @@ def _is_intraday_window_pt() -> bool:
 def run_intraday_pipeline(*, dry_run: bool) -> int:
     del dry_run
     agent_root = Path.cwd()
+    load_env_files(agent_root)
     run_date = pt_date_string()
     if not _is_weekday_pt() and os.environ.get("ALLOW_WEEKEND_RUN", "0") != "1":
         _append_local_decision(agent_root, "calendar_skip", "not_a_weekday_pt", run_date=run_date)

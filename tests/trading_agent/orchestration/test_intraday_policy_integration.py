@@ -108,6 +108,55 @@ def write_json(path: Path, payload: object) -> None:
 
 
 class IntradayPolicyIntegrationTests(unittest.TestCase):
+    def test_weekend_gate_honors_runtime_env_local_override(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            (root / "src" / "config").mkdir(parents=True)
+            (root / "src" / "config" / "runtime.env.local").write_text(
+                "ALLOW_WEEKEND_RUN=1\n", encoding="utf-8"
+            )
+            original_cwd = os.getcwd()
+            os.chdir(root)
+            try:
+                with mock.patch.object(intraday_module, "_is_weekday_pt", return_value=False), \
+                    mock.patch.object(intraday_module, "_is_intraday_window_pt", return_value=True), \
+                    mock.patch.object(intraday_module, "pt_date_string", return_value="2026-06-14"), \
+                    mock.patch.object(intraday_module, "load_runtime_config") as load_runtime_config, \
+                    mock.patch.object(intraday_module, "load_policy_inputs", return_value=policy_ready_inputs()), \
+                    mock.patch.object(intraday_module, "run_codex_prompt"), \
+                    mock.patch.object(intraday_module, "send_trade_email_notification"):
+                    load_runtime_config.return_value = mock.Mock(trading_mode="paper", risk_tier=0, paper_risk_tier=0, effective_risk_tier=0)
+                    with mock.patch.dict(intraday_module.os.environ, {}, clear=False):
+                        intraday_module.os.environ.pop("ALLOW_WEEKEND_RUN", None)
+                        status = intraday_module.run_intraday_pipeline(dry_run=False)
+                    decisions = read_decisions(root)
+            finally:
+                os.chdir(original_cwd)
+
+        # ALLOW_WEEKEND_RUN only exists in runtime.env.local here, never in
+        # os.environ directly, so passing the gate proves load_env_files ran
+        # before the weekend check.
+        self.assertEqual(status, 0)
+        self.assertEqual(decisions[0]["decision"], "would_trade")
+
+    def test_weekend_gate_skips_without_override(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            original_cwd = os.getcwd()
+            os.chdir(root)
+            try:
+                with mock.patch.object(intraday_module, "_is_weekday_pt", return_value=False), \
+                    mock.patch.object(intraday_module, "pt_date_string", return_value="2026-06-14"):
+                    with mock.patch.dict(intraday_module.os.environ, {}, clear=False):
+                        intraday_module.os.environ.pop("ALLOW_WEEKEND_RUN", None)
+                        status = intraday_module.run_intraday_pipeline(dry_run=False)
+                    decisions = read_decisions(root)
+            finally:
+                os.chdir(original_cwd)
+
+        self.assertEqual(status, 0)
+        self.assertEqual(decisions[0]["decision"], "calendar_skip")
+
     def test_intraday_uses_policy_and_does_not_call_codex_prompt(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)

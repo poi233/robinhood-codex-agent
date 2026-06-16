@@ -19,11 +19,16 @@ class RuntimeConfig:
         return self.paper_risk_tier if self.trading_mode == "paper" else self.risk_tier
 
 
-def _load_env_files(agent_root: Path) -> None:
+def load_env_files(agent_root: Path) -> None:
     """Parse runtime.env then runtime.env.local into os.environ.
 
     Values from local override base; neither overrides a key already
     present in the environment (shell exports remain highest priority).
+
+    Call this before any skip-gate check (weekend/market-window/KILL_SWITCH
+    allow-flags) so that overrides set only in runtime.env.local take effect
+    on direct Python invocations, not just shell-wrapper runs that source the
+    same files before exec'ing python.
     """
     merged: dict[str, str] = {}
     for filename in ("runtime.env", "runtime.env.local"):
@@ -45,7 +50,7 @@ def _load_env_files(agent_root: Path) -> None:
 
 
 def load_runtime_config(agent_root: Path) -> RuntimeConfig:
-    _load_env_files(agent_root)
+    load_env_files(agent_root)
     env = os.environ
     trading_mode = env.get("TRADING_MODE", "paper")
     risk_tier = int(env.get("RISK_TIER", "0"))
