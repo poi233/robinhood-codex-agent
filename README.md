@@ -27,6 +27,13 @@ python3 -m trading_agent postmarket
 # Local paper-trading replay analytics (fill rate + blocked-reason distribution)
 python3 -m trading_agent replay
 python3 -m trading_agent replay --since 2026-06-01 --output replay.json
+
+# Read-only dashboard + analytics DB
+python3 -m trading_agent analytics build
+python3 -m trading_agent dashboard
+
+# Self-growth diagnostics (paper-only, read-only — proposes nothing, changes nothing)
+python3 -m trading_agent growth observe
 ```
 
 Safe-by-default state:
@@ -172,6 +179,55 @@ only the *inputs* the prompts read changed.
 
 ---
 
+## Self-Growth Lab (read-only diagnostics)
+
+The self-growth platform turns each module into a controlled
+**Observe → Diagnose → Propose → Validate → Shadow Test → Compare → Recommend → Human Approve**
+loop. **Phase 1 (G-pre + G0–G2) is implemented and is strictly read-only and paper-safe** — it
+diagnoses, but it proposes nothing, changes no trading parameter, and never touches review/live.
+
+**Red line (enforced by code):** self-growth may eventually *propose* paper experiments, but it can
+**never** auto-edit the champion strategy and **never** auto-promote to live. The following are
+permanently forbidden from any mutation: `TRADING_MODE`, `RISK_TIER`, `PAPER_RISK_TIER`,
+`KILL_SWITCH`, MCP approval, `place_equity_order`, `per_trade_risk_pct`, `max_daily_risk_pct`,
+`max_single_stock_weight`.
+
+What ships in Phase 1 (`src/trading_agent/growth/`):
+
+- **Safety boundary** — `src/config/growth_policy.json` + `growth/policy.py`. Defines `mode:
+  paper_only`, the allowed-mutation whitelist (per-field `min`/`max`/`max_delta`, component-weight
+  sum constraints) and the forbidden-mutation deny-list. The deny-list is **union-only**: a tampered
+  or partial config can widen it but never weaken it.
+- **Fail-closed validator** — `growth/validator.py`. `validate_mutation(mutation, policy)` rejects
+  any forbidden field, out-of-range value, oversized single-step delta, non-normalized weight set,
+  or non-`paper_only` policy. (Skeleton now; full proposal validation lands in G4.)
+- **Observations + module diagnosers** — `growth/observations.py` reuses the existing replay report
+  and run manifests to detect `low_trade_frequency`, `high_no_trade_rate`, `dominant_blocked_reason`,
+  `high_pending_cancel_rate`, and `missing_manifest`. An extensible per-module diagnoser registry
+  (`growth/diagnosers/`, currently `scoring` + `setups`) shares one `GrowthContext` computed once.
+  Each observation carries `type/module/severity/evidence/suggested_action`.
+- **Extensibility seam (G-pre)** — `load_scoring_profile(..., profile_name=...)` /
+  `load_policy_profile(..., profile_name=...)` can now resolve a profile by explicit name without
+  mutating `os.environ` (default behavior unchanged). This is the prerequisite for later running a
+  challenger alongside the champion in one process (G6).
+
+```bash
+# Build the analytics DB first (observations read fill-rate / blocked-reason data from it)
+python3 -m trading_agent analytics build
+
+# Write runtime/analytics/growth_observations.json (read-only; optional --since/--until)
+python3 -m trading_agent growth observe
+
+# View it in the dashboard's "Self-Growth Lab" section
+python3 -m trading_agent dashboard
+```
+
+Later phases (G3–G8: proposal generation → validation → experiment queue → shadow runner →
+evaluator → human promotion) are **not** implemented yet; see [`docs/roadmap.md`](docs/roadmap.md)
+G phase and [`docs/superpowers/plans/2026-06-16-self-growth-platform-g0-g2.md`](docs/superpowers/plans/2026-06-16-self-growth-platform-g0-g2.md).
+
+---
+
 ## Risk Tiers
 
 `src/config/risk_tiers.json` defines notional caps. The **effective tier** depends on
@@ -207,6 +263,9 @@ environment.
 | `dsa` | Standalone DSA signal scan |
 | `doctor` | Print effective runtime configuration (mode, tiers, caps, layer flags) and exit |
 | `replay` | Local paper-trading analytics (`--since`, `--until`, `--output`) |
+| `analytics build` | (Re)build `runtime/analytics/analytics.db` from `runtime/state/runs/*` (`--since`, `--until`) |
+| `dashboard` | Launch the read-only Streamlit dashboard at `http://localhost:8501` |
+| `growth observe` | Write read-only self-growth diagnostics to `runtime/analytics/growth_observations.json` (`--since`, `--until`) |
 
 All lifecycle commands accept `--dry-run`. Shell wrappers in `src/scripts/entrypoints/` export the
 same defaults used by cron/launchd and are the canonical operational path.
@@ -217,7 +276,8 @@ same defaults used by cron/launchd and are the canonical operational path.
 
 ```text
 src/trading_agent/
-  cli.py                   argparse entrypoint: premarket/intraday/postmarket/dsa/doctor/replay
+  cli.py                   argparse entrypoint: premarket/intraday/postmarket/dsa/doctor/replay/
+                           analytics/dashboard/growth
   core/                    runtime config + env loading, paths, time, JSON helpers, run logs, locks
   orchestration/           lifecycle pipelines (premarket / intraday / postmarket / tasks)
   prompts/                 Codex subprocess runner and runtime variable block
@@ -227,6 +287,10 @@ src/trading_agent/
   policy/                  deterministic intraday engine: ranking, price, sizing, sell, risk
   paper/                   local paper broker (slippage, pending fills, day-end cancel)
   replay/                  paper-trading analytics (fill rate, blocked reasons)
+  strategy/                run_manifest + strategy_registry (traceability for every run)
+  analytics/               analytics.db builder (SQLite) over runtime/state/runs/*
+  dashboard/               read-only Streamlit console (queries + charts + app)
+  growth/                  self-growth platform: safety policy, validator, observations, diagnosers
   reporting/               premarket archive, postmarket reports, watch-level normalization
   notifications/           email notifications
   contracts/               schema validators for generated payloads
@@ -254,6 +318,8 @@ active_watchlist.txt        ≤30 symbols that get Kronos + market_feed + techni
 universe_meta.json          per-symbol reference metadata (tier/theme/liquidity)
 allowlist.txt               emergency fallback symbols
 dsa_strategy_weights.json   DSA-inspired signal weights
+strategy_registry.yaml      registered strategy versions + active_strategy pointer (B2)
+growth_policy.json          self-growth safety boundary: allowed/forbidden mutations, ranges, promotion rules (G0)
 risk.md                     human-readable hard risk rules
 strategy.md                 trading and screening strategy
 ```
@@ -562,7 +628,7 @@ ALLOW_OUTSIDE_MARKET_TEST=1 ./src/scripts/entrypoints/run_all_paper_once.sh
 ./src/scripts/safety/check_safety.sh
 ALLOW_WEEKEND_RUN=1 KRONOS_USE_MOCK=1 ./src/scripts/kronos/run_kronos_premarket_scan.sh
 
-# Unit tests (222 tests)
+# Unit tests
 python3 -m pytest tests/ -q
 python3 -m unittest discover -s tests -v
 ```

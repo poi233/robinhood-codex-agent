@@ -272,6 +272,36 @@
   页面渲染效果，用户已知情并决定先这样、以后再改可视化部分。只验证了 query helper 的正确性和
   streamlit 进程能正常启动监听 8501，没有验证页面实际显示是否符合预期。**这是本节中唯一一个"测试
   通过"不代表"功能已验证"的例外，使用前建议先手动跑一次确认。**
+- dashboard 新增了只读的 **Self-Growth Lab** 区块（见下一节 15）；同样未经人工视觉核实。
+
+### 15. 自成长平台 · Phase 1（`growth/`，roadmap G-pre + G0–G2）
+
+**已做（只读、paper-safe、零交易行为变化）**
+- **（G-pre）** profile 按名解析：`load_scoring_profile(..., profile_name=)` /
+  `load_policy_profile(..., profile_name=)` / `load_policy_inputs(..., policy_profile_name=)` 支持不碰
+  `os.environ` 直接按名取 profile，默认 `None` 时行为逐字不变。这是 G6 在同一进程并跑 champion +
+  challenger 的硬前置。
+- **（G0）** 安全边界：`src/config/growth_policy.json` + `growth/policy.py`（`forbidden_mutations`
+  并集处理，配置只能扩红线不能削）+ `growth/validator.py`（`validate_mutation` 失败即拒：禁止字段 /
+  超范围 / 超 delta / 权重和 / 非 paper_only 全部拒绝）。
+- **（G1）** 全局诊断：`growth/observations.py` 复用 replay report + run manifest，检测
+  `low_trade_frequency`/`high_no_trade_rate`/`dominant_blocked_reason`/`high_pending_cancel_rate`/
+  `missing_manifest`，写 `runtime/analytics/growth_observations.json`；CLI `growth observe`。
+- **（G2）** 模块 diagnoser 注册表（`growth/diagnosers/`，首批 `scoring`/`setups`，开闭可扩展）+
+  dashboard 只读 Self-Growth Lab 区块。
+- 测试：`tests/trading_agent/growth/*`（profiles_by_name 3 / growth_policy 3 / validator 7 /
+  observations 2 / diagnosers 3）+ CLI/dashboard 各新增测试，全绿。
+
+**红线（代码强制）**
+- 自成长只**诊断**、不提议、不改任何交易参数；永远禁止 mutation：`TRADING_MODE`/`RISK_TIER`/
+  `PAPER_RISK_TIER`/`KILL_SWITCH`/MCP 审批/`place_equity_order`/`per_trade_risk_pct`/
+  `max_daily_risk_pct`/`max_single_stock_weight`。validator 对这些一律 fail-closed。
+
+**没做**
+- G-pre 的实验账本隔离 `build_experiment_paths` 推后到 G6（YAGNI，G6 前无消费者）。
+- G3–G8（proposal 生成 → 校验 → 实验队列 → shadow runner → evaluator → 人工 promote）全部未做；
+  其中 G7 评估质量依赖 E1 的 forward returns（阻塞于 paper 数据积累）。
+- `analyzer_failure_rate` 这条 observation 留给后续 analyzers diagnoser。
 
 ---
 
@@ -297,6 +327,7 @@
 | **P5-D2** 工程优化 | `data/ohlcv_cache.py`：1w/1d 跨日缓存 + split/dividend 失效策略（batch 拉取未做） | 见 git log |
 | **P5-D3** 工程优化 | Kronos `predict_batch()`：按窗口长度合批推理，batch 失败回退逐标的 | 见 git log |
 | **P5-D4** 工程优化 | paper 部分成交模型：确定性 ratio + 余量续接重新进入 pending 队列 | 见 git log |
+| **G-pre/G0–G2** 自成长 Phase 1 | profile 按名解析；`growth_policy.json` + validator；`growth observe` + observations；模块 diagnoser 注册表 + dashboard Self-Growth Lab（全只读、paper-safe） | 见 git log |
 
 ---
 
