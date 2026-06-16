@@ -21,6 +21,12 @@ def build_parser() -> argparse.ArgumentParser:
     replay_parser.add_argument("--until", metavar="YYYY-MM-DD", default=None, help="Only include run dates on or before this date.")
     replay_parser.add_argument("--output", metavar="PATH", default=None, help="Write JSON report to this path instead of printing text.")
 
+    analytics_parser = subparsers.add_parser("analytics", help="Build the local analytics.db from runtime/state/runs/*.")
+    analytics_subparsers = analytics_parser.add_subparsers(dest="analytics_command", required=True)
+    analytics_build_parser = analytics_subparsers.add_parser("build", help="(Re)build runtime/analytics/analytics.db.")
+    analytics_build_parser.add_argument("--since", metavar="YYYY-MM-DD", default=None, help="Only include run dates on or after this date.")
+    analytics_build_parser.add_argument("--until", metavar="YYYY-MM-DD", default=None, help="Only include run dates on or before this date.")
+
     return parser
 
 
@@ -113,6 +119,16 @@ def _run_replay(agent_root: Path, *, since: str | None, until: str | None, outpu
     return 0
 
 
+def _run_analytics_build(agent_root: Path, *, since: str | None, until: str | None) -> int:
+    from trading_agent.analytics.build_db import build_analytics_db, default_analytics_db_path
+
+    row_counts = build_analytics_db(agent_root, since_date=since, until_date=until)
+    print(f"Wrote {default_analytics_db_path(agent_root)}")
+    for table_name, count in row_counts.items():
+        print(f"  {table_name:<15} {count} rows")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     if args.command == "premarket":
@@ -138,4 +154,6 @@ def main(argv: list[str] | None = None) -> int:
         return _run_doctor(Path.cwd())
     if args.command == "replay":
         return _run_replay(Path.cwd(), since=args.since, until=args.until, output=args.output)
+    if args.command == "analytics" and args.analytics_command == "build":
+        return _run_analytics_build(Path.cwd(), since=args.since, until=args.until)
     return 0

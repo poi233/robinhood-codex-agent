@@ -28,7 +28,7 @@
 | | A3 | 配置化魔数 + doctor/runtime_block 默认值 | 旧 R3 + docx | ✅ **已完成**（2026-06-15） |
 | **B 数据可追溯基建（P0）** | B1 | run_manifest（每次 lifecycle run） | docx | ✅ **已完成**（2026-06-15） |
 | | B2 | strategy_registry + registry.py | docx | ✅ **已完成**（2026-06-15） |
-| | B3 | analytics DB builder（analytics.db） | docx | ✅ 可立即做（依赖 B1 落盘） |
+| | B3 | analytics DB builder（analytics.db） | docx | ✅ **已完成**（2026-06-15） |
 | | B4 | strategy-changelog.md | docx | ✅ 可立即做（文档） |
 | **C 只读可视化与观测** | C1 | Dashboard MVP（Streamlit 只读） | docx | 依赖 B3 |
 | | C2 | theme exposure / speculative cap 诊断 | docx | ✅ 可立即做 |
@@ -224,26 +224,35 @@ strategy version，供 B1 manifest 引用、F1 strategy compare 对比。
 
 ---
 
-## B3 — analytics DB builder（analytics.db）
+## B3 — analytics DB builder（analytics.db） — ✅ 已完成（2026-06-15）
 
 **目标**：新增 `analytics build` 命令，把分散的 runtime JSON/JSONL 汇总成统一可查询库，供 dashboard
 与 replay 使用。
 
-**具体步骤**：
-1. 新增 `src/trading_agent/analytics/{__init__,build_db,schema,loaders}.py`。
-2. 命令 `python3 -m trading_agent analytics build`：读 `runtime/state/runs/*`，写
-   `runtime/analytics/analytics.db`。
-3. 表（SQLite 默认，DuckDB 可选）：
-   - `runs`：run_date, strategy_id, git_commit, config_hash, trading_mode, effective_risk_tier
-   - `candidates`：run_date, symbol, candidate_score, trade_readiness_score, technical/price_setup/catalyst_score, is_watchlist, is_tradable
-   - `decisions`：timestamp, run_date, decision, symbol, side, setup_type, blocked_reasons, confidence
-   - `orders`：timestamp, run_date, symbol, side, status, quantity, limit_price, fill_price, notional, reason_codes
-   - `paper_equity`：timestamp, run_date, cash, positions_market_value, total_equity, realized_pnl
-   - `blocked_reasons`：run_date, reason, count
+**实现记录**：
+- 新增 `src/trading_agent/analytics/{__init__,schema,loaders,build_db}.py`；命令
+  `python3 -m trading_agent analytics build [--since YYYY-MM-DD] [--until YYYY-MM-DD]`，读
+  `runtime/state/runs/*`，写 `runtime/analytics/analytics.db`（SQLite，标准库 `sqlite3`，没引入新依赖）。
+- 6 张表如计划：`runs`、`candidates`、`decisions`、`orders`、`paper_equity`、`blocked_reasons`。
+  `orders`/`decisions` 复用了已有的 `replay/analysis.py` 的 `collect_paper_orders()`/
+  `collect_decisions()`（同一套多事件订单合并 + JSONL 解析逻辑，不重新发明）。
+  `candidates` 表的 `is_watchlist`/`is_tradable` 是用同一 run_date 的 `risk_overlay.json` 的
+  `watchlist_candidates`/`tradable_candidates` 反查得到的。
+- **字段范围调整**：roadmap 原列的 `trade_readiness_score`/`price_setup_score` 目前只在 intraday
+  policy 引擎里临时计算（`policy/candidate_selector.py`），从未持久化到任何文件，所以这次没法从
+  现有 JSON 拼出这两列。改用 `candidate_scores.json` 里确实存在的
+  `technical_score`/`catalyst_score`/`dsa_score`/`kronos_score`/`quote_score`（components 字段）。
+  以后如果要做 strategy compare，需要先让 candidate_selector 把这两个分数落盘。
+- **幂等实现**：每次 build 都 `DROP TABLE IF EXISTS` + 重新 `CREATE TABLE` + 全量重新 `INSERT`，
+  不做增量 upsert——因为源数据是 JSON/JSONL 文件本身，全量重建最简单也最不会有脏数据残留。
 
-**涉及文件**：新增 `analytics/*`、`cli.py`（新子命令）、测试（用 fixture run 目录）。
+**涉及文件**：新增 `analytics/__init__.py`、`schema.py`、`loaders.py`、`build_db.py`、
+`tests/trading_agent/analytics/test_build_db.py`；改动 `cli.py`（新增 `analytics build` 子命令）、
+`tests/trading_agent/test_cli.py`。
 
-**验收**：对样本 run 目录 build 出 6 张表且行数正确；可重跑幂等。
+**验收**：✅ 用 fixture run 目录验证 build 出 6 张表且行数正确（含 watchlist/tradable 标记、
+blocked_reasons 按 run_date+reason 聚合计数）；重跑两次结果完全一致（幂等）；无数据的 run 目录
+返回全 0 行数而不报错。259 测试通过（+6 新增）。
 
 **依赖**：B1（manifest 提供 runs 表的 strategy/commit/hash）。
 

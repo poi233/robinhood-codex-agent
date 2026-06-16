@@ -1,7 +1,7 @@
 # 项目状态总表 — 做了什么 / 没做什么
 
 > 最后更新：2026-06-15
-> 范围：`src/trading_agent/`（约 6500 行 Python）+ 配置 + 编排 + 入口 + 测试（253 passed）
+> 范围：`src/trading_agent/`（约 6500 行 Python）+ 配置 + 编排 + 入口 + 测试（259 passed）
 > 用途：**单一权威的"现状"文档**，按子系统逐块说明已实现与未实现。未来要做的事另见
 > [`roadmap.md`](./roadmap.md)。
 >
@@ -226,9 +226,17 @@
   `runtime/state/runs/<run_date>/run_manifest.json`，供以后 analytics.db（B3）和 strategy compare
   （F1）引用。
 
+- **（roadmap B3）** `analytics/` 包 + `python3 -m trading_agent analytics build`：把
+  `runtime/state/runs/*` 下分散的 run_manifest/candidate_scores/risk_overlay/decisions/orders/
+  equity_curve 汇总进 `runtime/analytics/analytics.db`（SQLite，6 张表）。每次 build 全量
+  drop+recreate+重新 insert，天然幂等。`orders`/`decisions` 复用 `replay/analysis.py` 现成的
+  解析/合并逻辑。
+
 **没做**
 - registry 的 `watchlist` 字段目前只是记录，没有反向接线到 `parse_active_watchlist()`（仍只读
   `active_watchlist.txt`），切换策略不会切换 watchlist 文件本身。
+- `analytics.db` 的 `candidates` 表没有 `trade_readiness_score`/`price_setup_score`——这两个分数
+  目前只在 intraday policy 引擎里临时计算，没有持久化到任何文件，等以后需要才补。
 
 ---
 
@@ -247,6 +255,7 @@
 | **P5-A3** 正确性 | 配置化魔数：`max_scored_candidates`/`max_watchlist`/`max_tradable` 进 `scoring_profiles.yaml` | 见 git log |
 | **P5-B2** 数据可追溯 | `strategy_registry.yaml` + `strategy/registry.py`；接入 `load_env_files` | 见 git log |
 | **P5-B1** 数据可追溯 | `strategy/manifest.py`：三个 lifecycle 入口都写 `run_manifest.json` | 见 git log |
+| **P5-B3** 数据可追溯 | `analytics/` 包 + `analytics build` 子命令：6 张表汇总进 `analytics.db` | 见 git log |
 
 ---
 
@@ -256,8 +265,8 @@
 
 - **A 正确性与安全闸**：A1/A2/A3 均已完成（见上方 P5-A1/P5-A2/P5-A3）。下一批是 B 阶段
   （数据可追溯基建：run_manifest / strategy_registry / analytics.db）。
-- **B 数据可追溯基建（P0）**：analytics.db builder（B3）、strategy-changelog（B4）。
-  （run_manifest 和 strategy_registry 已完成，见上方 P5-B1/P5-B2 与第 13 节。）
+- **B 数据可追溯基建（P0）**：strategy-changelog（B4，纯文档）。
+  （run_manifest、strategy_registry、analytics.db 已完成，见上方 P5-B1/P5-B2/P5-B3 与第 13 节。）
 - **C 只读可视化与观测**：Strategy Lab dashboard（Streamlit 只读）、theme/speculative 集中度诊断。
 - **D 工程优化**：market_feed 跨日缓存/batch、Kronos batch 推理、paper 部分成交模型。
   （DSA/Technical token 优化已完成，见上方 P4 与 roadmap D1。）
