@@ -112,6 +112,7 @@ def snapshot_stage_artifacts(agent_root: Path, run_date: str, stage: str) -> lis
         ],
         "technical": [
             (paths.technical_signals_path, run_dir / "signals" / "technical_signals.json"),
+            (paths.technical_signals_full_path, run_dir / "signals" / "technical_signals.full.json"),
         ],
         "trader_watch_levels": [
             (paths.trader_watch_levels_path, run_dir / "planner" / "trader_watch_levels.json"),

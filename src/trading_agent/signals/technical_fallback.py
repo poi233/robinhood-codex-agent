@@ -53,6 +53,31 @@ def _build_levels_from_rows(rows: list[dict[str, object]]) -> dict[str, object]:
     }
 
 
+def merge_technical_signals(full: dict[str, object], live: dict[str, object]) -> dict[str, object]:
+    """Union the per-symbol technical signals of a protected full-day snapshot with the
+    current (possibly clobbered) live file. The live file wins per symbol, but symbols only
+    present in the snapshot are preserved.
+
+    This is the guard for the ad hoc / single-symbol technical run problem: a one-off
+    analysis that overwrites technical_signals.json with just one symbol no longer drops
+    the rest of the watchlist for intraday. The full-day snapshot is written only by
+    premarket; ad hoc runs touch only the live file.
+
+    Backward compatible: if either side is empty, the other is returned unchanged, so a run
+    with no snapshot behaves exactly as before.
+    """
+    if not isinstance(full, dict) or not full:
+        return live if isinstance(live, dict) else {}
+    if not isinstance(live, dict) or not live:
+        return full
+
+    full_symbols = full.get("symbols") if isinstance(full.get("symbols"), dict) else {}
+    live_symbols = live.get("symbols") if isinstance(live.get("symbols"), dict) else {}
+    merged = {**full, **live}  # live top-level metadata (most recent) wins
+    merged["symbols"] = {**full_symbols, **live_symbols}  # live per-symbol wins, snapshot fills the rest
+    return merged
+
+
 def build_failed_technical_payload(
     manifest: dict[str, object],
     *,

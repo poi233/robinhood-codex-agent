@@ -291,14 +291,13 @@ def run_premarket_pipeline(*, dry_run: bool) -> int:
             raise RuntimeError("market feed manifest missing")
         manifest = read_json(manifest_path)
         if manifest.get("data_status") != "ok":
-            write_json(
-                paths.technical_signals_path,
-                build_failed_technical_payload(
-                    manifest,
-                    run_date=run_date,
-                    reason="market feed was not complete enough for technical analysis; technical layer is fail-closed",
-                ),
+            failed_payload = build_failed_technical_payload(
+                manifest,
+                run_date=run_date,
+                reason="market feed was not complete enough for technical analysis; technical layer is fail-closed",
             )
+            write_json(paths.technical_signals_path, failed_payload)
+            write_json(paths.technical_signals_full_path, failed_payload)
             return
         if os.environ.get("ENABLE_TECHNICAL_FEATURES_PRECOMPUTE", "1") == "1":
             recent_bars = int(os.environ.get("TECHNICAL_RECENT_BARS", "30") or "30")
@@ -308,15 +307,19 @@ def run_premarket_pipeline(*, dry_run: bool) -> int:
             )
         status = run_codex_prompt("technical_research", agent_root, paths.prompts_dir / "technical" / "research.txt")
         if status != 0:
-            write_json(
-                paths.technical_signals_path,
-                build_failed_technical_payload(
-                    manifest,
-                    run_date=run_date,
-                    reason="technical research prompt failed; archived conservative price levels for watch-only use",
-                ),
+            failed_payload = build_failed_technical_payload(
+                manifest,
+                run_date=run_date,
+                reason="technical research prompt failed; archived conservative price levels for watch-only use",
             )
+            write_json(paths.technical_signals_path, failed_payload)
+            write_json(paths.technical_signals_full_path, failed_payload)
             raise RuntimeError("technical prompt failed")
+        # Snapshot the full-day technical file. Intraday reads the merge of this snapshot and
+        # the live file, so a later ad hoc single-symbol run that overwrites the live file can
+        # never drop the rest of the watchlist (TODO_FIX: missing_technical_levels guard).
+        if paths.technical_signals_path.exists():
+            write_json(paths.technical_signals_full_path, read_json(paths.technical_signals_path))
 
     def run_market_calendar() -> None:
         status = run_codex_prompt(

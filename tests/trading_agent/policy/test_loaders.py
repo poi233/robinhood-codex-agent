@@ -406,6 +406,50 @@ class PolicyLoaderTests(unittest.TestCase):
 
         self.assertEqual(inputs.today_allowlist, ["AAPL"])
 
+    def test_intraday_merges_full_snapshot_over_clobbered_technical_live_file(self) -> None:
+        # Regression (TODO_FIX): an ad hoc single-symbol technical run overwrites the live
+        # technical_signals.json with only EOSE; intraday must still see the full watchlist
+        # from the premarket-owned full-day snapshot (no missing_technical_levels).
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            signals = root / "runtime" / "state" / "runs" / "2026-06-14" / "signals"
+            signals.mkdir(parents=True)
+            write_json(
+                signals / "technical_signals.full.json",
+                {"date": "2026-06-14", "analysis_status": "ok", "symbols": {
+                    "MRVL": {"long_setup": {"status": "active"}},
+                    "MU": {"long_setup": {"status": "active"}},
+                }},
+            )
+            write_json(
+                signals / "technical_signals.json",
+                {"date": "2026-06-14", "analysis_status": "ok", "symbols": {
+                    "EOSE": {"long_setup": {"status": "active"}},
+                }},
+            )
+
+            inputs = load_policy_inputs(root, run_date="2026-06-14", trading_mode="paper", risk_tier=0)
+
+        symbols = inputs.technical_signals["symbols"]
+        self.assertIn("MRVL", symbols)  # preserved despite the clobber
+        self.assertIn("MU", symbols)
+        self.assertIn("EOSE", symbols)  # fresh ad hoc analysis still flows through
+
+    def test_intraday_without_snapshot_uses_live_only(self) -> None:
+        # Backward compatibility: no full-day snapshot => behave exactly as before.
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            signals = root / "runtime" / "state" / "runs" / "2026-06-14" / "signals"
+            signals.mkdir(parents=True)
+            write_json(
+                signals / "technical_signals.json",
+                {"date": "2026-06-14", "symbols": {"NVDA": {"long_setup": {"status": "active"}}}},
+            )
+
+            inputs = load_policy_inputs(root, run_date="2026-06-14", trading_mode="paper", risk_tier=0)
+
+        self.assertEqual(set(inputs.technical_signals["symbols"]), {"NVDA"})
+
 
 if __name__ == "__main__":
     unittest.main()

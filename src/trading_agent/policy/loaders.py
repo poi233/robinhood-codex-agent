@@ -9,6 +9,7 @@ from trading_agent.paper.broker import pending_paper_orders
 from trading_agent.data.universe import parse_universe
 from trading_agent.policy.models import OpenOrder, PolicyInputs, Position, Quote
 from trading_agent.policy.profiles import load_policy_profile
+from trading_agent.signals.technical_fallback import merge_technical_signals
 
 
 class RobinhoodPolicyGateway(Protocol):
@@ -330,7 +331,10 @@ def load_policy_inputs(
         daily_usage=_read_json_if_fresh(paths.daily_usage_path, run_date),
         dsa_signals=_read_json_if_fresh(paths.dsa_signals_path, run_date),
         kronos_signals=_read_json_if_fresh(paths.kronos_signals_path, run_date),
-        technical_signals=_read_json_if_fresh(paths.technical_signals_path, run_date),
+        technical_signals=merge_technical_signals(
+            _read_json_if_fresh(paths.technical_signals_full_path, run_date),
+            _read_json_if_fresh(paths.technical_signals_path, run_date),
+        ),
         research_reports=_load_research_reports(agent_root, run_date),
         kill_switch_present=(agent_root / "KILL_SWITCH").exists(),
     )

@@ -552,7 +552,9 @@ Each run date uses the same shape (all git-ignored):
 runtime/state/runs/YYYY-MM-DD/
   market_feed/   manifest.json, charts/, ohlcv/, news/
   signals/       dsa_signals.json, kronos_signals.json, technical_signals.json,
-                 dsa_metrics.json, technical_features.json
+                 technical_signals.full.json (premarket-owned full-day snapshot; intraday reads
+                 merge(snapshot, live) so an ad hoc single-symbol technical run can't drop the
+                 watchlist), dsa_metrics.json, technical_features.json
   planner/       account_snapshot, capital_snapshot, market_calendar, quote_snapshot_core,
                  candidate_snapshot, candidate_scores, quote_snapshot_candidates,
                  tradability_snapshot, catalyst_snapshot, trader_watch_levels,
