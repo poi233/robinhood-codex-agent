@@ -182,8 +182,8 @@ watchlist/tradable 分层、observe_only/no_trade 区分都对。小点：`today
 
 | # | 状态 | 改动 | 主要文件 | commit |
 |---|---|---|---|---|
-| 1 | ⏳ 待做 | env 加载 + `doctor` | `core/config.py`, `cli.py` | — |
-| 2 | ⏳ 待做（依赖 #1） | paper/live tier 解耦 | `core/config.py`, `planner/risk_overlay.py`, `policy/sizing_policy.py` | — |
+| 1 | ✅ 完成 | env 加载 + `doctor` | `core/config.py`, `cli.py` | `7b5d8d3` |
+| 2 | ✅ 完成 | paper/live tier 解耦 | `core/config.py`, `risk_tiers.json`, orchestration | `9d53047`, `f0cc272` |
 | 3 | ✅ 完成 | 修 `previous_close=price` | `data/live_quotes.py` | `88a838b` |
 | 4 | ✅ 完成 | `today_allowlist` 兜底 | `policy/loaders.py` | `3011bad` |
 | 5 | ✅ 完成 | 删重复计分 + scoring 重复读 | `policy/candidate_selector.py`, `planner/scoring.py` | `3b80d72`, `f35b947` |
