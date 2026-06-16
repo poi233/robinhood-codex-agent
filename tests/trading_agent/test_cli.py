@@ -125,3 +125,34 @@ def test_growth_observe_writes_artifact(tmp_path, monkeypatch, capsys):
     out = tmp_path / "runtime" / "analytics" / "growth_observations.json"
     assert out.exists()
     assert "growth_observations.json" in capsys.readouterr().out
+
+
+def test_growth_propose_writes_validated_proposals(tmp_path, monkeypatch, capsys):
+    import json
+    from pathlib import Path
+    from trading_agent.cli import main
+
+    # Seed the real safety policy + a run that triggers a high-no-trade observation.
+    config_dir = tmp_path / "src" / "config"
+    config_dir.mkdir(parents=True)
+    (config_dir / "growth_policy.json").write_text(
+        (Path.cwd() / "src" / "config" / "growth_policy.json").read_text(encoding="utf-8"),
+        encoding="utf-8",
+    )
+    (tmp_path / "runtime" / "state" / "runs" / "2026-06-15").mkdir(parents=True)
+    dec_dir = tmp_path / "runtime" / "logs" / "runs" / "2026-06-15" / "audit"
+    dec_dir.mkdir(parents=True)
+    with (dec_dir / "decisions.jsonl").open("w", encoding="utf-8") as fh:
+        for i in range(5):
+            fh.write(json.dumps({"timestamp": f"2026-06-15T07:0{i}:00-0700",
+                                 "decision": "no_trade", "blocked_reasons": ["below_trade_threshold"]}) + "\n")
+    monkeypatch.chdir(tmp_path)
+
+    rc = main(["growth", "propose"])
+    assert rc == 0
+    assert "proposal" in capsys.readouterr().out.lower()
+    proposals = list((tmp_path / "runtime" / "strategy_proposals").rglob("*.json"))
+    assert proposals
+    payload = json.loads(proposals[0].read_text(encoding="utf-8"))
+    assert payload["validation"]["ok"] is True
+    assert payload["status"] == "proposed"

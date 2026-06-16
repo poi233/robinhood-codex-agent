@@ -28,8 +28,8 @@
 | 数据可追溯（run_manifest / analytics.db） | ✅ 已加（B1–B4，见 roadmap B） |
 | 只读可视化（Strategy Lab dashboard） | ✅ 已加（C1–C2，dashboard 视觉未人工验证，见 roadmap C） |
 | Token 成本（DSA/Technical 预计算） | ✅ 已加（P4，见 roadmap D1） |
-| 自成长平台（observe→propose→shadow→promote） | 🟡 G0–G2 已加（只读诊断地基），G3–G8 待做（见 roadmap G） |
-| 自成长诊断（growth observe / Self-Growth Lab） | ✅ G0–G2 已加（只读，见 roadmap G） |
+| 自成长平台（observe→propose→shadow→promote） | 🟡 G-pre/G0–G3 已加（诊断 + 提议，paper-safe），G4–G8 待做（见 roadmap G） |
+| 自成长诊断 + 提议（growth observe/propose / Self-Growth Lab） | ✅ G0–G3 已加（只写文件、不启用，见 roadmap G） |
 | review/live 真实下单 | ⛔ 故意未接线 |
 
 ---
@@ -274,7 +274,7 @@
   通过"不代表"功能已验证"的例外，使用前建议先手动跑一次确认。**
 - dashboard 新增了只读的 **Self-Growth Lab** 区块（见下一节 15）；同样未经人工视觉核实。
 
-### 15. 自成长平台 · Phase 1（`growth/`，roadmap G-pre + G0–G2）
+### 15. 自成长平台（`growth/`，roadmap G-pre + G0–G3）
 
 **已做（只读、paper-safe、零交易行为变化）**
 - **（G-pre）** profile 按名解析：`load_scoring_profile(..., profile_name=)` /
@@ -289,17 +289,24 @@
   `missing_manifest`，写 `runtime/analytics/growth_observations.json`；CLI `growth observe`。
 - **（G2）** 模块 diagnoser 注册表（`growth/diagnosers/`，首批 `scoring`/`setups`，开闭可扩展）+
   dashboard 只读 Self-Growth Lab 区块。
+- **（G3）** proposal 生成器 `growth/proposals.py`：规则注册表把 observation 映射成**白名单内、过
+  validator、按 max_delta 夹紧**的候选 mutation，写 `runtime/strategy_proposals/<date>/proposal_*.{json,md}`；
+  CLI `growth propose`。**只写文件、不启用、交易路径不读它。**
+- **（E1/E2 数据前置）** intraday `trade_readiness_score`/`price_setup_score` + 六分量现在每次 run 落到
+  `intraday_rankings.jsonl`，`analytics build` 新增第 7 张表 `intraday_rankings`，为 E1 attribution /
+  E2 校准提供历史数据（这天之前的样本仍缺这两个分数）。
 - 测试：`tests/trading_agent/growth/*`（profiles_by_name 3 / growth_policy 3 / validator 7 /
-  observations 2 / diagnosers 3）+ CLI/dashboard 各新增测试，全绿。
+  observations 2 / diagnosers 3 / proposals 8）+ CLI/dashboard/analytics/orchestration 各新增测试，全绿。
 
 **红线（代码强制）**
-- 自成长只**诊断**、不提议、不改任何交易参数；永远禁止 mutation：`TRADING_MODE`/`RISK_TIER`/
-  `PAPER_RISK_TIER`/`KILL_SWITCH`/MCP 审批/`place_equity_order`/`per_trade_risk_pct`/
-  `max_daily_risk_pct`/`max_single_stock_weight`。validator 对这些一律 fail-closed。
+- 自成长只**诊断 + 提议**（提议也只写文件），不改任何交易参数；永远禁止 mutation：`TRADING_MODE`/
+  `RISK_TIER`/`PAPER_RISK_TIER`/`KILL_SWITCH`/MCP 审批/`place_equity_order`/`per_trade_risk_pct`/
+  `max_daily_risk_pct`/`max_single_stock_weight`。validator 对这些一律 fail-closed；G3 proposal 只 emit
+  过 validator 的白名单 mutation。
 
 **没做**
 - G-pre 的实验账本隔离 `build_experiment_paths` 推后到 G6（YAGNI，G6 前无消费者）。
-- G3–G8（proposal 生成 → 校验 → 实验队列 → shadow runner → evaluator → 人工 promote）全部未做；
+- G4–G8（完整 proposal 校验命令 → 实验队列 → shadow runner → evaluator → 人工 promote）未做；
   其中 G7 评估质量依赖 E1 的 forward returns（阻塞于 paper 数据积累）。
 - `analyzer_failure_rate` 这条 observation 留给后续 analyzers diagnoser。
 
@@ -328,6 +335,7 @@
 | **P5-D3** 工程优化 | Kronos `predict_batch()`：按窗口长度合批推理，batch 失败回退逐标的 | 见 git log |
 | **P5-D4** 工程优化 | paper 部分成交模型：确定性 ratio + 余量续接重新进入 pending 队列 | 见 git log |
 | **G-pre/G0–G2** 自成长 Phase 1 | profile 按名解析；`growth_policy.json` + validator；`growth observe` + observations；模块 diagnoser 注册表 + dashboard Self-Growth Lab（全只读、paper-safe） | 见 git log |
+| **G3 + 数据前置** 自成长提议 | `growth/proposals.py` + `growth propose`（白名单、过 validator、只写文件）；intraday 分数落盘 `intraday_rankings.jsonl` + analytics 第 7 张表 | 见 git log |
 
 ---
 

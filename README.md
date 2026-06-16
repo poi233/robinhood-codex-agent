@@ -183,8 +183,9 @@ only the *inputs* the prompts read changed.
 
 The self-growth platform turns each module into a controlled
 **Observe → Diagnose → Propose → Validate → Shadow Test → Compare → Recommend → Human Approve**
-loop. **Phase 1 (G-pre + G0–G2) is implemented and is strictly read-only and paper-safe** — it
-diagnoses, but it proposes nothing, changes no trading parameter, and never touches review/live.
+loop. **G-pre + G0–G3 are implemented and are strictly paper-safe** — the platform diagnoses and now
+*proposes* bounded experiments, but it changes no trading parameter, enables nothing automatically,
+and never touches review/live. A proposal is just a file a human must review.
 
 **Red line (enforced by code):** self-growth may eventually *propose* paper experiments, but it can
 **never** auto-edit the champion strategy and **never** auto-promote to live. The following are
@@ -210,6 +211,12 @@ What ships in Phase 1 (`src/trading_agent/growth/`):
   `load_policy_profile(..., profile_name=...)` can now resolve a profile by explicit name without
   mutating `os.environ` (default behavior unchanged). This is the prerequisite for later running a
   challenger alongside the champion in one process (G6).
+- **Proposal generator (G3)** — `growth/proposals.py` maps observations to bounded candidate
+  mutations on whitelisted fields (e.g. `low_trade_frequency` → lower `scoring.trade_threshold` by
+  one `max_delta` step) via an extensible rule registry. **Every candidate is run through the G0
+  validator and only emitted if it passes**; steps clamp to `min`/`max` and no-ops are dropped.
+  Output is written as `proposal_*.json` + `.md` under `runtime/strategy_proposals/<date>/` —
+  **never auto-applied**; the trading path doesn't read it.
 
 ```bash
 # Build the analytics DB first (observations read fill-rate / blocked-reason data from it)
@@ -218,13 +225,15 @@ python3 -m trading_agent analytics build
 # Write runtime/analytics/growth_observations.json (read-only; optional --since/--until)
 python3 -m trading_agent growth observe
 
-# View it in the dashboard's "Self-Growth Lab" section
+# Generate validated, whitelist-only proposals (writes files only; enables nothing)
+python3 -m trading_agent growth propose
+
+# View diagnostics in the dashboard's "Self-Growth Lab" section
 python3 -m trading_agent dashboard
 ```
 
-Later phases (G3–G8: proposal generation → validation → experiment queue → shadow runner →
-evaluator → human promotion) are **not** implemented yet; see [`docs/roadmap.md`](docs/roadmap.md)
-G phase and [`docs/superpowers/plans/2026-06-16-self-growth-platform-g0-g2.md`](docs/superpowers/plans/2026-06-16-self-growth-platform-g0-g2.md).
+Later phases (G4–G8: full proposal validation → experiment queue → shadow runner → evaluator →
+human promotion) are **not** implemented yet; see [`docs/roadmap.md`](docs/roadmap.md) G phase.
 
 ---
 
@@ -266,6 +275,7 @@ environment.
 | `analytics build` | (Re)build `runtime/analytics/analytics.db` from `runtime/state/runs/*` (`--since`, `--until`) |
 | `dashboard` | Launch the read-only Streamlit dashboard at `http://localhost:8501` |
 | `growth observe` | Write read-only self-growth diagnostics to `runtime/analytics/growth_observations.json` (`--since`, `--until`) |
+| `growth propose` | Write validated, whitelist-only strategy proposals to `runtime/strategy_proposals/<date>/` (never auto-enabled; `--since`, `--until`) |
 
 All lifecycle commands accept `--dry-run`. Shell wrappers in `src/scripts/entrypoints/` export the
 same defaults used by cron/launchd and are the canonical operational path.

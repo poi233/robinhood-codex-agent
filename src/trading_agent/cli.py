@@ -34,6 +34,9 @@ def build_parser() -> argparse.ArgumentParser:
     growth_observe_parser = growth_subparsers.add_parser("observe", help="Write runtime/analytics/growth_observations.json.")
     growth_observe_parser.add_argument("--since", metavar="YYYY-MM-DD", default=None)
     growth_observe_parser.add_argument("--until", metavar="YYYY-MM-DD", default=None)
+    growth_propose_parser = growth_subparsers.add_parser("propose", help="Write validated, whitelist-only strategy proposals (never auto-enabled).")
+    growth_propose_parser.add_argument("--since", metavar="YYYY-MM-DD", default=None)
+    growth_propose_parser.add_argument("--until", metavar="YYYY-MM-DD", default=None)
 
     return parser
 
@@ -149,6 +152,19 @@ def _run_growth_observe(agent_root: Path, *, since: str | None, until: str | Non
     return 0
 
 
+def _run_growth_propose(agent_root: Path, *, since: str | None, until: str | None) -> int:
+    from trading_agent.growth.proposals import write_proposals
+
+    written = write_proposals(agent_root, since=since, until=until)
+    if not written:
+        print("No proposals generated (no actionable observations within the safety whitelist).")
+        return 0
+    print(f"Wrote {len(written)} proposal(s):")
+    for path in written:
+        print(f"  {path}")
+    return 0
+
+
 def _run_dashboard(agent_root: Path) -> int:
     import subprocess
     import sys
@@ -193,4 +209,6 @@ def main(argv: list[str] | None = None) -> int:
         return _run_dashboard(Path.cwd())
     if args.command == "growth" and args.growth_command == "observe":
         return _run_growth_observe(Path.cwd(), since=args.since, until=args.until)
+    if args.command == "growth" and args.growth_command == "propose":
+        return _run_growth_propose(Path.cwd(), since=args.since, until=args.until)
     return 0

@@ -52,7 +52,7 @@
 | | G0 | growth_policy + validator 骨架（安全边界） | self-growth | ✅ **已完成**（2026-06-16） |
 | | G1 | growth observations（全局诊断） | self-growth | ✅ **已完成**（2026-06-16） |
 | | G2 | 模块 diagnosers + dashboard Self-Growth Lab | self-growth | ✅ **已完成**（2026-06-16） |
-| | G3 | proposal generator（只写 proposal，不启用） | self-growth | 依赖 G0–G2 |
+| | G3 | proposal generator（只写 proposal，不启用） | self-growth | ✅ **已完成**（2026-06-16） |
 | | G4 | proposal validator（完整校验） | self-growth | 依赖 G0 / G3 |
 | | G5 | experiment queue（proposed→…→archived） | self-growth | 依赖 G4 |
 | | G6 | shadow paper runner（challenger 隔离并跑） | self-growth | 依赖 G-pre + G5（评估质量依赖 E1） |
@@ -778,7 +778,26 @@ dashboard 页面只读。
 
 ---
 
-## G3 — proposal generator（依赖 G0–G2）
+## G3 — proposal generator（依赖 G0–G2）— ✅ 已完成（2026-06-16）
+
+**实现记录**：
+- 新增 `growth/proposals.py`：纯函数 `proposals_from_observations(observations, policy, current, *,
+  run_date)` 用**可扩展的规则注册表**（`PROPOSAL_RULES`，风格同 diagnoser 注册表）把 observation 映射成
+  候选 mutation。首批两条规则：`low_trade_frequency`/`high_no_trade_rate` → 把 `scoring.trade_threshold`
+  降一个 `max_delta` 步（多成交）；`recurring_theme_concentration` → 把 `scoring.watchlist_threshold`
+  升一步（收紧 watchlist）。两个都是 `scoring_profiles.yaml` 真实存在的、且在 `growth_policy` 白名单里的字段。
+- **安全**：每个候选 mutation 都过 G0 的 `validate_mutation`，只有 `ok=True` 的才会被 emit；步进会按
+  `min`/`max` 夹紧，夹到边界变成 no-op 的直接丢弃；emit 数量受
+  `growth_policy.proposal.max_new_proposals_per_week` 限制（完整跨 run 频率控制留给 G5 队列）。
+- **输出格式调整**：roadmap 原写 YAML，这里改用 **JSON + Markdown**（与 G0 选 JSON 同理——proposal 是会被
+  G4/G5 机器回读的嵌套结构，JSON 更稳、与 `growth_policy.json` 一致；`.md` 给人看 rationale）。写到
+  `runtime/strategy_proposals/<run_date>/proposal_NNN_<module>_<field>.{json,md}`。
+- CLI 新增 `growth propose`（`--since`/`--until`）。**不碰任何 champion 配置**：proposal 只落在
+  `runtime/strategy_proposals/` 下，交易路径不读它。
+- 测试：`tests/trading_agent/growth/test_proposals.py`（8，含纯函数规则、no-op 夹紧、频率上限、
+  write 落盘 + champion 配置零改动、真实仓库 smoke）；`test_cli.py` 新增 `growth propose` 测试。
+
+**原计划（保留）**：
 
 **目标**：把 observations 转成 strategy proposal，但**只写** proposed YAML/Markdown，**不自动启用**。
 
