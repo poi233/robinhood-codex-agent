@@ -45,7 +45,7 @@ def _candidate_components(inputs: PolicyInputs, symbol: str) -> tuple[float, flo
 
 def hard_block_reasons(inputs: PolicyInputs, symbol: str) -> list[str]:
     reasons: list[str] = []
-    if inputs.kill_switch_present:
+    if inputs.kill_switch_present and inputs.trading_mode != "paper":
         reasons.append("kill_switch_present")
     if not inputs.daily_plan:
         reasons.append("missing_daily_plan")

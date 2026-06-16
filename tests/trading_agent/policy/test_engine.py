@@ -144,11 +144,22 @@ class PolicyEngineTests(unittest.TestCase):
     def test_kill_switch_blocks_inside_policy_engine(self) -> None:
         inputs = base_inputs()
         inputs.kill_switch_present = True
+        inputs.trading_mode = "live"
 
         decision = generate_order_intent(inputs)
 
         self.assertEqual(decision.decision, "blocked")
         self.assertIn("kill_switch_present", decision.blocked_reasons)
+
+    def test_kill_switch_does_not_block_paper_mode(self) -> None:
+        inputs = base_inputs()
+        inputs.kill_switch_present = True
+        inputs.trading_mode = "paper"
+
+        decision = generate_order_intent(inputs)
+
+        self.assertEqual(decision.decision, "would_trade")
+        self.assertTrue(decision.risk_checks["kill_switch"])
 
     def test_stale_daily_plan_blocks_decision(self) -> None:
         inputs = base_inputs()

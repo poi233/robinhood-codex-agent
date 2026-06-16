@@ -38,7 +38,7 @@ Safe-by-default state:
 | `PAPER_RISK_TIER` | `4` | Paper-only "paper_max" tier — caps intentionally high so risk-budget binds |
 | `PAPER_STARTING_CASH` | `400000` | Paper ledger seed cash |
 | `CODEX_MODEL` | `gpt-5.4-mini` | Codex model for prompts |
-| `KILL_SWITCH` | present | File-based hard stop for intraday |
+| `KILL_SWITCH` | present | File-based hard stop for review/live intraday; paper mode may still run |
 
 Real order placement tools are never auto-approved; review/live execution is intentionally **not
 wired** in Python and fails closed with `execution_not_wired`.
@@ -349,7 +349,7 @@ Deterministic Python policy path — **no direct Robinhood MCP calls**:
 
 1. Skip on weekends unless `ALLOW_WEEKEND_RUN=1`.
 2. Skip outside 06:45–12:55 PT unless `ALLOW_OUTSIDE_MARKET_TEST=1`.
-3. Skip when `KILL_SWITCH` exists unless `ALLOW_KILL_SWITCH_PAPER_TEST=1`.
+3. Skip when `KILL_SWITCH` exists for `review/live` unless `ALLOW_KILL_SWITCH_PAPER_TEST=1`. Paper mode may still run.
 4. Load runtime mode + effective risk tier.
 5. Load policy inputs from config, planner files, signals, account snapshot.
 6. **Refresh live quotes** (yfinance) for watchlist + allowlist + positions + open orders only
@@ -489,7 +489,7 @@ Hard rules:
 - limit orders only
 - notional capped by effective risk tier and daily plan
 - missing/stale/inconsistent data → do nothing
-- `KILL_SWITCH` present → intraday blocked
+- `KILL_SWITCH` present → intraday blocked for review/live; paper mode may still run
 - DSA / Kronos / technical signals are advisory only
 - intraday never calls Robinhood MCP directly
 - real execution remains unwired in Python policy

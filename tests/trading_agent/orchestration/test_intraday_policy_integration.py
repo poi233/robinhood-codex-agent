@@ -271,14 +271,17 @@ class IntradayPolicyIntegrationTests(unittest.TestCase):
             try:
                 with mock.patch.object(intraday_module, "_is_weekday_pt", return_value=True), \
                     mock.patch.object(intraday_module, "_is_intraday_window_pt", return_value=True), \
-                    mock.patch.object(intraday_module, "pt_date_string", return_value="2026-06-14"):
+                    mock.patch.object(intraday_module, "pt_date_string", return_value="2026-06-14"), \
+                    mock.patch.object(intraday_module, "load_runtime_config") as load_runtime_config, \
+                    mock.patch.object(intraday_module, "load_policy_inputs", return_value=policy_ready_inputs()):
+                    load_runtime_config.return_value = mock.Mock(trading_mode="paper", risk_tier=0, paper_risk_tier=0, effective_risk_tier=0)
                     status = intraday_module.run_intraday_pipeline(dry_run=False)
                     decisions = read_decisions(root)
             finally:
                 os.chdir(original_cwd)
 
         self.assertEqual(status, 0)
-        self.assertEqual(decisions[0]["decision"], "kill_switch_skip")
+        self.assertEqual(decisions[0]["decision"], "would_trade")
 
     def test_pending_paper_order_blocks_duplicate_submission_on_next_run(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

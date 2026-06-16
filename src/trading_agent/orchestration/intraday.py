@@ -58,16 +58,17 @@ def run_intraday_pipeline(*, dry_run: bool) -> int:
     agent_root = Path.cwd()
     load_env_files(agent_root)
     run_date = pt_date_string()
+    runtime = load_runtime_config(agent_root)
     if not _is_weekday_pt() and os.environ.get("ALLOW_WEEKEND_RUN", "0") != "1":
         _append_local_decision(agent_root, "calendar_skip", "not_a_weekday_pt", run_date=run_date)
         return 0
     if not _is_intraday_window_pt() and os.environ.get("ALLOW_OUTSIDE_MARKET_TEST", "0") != "1":
         _append_local_decision(agent_root, "time_window_skip", "outside_intraday_window_pt", run_date=run_date)
         return 0
-    if (agent_root / "KILL_SWITCH").exists() and os.environ.get("ALLOW_KILL_SWITCH_PAPER_TEST", "0") != "1":
+    kill_switch_present = (agent_root / "KILL_SWITCH").exists()
+    if kill_switch_present and runtime.trading_mode != "paper" and os.environ.get("ALLOW_KILL_SWITCH_PAPER_TEST", "0") != "1":
         _append_local_decision(agent_root, "kill_switch_skip", "KILL_SWITCH_present", run_date=run_date)
         return 0
-    runtime = load_runtime_config(agent_root)
     effective_risk_tier = runtime.effective_risk_tier
     build_run_manifest(agent_root, run_date)
     paper_starting_cash = float(os.environ.get("PAPER_STARTING_CASH", "400000"))

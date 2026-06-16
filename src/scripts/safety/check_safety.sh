@@ -85,7 +85,11 @@ case "$RISK_TIER" in
 esac
 
 if [[ "$(kill_switch_status)" == "present" ]]; then
-  echo "  - KILL_SWITCH present: intraday script will skip before Codex."
+  if [[ "$TRADING_MODE" == "paper" ]]; then
+    echo "  - KILL_SWITCH present: paper intraday may still run; live/review remain blocked."
+  else
+    echo "  - KILL_SWITCH present: intraday script will skip before Codex."
+  fi
 else
   echo "  - KILL_SWITCH absent: intraday script may run according to TRADING_MODE."
 fi

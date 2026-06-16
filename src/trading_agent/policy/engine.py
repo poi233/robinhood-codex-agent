@@ -13,15 +13,16 @@ def _checked_symbols(inputs: PolicyInputs) -> list[str]:
 
 def generate_order_intent(inputs: PolicyInputs) -> PolicyDecision:
     checked_symbols = _checked_symbols(inputs)
+    kill_switch_blocks = inputs.kill_switch_present and inputs.trading_mode != "paper"
     risk_checks: dict[str, bool | None] = {
-        "kill_switch": not inputs.kill_switch_present,
+        "kill_switch": not kill_switch_blocks,
         "daily_plan": inputs.daily_plan is not None,
         "trading_mode": inputs.trading_mode in {"paper", "review", "live"},
         "account_data": "buying_power" in inputs.account,
         "data_status": not bool((inputs.data_status_summary or {}).get("execution_blocking")),
         "risk_overlay": str((inputs.risk_overlay or {}).get("market_regime") or "").lower() not in {"no_trade", "risk_off"},
     }
-    if inputs.kill_switch_present:
+    if kill_switch_blocks:
         return PolicyDecision(
             trading_mode=inputs.trading_mode,
             checked_symbols=checked_symbols,
