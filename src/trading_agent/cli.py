@@ -59,6 +59,11 @@ def build_parser() -> argparse.ArgumentParser:
         ev.add_argument("--since", metavar="YYYY-MM-DD", default=None)
         ev.add_argument("--until", metavar="YYYY-MM-DD", default=None)
 
+    promote_parser = growth_subparsers.add_parser("promote", help="Human-in-the-loop promotion: validate + draft only (never edits strategy_registry.yaml).")
+    promote_subparsers = promote_parser.add_subparsers(dest="promote_command", required=True)
+    promote_check = promote_subparsers.add_parser("check", help="Validate a challenger and write a changelog + registry draft.")
+    promote_check.add_argument("experiment_id", metavar="EXPERIMENT_ID")
+
     return parser
 
 
@@ -285,6 +290,24 @@ def _run_growth_evaluate(agent_root: Path, *, since: str | None, until: str | No
     return 0
 
 
+def _run_growth_promote_check(agent_root: Path, *, experiment_id: str) -> int:
+    from trading_agent.growth.promotion import build_promotion_check, write_promotion_check
+
+    try:
+        check = build_promotion_check(agent_root, experiment_id)
+    except KeyError:
+        print(f"No such experiment: {experiment_id}")
+        return 1
+    out_path = write_promotion_check(agent_root, experiment_id)
+    verdict = "ELIGIBLE for human promotion" if check["eligible"] else "NOT eligible"
+    print(f"{experiment_id}: {verdict}")
+    for reason in check["blocking_reasons"]:
+        print(f"  - {reason}")
+    print(f"Draft written to {out_path}")
+    print("Promotion stays a manual strategy_registry.yaml edit — this command changed nothing.")
+    return 0
+
+
 def _run_dashboard(agent_root: Path) -> int:
     import subprocess
     import sys
@@ -339,4 +362,6 @@ def main(argv: list[str] | None = None) -> int:
         return _run_growth_shadow(Path.cwd(), run_date=args.run_date)
     if args.command == "growth" and args.growth_command in {"evaluate", "recommend"}:
         return _run_growth_evaluate(Path.cwd(), since=args.since, until=args.until, print_md=args.growth_command == "recommend")
+    if args.command == "growth" and args.growth_command == "promote" and args.promote_command == "check":
+        return _run_growth_promote_check(Path.cwd(), experiment_id=args.experiment_id)
     return 0

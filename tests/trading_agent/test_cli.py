@@ -207,3 +207,32 @@ def test_growth_evaluate_writes_report(tmp_path, monkeypatch, capsys):
     assert (tmp_path / "runtime" / "analytics" / "experiment_report.json").exists()
     assert (tmp_path / "runtime" / "analytics" / "promotion_recommendation.md").exists()
     assert "experiment_report.json" in capsys.readouterr().out
+
+
+def test_growth_promote_check_drafts_without_touching_registry(tmp_path, monkeypatch, capsys):
+    import json
+    from pathlib import Path
+    from trading_agent.cli import main
+
+    config_dir = tmp_path / "src" / "config"
+    config_dir.mkdir(parents=True)
+    registry = config_dir / "strategy_registry.yaml"
+    registry.write_text("active_strategy: baseline_v1\nstrategies:\n  baseline_v1:\n    status: active\n", encoding="utf-8")
+    registry_before = registry.read_text(encoding="utf-8")
+    (config_dir / "growth_policy.json").write_text(json.dumps({
+        "mode": "paper_only",
+        "promotion_rules": {"min_shadow_days": 1, "fill_rate_not_worse_than_champion": False,
+                            "max_drawdown_not_worse_than_champion": False, "require_human_final_approval": True},
+    }), encoding="utf-8")
+    (config_dir / "strategy_experiments.yaml").write_text(
+        "experiments:\n  exp_x:\n    status: ready_for_review\n"
+        "    challenger_strategy_id: \"baseline_v1__trade_threshold_40\"\n"
+        "    parent_strategy_id: baseline_v1\n    module: scoring\n    field: trade_threshold\n"
+        "    current: 50.0\n    proposed: 40.0\n", encoding="utf-8")
+    monkeypatch.chdir(tmp_path)
+
+    assert main(["growth", "promote", "check", "exp_x"]) == 0
+    assert "exp_x" in capsys.readouterr().out
+    assert (tmp_path / "runtime" / "analytics" / "promotion_drafts" / "exp_x.md").exists()
+    # The command must never modify the champion registry.
+    assert registry.read_text(encoding="utf-8") == registry_before
