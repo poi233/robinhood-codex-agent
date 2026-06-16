@@ -26,7 +26,7 @@
 | 回看分析（fill rate / blocked 分布） | ✅ 本地部分已加 |
 | 回看校准（score 桶 vs 未来收益 / 权重校准） | ⏳ 阻塞于数据积累 |
 | 数据可追溯（run_manifest / analytics.db） | ✅ 已加（B1–B4，见 roadmap B） |
-| 只读可视化（Strategy Lab dashboard） | ✅ C1–C2 已加（视觉未人工验证）；📐 C3 v2（可读性重构 + 策略对比）设计中，见 roadmap C3 |
+| 只读可视化（Strategy Lab dashboard） | ✅ C1–C3 已加；C3 v2 = 侧边栏+7 Tab+策略对比（含 F1），首次 headless 渲染验证，像素级视觉仍待人工目测，见 roadmap C3 |
 | Token 成本（DSA/Technical 预计算） | ✅ 已加（P4，见 roadmap D1） |
 | 自成长平台（observe→propose→shadow→promote） | ✅ G-pre/G0–G8 全闭环已加（paper/shadow only，promote 仅人工，见 roadmap G） |
 | 自成长诊断/提议/shadow/推荐（growth 全命令树） | ✅ observe/propose/validate/experiments/shadow/evaluate/recommend/promote check 全部上线 |
@@ -261,18 +261,22 @@
 
 ### 14. Dashboard（`dashboard/`）
 
-**已做**
-- **（roadmap C1）** `python3 -m trading_agent dashboard` 拉起 Streamlit，单页面（无需点击）依次显示
-  Overview / Candidates / Decisions / Orders / Replay 五个区块。`queries.py` 是纯函数层，对
-  `analytics.db` 做 sqlite3 查询 + 少量直接读 `daily_plan.json`/`risk_overlay.json`，8 个单测覆盖。
-  `streamlit` 作为 `pyproject.toml` 的可选依赖（`dashboard` extra），不影响其余命令。
+**已做（C1 → C3 v2）**
+- **（C1）** `python3 -m trading_agent dashboard` 拉起 Streamlit；`queries.py` 纯函数层（sqlite3 查
+  `analytics.db` + 少量直接读 state JSON），`streamlit` 是 `pyproject.toml` 可选依赖。
+- **（C3 v2，2026-06-16）** 单页瀑布流 → **侧边栏 + 7 Tab**（Today / Candidates / Decisions / Paper /
+  Strategy Comparison / Self-Growth / Themes）。新增 8 个只读查询（`strategy_comparison`/
+  `champion_vs_challengers`/`equity_timeseries`/`blocked_reason_trend`/`candidates_with_rankings`/
+  proposals/queue/theme），各有单测（query 层 17 个）。**策略对比 Tab** 覆盖 champion 版本横向对比
+  （= F1）+ champion vs challenger（读 G7 `experiment_report.json`）。
+- **首次渲染验证**：`test_app_smoke.py` 用 streamlit `AppTest` headless 跑整个 app（缺 streamlit 自动
+  skip），断言 7 Tab 全部无异常渲染——这是 dashboard 第一次被自动化证明「能真正跑起来」。
 
 **没做 / 注意**
-- **视觉效果未经人工核实**：本次实现时沙箱环境没有 macOS 截屏权限，无法用 computer-use 截图验证
-  页面渲染效果，用户已知情并决定先这样、以后再改可视化部分。只验证了 query helper 的正确性和
-  streamlit 进程能正常启动监听 8501，没有验证页面实际显示是否符合预期。**这是本节中唯一一个"测试
-  通过"不代表"功能已验证"的例外，使用前建议先手动跑一次确认。**
-- dashboard 新增了只读的 **Self-Growth Lab** 区块（见下一节 15）；同样未经人工视觉核实。
+- **像素级视觉/布局美观度仍未人工核实**：沙箱无法截屏，只验证了「能 headless 渲染无异常 + 查询正确」，
+  没有人眼确认排版好不好看。使用前建议本地跑一次 `python3 -m trading_agent dashboard` 目测。
+- 现仅 `baseline_v1` 一个 strategy version，⑤ 策略对比的「版本横向对比」要等切过第二个版本才有第二行
+  数据（UI/查询已就位）；challenger 的 fill rate/drawdown、forward returns 仍待 G6 订单仿真 / E1。
 
 ### 15. 自成长平台（`growth/`，roadmap G-pre + G0–G8 全闭环）
 
@@ -341,6 +345,7 @@
 | **G-pre/G0–G2** 自成长 Phase 1 | profile 按名解析；`growth_policy.json` + validator；`growth observe` + observations；模块 diagnoser 注册表 + dashboard Self-Growth Lab（全只读、paper-safe） | 见 git log |
 | **G3 + 数据前置** 自成长提议 | `growth/proposals.py` + `growth propose`（白名单、过 validator、只写文件）；intraday 分数落盘 `intraday_rankings.jsonl` + analytics 第 7 张表 | 见 git log |
 | **G4–G8** 自成长全闭环 | proposal 完整校验（`growth validate`）→ 实验队列（`growth experiments`）→ shadow runner + 隔离账本（`growth shadow`，接入 intraday）→ evaluator（`growth evaluate/recommend`）→ 人工 promote check（`growth promote check`，不改 registry） | 见 git log |
+| **C3** Dashboard v2 | 侧边栏 + 7 Tab；8 个只读查询（含 `strategy_comparison`=F1 + `champion_vs_challengers`）；`AppTest` headless 渲染验证 | 见 git log |
 
 ---
 

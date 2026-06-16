@@ -288,7 +288,7 @@ environment.
 | `doctor` | Print effective runtime configuration (mode, tiers, caps, layer flags) and exit |
 | `replay` | Local paper-trading analytics (`--since`, `--until`, `--output`) |
 | `analytics build` | (Re)build `runtime/analytics/analytics.db` from `runtime/state/runs/*` (`--since`, `--until`) |
-| `dashboard` | Launch the read-only Streamlit dashboard at `http://localhost:8501` |
+| `dashboard` | Launch the read-only Streamlit dashboard at `http://localhost:8501` (sidebar + 7 tabs incl. Strategy Comparison: champion versions + champion-vs-challenger) |
 | `growth observe` | Write read-only self-growth diagnostics to `runtime/analytics/growth_observations.json` (`--since`, `--until`) |
 | `growth propose` | Write validated, whitelist-only strategy proposals to `runtime/strategy_proposals/<date>/` (never auto-enabled; `--since`, `--until`) |
 | `growth validate <file\|dir>` | Validate proposal JSON(s) against `growth_policy.json`; writes sibling `*_validation.json` |

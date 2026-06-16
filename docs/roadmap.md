@@ -37,7 +37,7 @@
 | | B4 | strategy-changelog.md | docx | ✅ **已完成**（2026-06-15） |
 | **C 只读可视化与观测** | C1 | Dashboard MVP（Streamlit 只读） | docx | ✅ **已完成**（2026-06-15，视觉未验证） |
 | | C2 | theme exposure / speculative cap 诊断 | docx | ✅ **已完成**（2026-06-15） |
-| | C3 | Dashboard v2（可读性重构 + 策略对比，含 F1） | 用户新增 | 📐 设计中（2026-06-16，见下方 C3 设计） |
+| | C3 | Dashboard v2（可读性重构 + 策略对比，含 F1） | 用户新增 | ✅ **已完成**（2026-06-16，首次 headless 渲染验证；像素级视觉仍待人工目测） |
 | **D 工程优化 · 不阻塞** | D1 | DSA/Technical token 优化 | design doc | ✅ **已完成**（2026-06-15，见下方实现记录） |
 | | D2 | market_feed 跨日缓存 / batch | 旧 R4 | 🟡 部分完成（2026-06-15，缓存做了，batch 未做） |
 | | D3 | Kronos batch 推理 | 旧 R5 | ✅ **已完成**（2026-06-16） |
@@ -381,13 +381,37 @@ speculative 占比分别有独立 cap）；阈值通过 `scoring_profiles.yaml` 
 
 ---
 
-## C3 — Dashboard v2（可读性重构 + 策略对比）— 📐 设计中（2026-06-16）
+## C3 — Dashboard v2（可读性重构 + 策略对比）— ✅ 已完成（2026-06-16）
+
+**实现记录**：
+- `dashboard/app.py` 从单页瀑布流改成 **`st.sidebar`（run-date 选择 + 数据计数）+ `st.tabs` 7 个
+  Tab**：① Today / ② Candidates / ③ Decisions / ④ Paper / ⑤ Strategy Comparison / ⑥ Self-Growth /
+  ⑦ Themes（与下方设计一致）。
+- `dashboard/queries.py` 新增 8 个**纯只读**查询并各有单测：`candidates_with_rankings`（candidates
+  join 最新 `intraday_rankings`）、`equity_timeseries`、`blocked_reason_trend`、`strategy_comparison`
+  （按 `runs.strategy_id` 聚合 fill rate / no-trade rate / PnL / 平均分 / top blocked reason）、
+  `champion_vs_challengers`（读 G7 `experiment_report.json`）、`proposals_overview`、
+  `experiment_queue_overview`、`theme_diagnostics`。
+- `dashboard/charts.py` 新增可复用组件：`plan_state_badge`（颜色编码）、`today_view`（决策原因人话化）、
+  `candidates_with_rankings_view`、`equity_curve_view`、`blocked_reason_trend_view`、
+  `strategy_comparison_view`、`champion_vs_challengers_view`、`proposals_and_queue_view`、
+  `theme_diagnostics_view`。
+- **⑤ 策略对比落地两块**：(a) champion 版本横向对比（**实现 F1**，按 strategy_id 并排；现仅
+  `baseline_v1`，UI/查询框架已就位，等切第二个版本就有第二行）；(b) champion vs challenger（读
+  `experiment_report.json`，现有数据就能并排，缺失指标标注待补）。
+- **验证（重要进步）**：新增 `tests/.../dashboard/test_app_smoke.py`，用 streamlit 的 `AppTest`
+  **headless 渲染整个 app**（streamlit 缺失时自动 skip），断言 7 个 Tab 全部无异常渲染——这是 dashboard
+  **第一次被自动化验证能真正跑起来**（C1 当年只起过进程、没渲染验证）。查询层 17 个单测全绿。
+- **仍未做**：像素级视觉/布局美观度仍需人工 `python3 -m trading_agent dashboard` 目测（沙箱无法截屏）；
+  本条只保证「能渲染、查询正确、结构到位」。**全程只读，未碰任何交易代码路径。**
+
+**原设计（保留作参考）**：
 
 > **背景**：C1 的 dashboard 是单页瀑布流（Overview / Candidates / Decisions / Orders / Replay /
 > Self-Growth Lab 六块从上往下平铺），`charts.py` 全是 `st.dataframe`/`st.metric` 的薄封装，**视觉
 > 从未人工验证**。现在 B/C/G 阶段已经攒下足够多的数据源（`analytics.db` 7 张表 + replay + growth
-> 产物 + registry），值得把 dashboard 从「能看」升级到「好读、且能回答问题」。本条是**设计**，待拍板
-> 后再实现。**全程只读，不写任何交易参数**（与 C1 同约束；可编辑参数仍是 F3，最后做）。
+> 产物 + registry），值得把 dashboard 从「能看」升级到「好读、且能回答问题」。**全程只读，不写任何交易
+> 参数**（与 C1 同约束；可编辑参数仍是 F3，最后做）。
 
 **三个目标**
 1. **可读性**：从单页瀑布流改成**侧边栏导航 + 多 Tab**，每个 Tab 聚焦一个问题，不用滚一面墙；
@@ -656,15 +680,14 @@ benchmark 对照可见。
 
 # F 阶段 · 后期 / 故意推后
 
-## F1 — strategy compare — ↦ 并入 C3 ⑤(a)
+## F1 — strategy compare — ✅ 已并入 C3 ⑤(a)（2026-06-16）
 
 **目标**：对比不同 `strategy_id` 的 run count、fill rate、PnL、blocked reasons、平均分，判断新版本是否更好。
 
-**依赖**：B1（manifest）+ B2（registry）+ 至少两个 strategy version 的积累数据。
-
-**现状**：用户要求把策略对比并入 dashboard 改造，已在 **C3 ⑤ Strategy Comparison** Tab 的 (a) 节中设计
-落地（按 `strategy_id` 聚合 runs/orders/decisions 并排展示）。F1 不再单列实现，保留为概念入口；具体设计与
-验收见 C3。仍受「至少 2 个 strategy version 才有可比数据」约束。
+**现状**：已随 C3 落地——`dashboard/queries.py::strategy_comparison` 按 `runs.strategy_id` 聚合
+runs/orders/decisions/candidates/intraday_rankings/paper_equity，dashboard ⑤ Strategy Comparison Tab
+并排展示；有单测。F1 不再单列。**约束**：现仅 `baseline_v1` 一个版本，要等人工切过第二个 strategy
+version（B2 registry 改 `active_strategy`）后才有第二行可比数据；UI/查询此前已就位。
 
 ---
 
