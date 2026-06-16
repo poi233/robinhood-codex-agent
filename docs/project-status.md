@@ -28,7 +28,8 @@
 | 数据可追溯（run_manifest / analytics.db） | ✅ 已加（B1–B4，见 roadmap B） |
 | 只读可视化（Strategy Lab dashboard） | ✅ 已加（C1–C2，dashboard 视觉未人工验证，见 roadmap C） |
 | Token 成本（DSA/Technical 预计算） | ✅ 已加（P4，见 roadmap D1） |
-| 自成长平台（observe→propose→shadow→promote） | ⬜ 规划中（G0–G2 有实现计划，见 roadmap G） |
+| 自成长平台（observe→propose→shadow→promote） | 🟡 G0–G2 已加（只读诊断地基），G3–G8 待做（见 roadmap G） |
+| 自成长诊断（growth observe / Self-Growth Lab） | ✅ G0–G2 已加（只读，见 roadmap G） |
 | review/live 真实下单 | ⛔ 故意未接线 |
 
 ---
