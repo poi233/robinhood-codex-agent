@@ -29,6 +29,12 @@ def build_parser() -> argparse.ArgumentParser:
 
     subparsers.add_parser("dashboard", help="Launch the read-only Streamlit dashboard at http://localhost:8501.")
 
+    growth_parser = subparsers.add_parser("growth", help="Self-growth diagnostics (paper-only, read-only).")
+    growth_subparsers = growth_parser.add_subparsers(dest="growth_command", required=True)
+    growth_observe_parser = growth_subparsers.add_parser("observe", help="Write runtime/analytics/growth_observations.json.")
+    growth_observe_parser.add_argument("--since", metavar="YYYY-MM-DD", default=None)
+    growth_observe_parser.add_argument("--until", metavar="YYYY-MM-DD", default=None)
+
     return parser
 
 
@@ -135,6 +141,14 @@ def _run_analytics_build(agent_root: Path, *, since: str | None, until: str | No
     return 0
 
 
+def _run_growth_observe(agent_root: Path, *, since: str | None, until: str | None) -> int:
+    from trading_agent.growth.observations import write_growth_observations
+
+    path = write_growth_observations(agent_root, since=since, until=until)
+    print(f"Wrote {path}")
+    return 0
+
+
 def _run_dashboard(agent_root: Path) -> int:
     import subprocess
     import sys
@@ -177,4 +191,6 @@ def main(argv: list[str] | None = None) -> int:
         return _run_analytics_build(Path.cwd(), since=args.since, until=args.until)
     if args.command == "dashboard":
         return _run_dashboard(Path.cwd())
+    if args.command == "growth" and args.growth_command == "observe":
+        return _run_growth_observe(Path.cwd(), since=args.since, until=args.until)
     return 0

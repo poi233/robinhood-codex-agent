@@ -109,3 +109,19 @@ class PackageCliTests(unittest.TestCase):
         )
         self.assertEqual(result.returncode, 0, msg=result.stderr)
         self.assertIn("effective_risk_tier now   = 4", result.stdout)
+
+
+def test_growth_observe_writes_artifact(tmp_path, monkeypatch, capsys):
+    import json
+    from trading_agent.cli import main
+
+    run_dir = tmp_path / "runtime" / "state" / "runs" / "2026-06-15"
+    run_dir.mkdir(parents=True)
+    (run_dir / "run_manifest.json").write_text(json.dumps({"strategy_id": "baseline_v1"}), encoding="utf-8")
+    monkeypatch.chdir(tmp_path)
+
+    rc = main(["growth", "observe"])
+    assert rc == 0
+    out = tmp_path / "runtime" / "analytics" / "growth_observations.json"
+    assert out.exists()
+    assert "growth_observations.json" in capsys.readouterr().out
