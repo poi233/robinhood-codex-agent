@@ -191,3 +191,19 @@ def test_growth_experiments_add_approve_archive_flow(tmp_path, monkeypatch, caps
 
     assert main(["growth", "experiments", "archive", exp_id]) == 0
     assert load_experiments(tmp_path)[exp_id]["status"] == "archived"
+
+
+def test_growth_evaluate_writes_report(tmp_path, monkeypatch, capsys):
+    from pathlib import Path
+    from trading_agent.cli import main
+
+    config_dir = tmp_path / "src" / "config"
+    config_dir.mkdir(parents=True)
+    (config_dir / "growth_policy.json").write_text(
+        (Path.cwd() / "src" / "config" / "growth_policy.json").read_text(encoding="utf-8"), encoding="utf-8")
+    monkeypatch.chdir(tmp_path)
+
+    assert main(["growth", "evaluate"]) == 0
+    assert (tmp_path / "runtime" / "analytics" / "experiment_report.json").exists()
+    assert (tmp_path / "runtime" / "analytics" / "promotion_recommendation.md").exists()
+    assert "experiment_report.json" in capsys.readouterr().out

@@ -53,6 +53,11 @@ def build_parser() -> argparse.ArgumentParser:
 
     growth_shadow_parser = growth_subparsers.add_parser("shadow", help="Run active_shadow challengers over the current run's champion inputs (isolated ledgers).")
     growth_shadow_parser.add_argument("--run-date", metavar="YYYY-MM-DD", default=None)
+    for name, helptext in (("evaluate", "Write experiment_report.json + promotion_recommendation.md (recommend-only)."),
+                           ("recommend", "Same as evaluate, then print the promotion recommendation.")):
+        ev = growth_subparsers.add_parser(name, help=helptext)
+        ev.add_argument("--since", metavar="YYYY-MM-DD", default=None)
+        ev.add_argument("--until", metavar="YYYY-MM-DD", default=None)
 
     return parser
 
@@ -268,6 +273,18 @@ def _run_growth_shadow(agent_root: Path, *, run_date: str | None) -> int:
     return 0
 
 
+def _run_growth_evaluate(agent_root: Path, *, since: str | None, until: str | None, print_md: bool) -> int:
+    from trading_agent.growth.evaluator import write_experiment_report
+
+    json_path, md_path = write_experiment_report(agent_root, since=since, until=until)
+    print(f"Wrote {json_path}")
+    print(f"Wrote {md_path}")
+    if print_md:
+        print()
+        print(md_path.read_text(encoding="utf-8"))
+    return 0
+
+
 def _run_dashboard(agent_root: Path) -> int:
     import subprocess
     import sys
@@ -320,4 +337,6 @@ def main(argv: list[str] | None = None) -> int:
         return _run_growth_experiments(Path.cwd(), args)
     if args.command == "growth" and args.growth_command == "shadow":
         return _run_growth_shadow(Path.cwd(), run_date=args.run_date)
+    if args.command == "growth" and args.growth_command in {"evaluate", "recommend"}:
+        return _run_growth_evaluate(Path.cwd(), since=args.since, until=args.until, print_md=args.growth_command == "recommend")
     return 0
