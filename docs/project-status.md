@@ -1,7 +1,7 @@
 # 项目状态总表 — 做了什么 / 没做什么
 
 > 最后更新：2026-06-15
-> 范围：`src/trading_agent/`（约 6500 行 Python）+ 配置 + 编排 + 入口 + 测试（259 passed）
+> 范围：`src/trading_agent/`（约 6500 行 Python）+ 配置 + 编排 + 入口 + 测试（261 passed）
 > 用途：**单一权威的"现状"文档**，按子系统逐块说明已实现与未实现。未来要做的事另见
 > [`roadmap.md`](./roadmap.md)。
 >
@@ -231,6 +231,9 @@
   equity_curve 汇总进 `runtime/analytics/analytics.db`（SQLite，6 张表）。每次 build 全量
   drop+recreate+重新 insert，天然幂等。`orders`/`decisions` 复用 `replay/analysis.py` 现成的
   解析/合并逻辑。
+- **（roadmap B4）** `docs/strategy-changelog.md`：每个 registry 里的 strategy version 一条记录；
+  `strategy/registry.py` 新增 `list_strategy_ids()`，配测试强制要求每个 strategy_id 在 changelog
+  里有 `## {strategy_id}` 标题，而不是靠人工记得写。
 
 **没做**
 - registry 的 `watchlist` 字段目前只是记录，没有反向接线到 `parse_active_watchlist()`（仍只读
@@ -256,6 +259,7 @@
 | **P5-B2** 数据可追溯 | `strategy_registry.yaml` + `strategy/registry.py`；接入 `load_env_files` | 见 git log |
 | **P5-B1** 数据可追溯 | `strategy/manifest.py`：三个 lifecycle 入口都写 `run_manifest.json` | 见 git log |
 | **P5-B3** 数据可追溯 | `analytics/` 包 + `analytics build` 子命令：6 张表汇总进 `analytics.db` | 见 git log |
+| **P5-B4** 数据可追溯 | `docs/strategy-changelog.md` + `list_strategy_ids()` + 配套测试 | 见 git log |
 
 ---
 
@@ -265,8 +269,8 @@
 
 - **A 正确性与安全闸**：A1/A2/A3 均已完成（见上方 P5-A1/P5-A2/P5-A3）。下一批是 B 阶段
   （数据可追溯基建：run_manifest / strategy_registry / analytics.db）。
-- **B 数据可追溯基建（P0）**：strategy-changelog（B4，纯文档）。
-  （run_manifest、strategy_registry、analytics.db 已完成，见上方 P5-B1/P5-B2/P5-B3 与第 13 节。）
+- **B 数据可追溯基建（P0）**：✅ 全部完成（B1/B2/B3/B4，见上方 P5-B1~P5-B4 与第 13 节）。
+  下一批是 C 阶段（theme 诊断 + 只读 dashboard）。
 - **C 只读可视化与观测**：Strategy Lab dashboard（Streamlit 只读）、theme/speculative 集中度诊断。
 - **D 工程优化**：market_feed 跨日缓存/batch、Kronos batch 推理、paper 部分成交模型。
   （DSA/Technical token 优化已完成，见上方 P4 与 roadmap D1。）

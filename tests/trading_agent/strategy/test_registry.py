@@ -5,6 +5,7 @@ from pathlib import Path
 from trading_agent.strategy.registry import (
     DEFAULT_STRATEGY,
     apply_active_strategy_env_defaults,
+    list_strategy_ids,
     load_active_strategy,
 )
 
@@ -87,3 +88,16 @@ def test_apply_active_strategy_env_defaults_fills_unset_keys_only(tmp_path: Path
     assert os.environ["POLICY_PROFILE"] == "conservative"
     assert os.environ["RISK_TIER"] == "1"
     assert os.environ["PAPER_RISK_TIER"] == "9"
+
+
+def test_list_strategy_ids_reads_repo_registry() -> None:
+    assert list_strategy_ids(Path(".")) == ["baseline_v1"]
+
+
+def test_every_registered_strategy_has_a_changelog_entry() -> None:
+    """roadmap B4 acceptance: every change_reason in the registry has a matching
+    docs/strategy-changelog.md entry, identified by its strategy_id heading."""
+    changelog = Path("docs/strategy-changelog.md").read_text(encoding="utf-8")
+
+    for strategy_id in list_strategy_ids(Path(".")):
+        assert f"## {strategy_id}" in changelog, f"missing changelog entry for {strategy_id}"

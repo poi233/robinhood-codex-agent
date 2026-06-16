@@ -58,6 +58,15 @@ def _parse_strategy_registry_yaml(path: Path) -> dict[str, Any]:
     return payload
 
 
+def list_strategy_ids(agent_root: Path) -> list[str]:
+    """Return every strategy_id registered in strategy_registry.yaml (not just active)."""
+    path = agent_root / "src" / "config" / "strategy_registry.yaml"
+    if not path.exists():
+        return [DEFAULT_STRATEGY["strategy_id"]]
+    payload = _parse_strategy_registry_yaml(path)
+    return list((payload.get("strategies") or {}).keys())
+
+
 def load_active_strategy(agent_root: Path) -> dict[str, Any]:
     """Resolve the active strategy version registered in strategy_registry.yaml.
 
