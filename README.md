@@ -1,35 +1,49 @@
 # Robinhood Codex Agent
 
-Low-frequency trading automation for a dedicated Robinhood Agentic Account.
+Low-frequency trading automation for a single dedicated Robinhood Agentic Account.
 
-The system is intentionally conservative. Premarket uses Codex and Robinhood MCP to write local
-snapshots and a daily plan. Intraday does not call Robinhood MCP directly; it reads those local
-snapshots, runs a Python policy engine, and in paper mode updates a local simulated account.
+The system is intentionally conservative and **fail-closed**. Premarket uses Codex (LLM) plus the
+Robinhood Trading MCP to gather data and write a daily plan; everything downstream of the plan is
+**deterministic Python**. Intraday never calls Robinhood MCP directly — it reads the premarket
+snapshots, refreshes live quotes, runs a Python policy engine, and in paper mode updates a local
+simulated account ledger.
 
-Primary runtime entrypoints:
+> This is automation infrastructure, **not financial advice**. Live trading can lose money. Keep this
+> in paper/review mode until the logs are boring and correct.
+
+---
+
+## Quick Start
 
 ```bash
+# Inspect effective configuration (loads runtime.env + runtime.env.local, shows tiers/caps/layers)
+python3 -m trading_agent doctor
+
+# Lifecycle phases
 python3 -m trading_agent premarket
 python3 -m trading_agent intraday
 python3 -m trading_agent postmarket
+
+# Local paper-trading replay analytics (fill rate + blocked-reason distribution)
+python3 -m trading_agent replay
+python3 -m trading_agent replay --since 2026-06-01 --output replay.json
 ```
 
-Default state is deliberately safe:
+Safe-by-default state:
 
-- `TRADING_MODE=paper`
-- `RISK_TIER=3`
-- `PAPER_STARTING_CASH=400000`
-- `CODEX_MODEL=gpt-5.4-mini`
-- `KILL_SWITCH` exists
-- generated state and logs are ignored by git
-- intraday paper execution is wired through the Python policy engine and local paper broker
-- intraday buy/sell decisions are gated by same-day technical price levels when available
-- intraday execution prices come from a live quote refresh on each run; if live quotes are missing or stale, policy blocks instead of falling back to premarket snapshots
-- intraday review/live execution is not wired yet and fails closed with `execution_not_wired`
-- real order placement tools are not auto-approved
+| Setting | Default | Meaning |
+|---|---|---|
+| `TRADING_MODE` | `paper` | Simulated fills only; no real orders |
+| `RISK_TIER` | `3` | Live/review notional caps ($5k single / $20k daily) |
+| `PAPER_RISK_TIER` | `4` | Paper-only "paper_max" tier — caps intentionally high so risk-budget binds |
+| `PAPER_STARTING_CASH` | `400000` | Paper ledger seed cash |
+| `CODEX_MODEL` | `gpt-5.4-mini` | Codex model for prompts |
+| `KILL_SWITCH` | present | File-based hard stop for intraday |
 
-This is automation infrastructure, not financial advice. Live trading can lose money. Keep this in
-paper/review mode until the logs are boring and correct.
+Real order placement tools are never auto-approved; review/live execution is intentionally **not
+wired** in Python and fails closed with `execution_not_wired`.
+
+---
 
 ## System Diagram
 
@@ -40,713 +54,507 @@ flowchart TD
 
     CLI --> Premarket["premarket pipeline"]
     CLI --> Intraday["intraday policy engine"]
-    CLI --> Postmarket["postmarket summary prompt"]
+    CLI --> Postmarket["postmarket summary"]
+    CLI --> Doctor["doctor (config introspection)"]
+    CLI --> Replay["replay (paper analytics)"]
 
-    Premarket --> Snapshots["local run snapshots<br/>runtime/state/runs/YYYY-MM-DD/"]
+    Premarket --> Snapshots["run snapshots<br/>runtime/state/runs/YYYY-MM-DD/"]
     Premarket --> Logs["run logs<br/>runtime/logs/runs/YYYY-MM-DD/"]
 
     Snapshots --> Intraday
-    Intraday --> Policy["policy buy/sell gates"]
-    Policy --> Paper["paper broker<br/>runtime/state/runs/YYYY-MM-DD/paper/"]
+    Intraday --> LiveQuotes["live quote refresh (yfinance)"]
+    LiveQuotes --> Policy["deterministic buy/sell gates"]
+    Policy --> Paper["paper broker (slippage + pending lifecycle)"]
     Paper --> Usage["daily_usage.json"]
     Policy --> Decisions["decisions.jsonl"]
 
     Snapshots --> Postmarket
     Decisions --> Postmarket
-    Postmarket --> Summary["postmarket_summary.md"]
-    Paper --> PaperSummary["paper/postmarket_summary.json"]
+    Paper --> Postmarket
+    Postmarket --> Summary["postmarket_summary.md + paper summary"]
+
+    Decisions --> Replay
+    Paper --> Replay
 ```
 
-Premarket is the only scheduled lifecycle phase that should collect account/tradability planning data
-from Robinhood MCP and prompts. Intraday consumes the premarket plan artifacts, but it must refresh
-current execution quotes live on each run. Snapshot quotes remain planner context only and are not a
-valid fallback for intraday execution.
+Premarket is the only phase that talks to Robinhood MCP. Intraday consumes premarket artifacts but
+**must refresh execution quotes live** on each run; snapshot quotes are planner context only and are
+never a valid fallback for intraday execution.
+
+---
 
 ## Premarket DAG
 
 ```mermaid
 flowchart TD
-    Start["premarket start"] --> Account["Codex prompt: account_snapshot"]
-    Account --> MarketContext["local market_context<br/>charts / OHLCV / news"]
+    Start["premarket start"] --> Config["load runtime config + active_watchlist"]
+    Config --> Account["Codex: account_snapshot"]
+    Account --> Capital["local: capital_snapshot (paper vs real)"]
+    Capital --> MarketContext["local: market_context<br/>(active watchlist only, concurrent)"]
 
     MarketContext --> G1
     subgraph G1["parallel advisory group"]
-        DSA["Codex prompt: DSA signal scan"]
-        Kronos["local Kronos forecast"]
-        Technical["Codex prompt: technical research"]
-        Calendar["Codex prompt: market calendar"]
-        CoreQuotes["Codex prompt: core quotes"]
+        DSA["Codex: DSA signal scan (full universe)"]
+        Kronos["local: Kronos forecast (active watchlist)"]
+        Technical["Codex: technical research (active watchlist)"]
+        Calendar["Codex: market calendar"]
+        CoreQuotes["Codex: core quotes"]
     end
 
-    G1 --> TraderLevels["local trader watch levels"]
-    TraderLevels --> CandidateMerge["local candidate merge"]
+    G1 --> TraderLevels["local: trader_watch_levels"]
+    TraderLevels --> CandidateMerge["local: candidate_snapshot"]
+    CandidateMerge --> CandidateQuotes["local: candidate quotes"]
 
-    CandidateMerge --> CandidateQuotes["local candidate quotes"]
     CandidateQuotes --> G2
-    subgraph G2["parallel candidate enrichment after quotes"]
-        Tradability["local candidate tradability"]
-        Catalysts["Codex prompt: catalysts / news"]
+    subgraph G2["parallel candidate enrichment"]
+        Tradability["local: tradability"]
+        Catalysts["Codex: catalyst enrichment"]
     end
 
-    G2 --> FinalPlanner["Codex prompt: final premarket planner"]
-    FinalPlanner --> Archive["local archive snapshot"]
+    G2 --> DataStatus["local: data_status_summary"]
+    DataStatus --> Scoring["local: candidate_scores"]
+    Scoring --> RiskOverlay["local: risk_overlay (tier-aware gates)"]
+    RiskOverlay --> FinalPlanner["Codex: final premarket planner"]
+    FinalPlanner --> Normalize["local: normalize plan_state + diagnostics"]
+    Normalize --> Archive["local: archive snapshot"]
 ```
 
-Advisory failures are logged and fail closed where possible. The final planner is the official source
-for `daily_plan.json`, `today_allowlist.txt`, `dynamic_allowlist.json`, and the reset
-`daily_usage.json`.
+Advisory failures are logged and fail closed where possible. The deterministic layers (capital,
+market context, trader watch levels, candidate merge, tradability, data status, scoring, risk
+overlay, plan-state normalization, diagnostics, archive) own the numbers; Codex owns reasoning
+(DSA classification, technical research, catalysts, account/calendar snapshots, final narrative).
+
+---
+
+## Active Watchlist vs Full Universe
+
+The system separates the **full universe** (broad scan pool) from the **active watchlist** (the
+symbols that receive expensive analysis):
+
+| Layer | Pool | Why |
+|---|---|---|
+| DSA signal scan | full `universe.txt` (88 symbols) | Cheap classification; wide funnel |
+| Kronos forecast | `active_watchlist.txt` (≤30) | Local model inference is the slowest premarket step |
+| market_feed (4 timeframes + charts) | `active_watchlist.txt` | Heavy yfinance + chart I/O |
+| technical research (Codex) | `active_watchlist.txt` | Token cost |
+
+- `src/config/active_watchlist.txt` — the curated ≤30 high-conviction symbols.
+- `src/config/universe.txt` — the full 88-symbol scan pool.
+- `src/config/universe_meta.json` — reference metadata for all symbols (`tier` active/watch,
+  `theme`, `liquidity`).
+- If `active_watchlist.txt` is absent, the system falls back to the full universe automatically.
+
+---
+
+## Risk Tiers
+
+`src/config/risk_tiers.json` defines notional caps. The **effective tier** depends on
+`TRADING_MODE`:
+
+- `TRADING_MODE=paper` → uses `PAPER_RISK_TIER`
+- `TRADING_MODE=review` / `live` → uses `RISK_TIER`
+
+| Tier | Name | Single | Daily | Intent |
+|---|---|---|---|---|
+| 0 | micro_test | $10 | $25 | Initial paper/review/live micro test |
+| 1 | small_live | $25 | $75 | First small live |
+| 2 | moderate_live | $50 | $150 | Moderate live |
+| 3 | aggressive_small_account | $5,000 | $20,000 | Small dedicated live account |
+| 4 | paper_max | $100,000 | $400,000 | **Paper only** — caps intentionally high so per-trade risk-budget and portfolio-weight caps bind, not the notional hard cap |
+
+In paper mode the binding constraints are therefore `per_trade_risk_pct` (0.5% in
+`aggressive_growth`) and the portfolio-weight caps (`max_single_stock_weight`, `max_etf_weight`,
+`max_theme_weight`), not the dollar notional ceiling.
+
+Run `python3 -m trading_agent doctor` to print the effective tier and caps for the current
+environment.
+
+---
+
+## CLI Commands
+
+| Command | Purpose |
+|---|---|
+| `premarket` | Full premarket DAG → daily plan + scoring + risk overlay |
+| `intraday` | Deterministic policy engine + paper broker; one decision per run |
+| `postmarket` | Paper day-end + performance summary + Codex review |
+| `dsa` | Standalone DSA signal scan |
+| `doctor` | Print effective runtime configuration (mode, tiers, caps, layer flags) and exit |
+| `replay` | Local paper-trading analytics (`--since`, `--until`, `--output`) |
+
+All lifecycle commands accept `--dry-run`. Shell wrappers in `src/scripts/entrypoints/` export the
+same defaults used by cron/launchd and are the canonical operational path.
+
+---
 
 ## Package Architecture
 
 ```text
-src/
-  trading_agent/
-    cli.py                   argparse entrypoint for premarket/intraday/postmarket
-    core/                    runtime config, paths, time, JSON helpers, run logs
-    orchestration/           lifecycle pipelines
-      premarket.py           staged DAG with Codex prompts, local data, and archive
-      intraday.py            Python policy engine runner; no direct Robinhood MCP calls
-      postmarket.py          Codex summary runner
-    prompts/                 Codex subprocess runner and runtime variable block
-    policy/                  deterministic intraday buy/sell/risk/scoring logic
-    paper/                   local paper broker and ledger updates
-    planner/                 deterministic candidate snapshot, scoring, and risk helpers
-    data/                    yfinance-backed market context and chart collection
-    signals/                 Kronos and technical fallback payload helpers
-    reporting/               premarket archive and postmarket report helpers
-    contracts/               schema validators for generated payloads
+src/trading_agent/
+  cli.py                   argparse entrypoint: premarket/intraday/postmarket/dsa/doctor/replay
+  core/                    runtime config + env loading, paths, time, JSON helpers, run logs, locks
+  orchestration/           lifecycle pipelines (premarket / intraday / postmarket / tasks)
+  prompts/                 Codex subprocess runner and runtime variable block
+  data/                    yfinance market context (concurrent), live quotes, charts, universe
+  signals/                 DSA scan, Kronos payloads, technical fallback + levels
+  planner/                 deterministic candidate snapshot, scoring, risk overlay, diagnostics
+  policy/                  deterministic intraday engine: ranking, price, sizing, sell, risk
+  paper/                   local paper broker (slippage, pending fills, day-end cancel)
+  replay/                  paper-trading analytics (fill rate, blocked reasons)
+  reporting/               premarket archive, postmarket reports, watch-level normalization
+  notifications/           email notifications
+  contracts/               schema validators for generated payloads
 ```
 
 Shell wrappers live in `src/scripts/`. They source `src/scripts/lib/common.sh`, load
-`src/config/runtime.env` plus optional `src/config/runtime.env.local`, create the dated runtime folders, and
-then call the Python package.
+`src/config/runtime.env` plus optional `src/config/runtime.env.local`, create dated runtime folders,
+and call the Python package. The Python entrypoint **also** loads those env files itself (via
+`core/config.py`), so `python3 -m trading_agent` and the shell wrappers produce the same effective
+config. Shell exports always win over file values; `runtime.env.local` overrides `runtime.env`.
 
-## Repository Layout
+---
 
-```text
-src/config/
-  allowlist.txt                  emergency fallback symbols
-  policy_profiles.json           deterministic intraday policy profiles
-  scoring_profiles.yaml          premarket watchlist/trade/coverage thresholds
-  risk.md                        human-readable hard risk rules
-  risk_tiers.json                machine-readable notional caps by tier
-  runtime.env                    default mode, model, tier, layer flags
-  runtime.env.local              local overrides, ignored by git
-  runtime.env.local.example      local override template
-  strategy.md                    trading and screening strategy
-  universe.txt                   maximum candidate universe
-  dsa_strategy_weights.json      DSA-inspired signal weights
-
-src/prompts/
-  signals/dsa_scan.txt
-  technical/research.txt
-  premarket/account_snapshot.txt
-  premarket/market_calendar.txt
-  premarket/quote_snapshot_core.txt
-  premarket/quote_snapshot_candidates.txt
-  premarket/tradability_candidates.txt
-  premarket/catalyst_enrichment.txt
-  premarket/final_research.txt
-  intraday/check.txt             legacy prompt/spec reference; Python policy is active path
-  postmarket/summary.txt
-
-src/scripts/
-  lib/common.sh                  shared shell runtime
-  entrypoints/                   scheduled lifecycle wrappers
-  data/                          market feed and manual research helpers
-  kronos/                        portable Kronos setup and runner
-  safety/check_safety.sh         local safety sanity checks
-  skills/                        repo-owned skill install/verify helpers
-
-docs/
-  setup/                         setup notes
-  superpowers/specs/             design specs
-  superpowers/plans/             implementation plans
-
-runtime/state/
-  runs/YYYY-MM-DD/               generated runtime state, ignored by git
-
-runtime/logs/
-  runs/YYYY-MM-DD/               generated runtime logs, ignored by git
-
-launchd/
-  *.plist.example                macOS LaunchAgent examples
-
-cron.example                     cron schedule example
-KILL_SWITCH                      default safety stop file
-.codex/config.toml               project MCP approval policy
-```
-
-## Runtime State
-
-Each run date uses the same folder shape:
+## Configuration (`src/config/`)
 
 ```text
-runtime/state/runs/YYYY-MM-DD/
-  market_feed/
-    manifest.json
-    charts/
-    ohlcv/
-    news/
-  signals/
-    dsa_signals.json
-    kronos_signals.json
-    technical_signals.json
-  planner/
-    account_snapshot.json
-    capital_snapshot.json
-    market_calendar.json
-    quote_snapshot_core.json
-    candidate_snapshot.json
-    candidate_scores.json
-    quote_snapshot_candidates.json
-    tradability_snapshot.json
-    catalyst_snapshot.json
-    trader_watch_levels.json
-    data_status_summary.json
-    risk_overlay.json
-    today_allowlist.txt
-    dynamic_allowlist.json
-    daily_plan.json
-    daily_plan.md
-    daily_plan.zh.md
-    daily_usage.json
-  paper/
-    day_start.json
-    day_end.json
-    equity_curve.jsonl
-    postmarket_summary.json
-    account.json
-    positions.json
-    orders.jsonl
-  archive/
-    premarket_report.json
+runtime.env                 default mode, model, tier, layer flags, paper settings
+runtime.env.local           local overrides, ignored by git
+runtime.env.local.example   override template
+risk_tiers.json             notional caps by tier (0-4)
+policy_profiles.json        deterministic intraday policy profiles (conservative / aggressive_growth)
+scoring_profiles.yaml       premarket watchlist/trade/coverage thresholds by profile
+universe.txt                full 88-symbol scan pool
+active_watchlist.txt        ≤30 symbols that get Kronos + market_feed + technical
+universe_meta.json          per-symbol reference metadata (tier/theme/liquidity)
+allowlist.txt               emergency fallback symbols
+dsa_strategy_weights.json   DSA-inspired signal weights
+risk.md                     human-readable hard risk rules
+strategy.md                 trading and screening strategy
 ```
 
-```text
-runtime/logs/runs/YYYY-MM-DD/
-  pipeline/
-    pipeline.jsonl
-  progress/
-    *.jsonl
-  outputs/
-    codex_runs.log
-    stdout/
-      *.log
-    stderr/
-      *.log
-  system/
-    errors.log
-  audit/
-    decisions.jsonl
-    orders.jsonl
-  reports/
-    postmarket_summary.md
+Key env knobs (see `runtime.env`):
+
+```bash
+TRADING_MODE=paper
+RISK_TIER=3                 # live/review
+PAPER_RISK_TIER=4           # paper-only
+PAPER_STARTING_CASH=400000
+ENABLE_DSA_SIGNAL_LAYER=1
+ENABLE_KRONOS_SIGNAL_LAYER=1
+ENABLE_MARKET_FEED_LAYER=1
+ENABLE_TECHNICAL_SIGNAL_LAYER=1
+DSA_MAX_SUBAGENTS=3
+TECHNICAL_MAX_SUBAGENTS=3
+MARKET_FEED_TIMEFRAMES=1w,1d,1h,15m
+MARKET_FEED_MAX_WORKERS=4   # market_context concurrency
+PAPER_FILL_MODEL=conservative
+PAPER_SLIPPAGE_BPS=10       # 0.1% slippage on paper fills
+PAPER_CANCEL_PENDING_AT_DAY_END=1
 ```
 
-Important state contracts:
-
-- `planner/account_snapshot.json` is the local account/positions/open-orders source created by the
-  premarket account snapshot prompt.
-- `planner/capital_snapshot.json` separates paper and real account capital. In paper mode, sizing
-  uses the paper ledger or `PAPER_STARTING_CASH`; Robinhood buying power remains a read-only
-  real-account reference.
-- `planner/quote_snapshot_core.json` and `planner/quote_snapshot_candidates.json` provide intraday
-  prices.
-- `planner/trader_watch_levels.json` is a normalized, trader-facing copy of technical price levels:
-  reference price, supports, resistances, entry zone, buy trigger, invalidation, targets,
-  no-trade zone, and existing-long risk-reduction levels.
-- `planner/data_status_summary.json` normalizes each layer's `ok`, `partial`, `failed`, or
-  `missing` state with reason codes such as `market_closed`, `provider_partial`, `provider_failed`,
-  `schema_invalid`, and `mcp_unavailable`.
-- `planner/candidate_scores.json` deterministically aggregates existing DSA, Kronos, technical,
-  quote, and catalyst outputs with transparent weights. It does not replace those reasoning layers.
-  Technical actions are normalized before scoring so prompt-local values such as `strong_promote`,
-  `promote`, `buy_bias`, `hold`, `observe`, `neutral`, `reduce`, `sell_bias`, `avoid`, and `block`
-  land on one canonical scale instead of silently dropping to zero.
-  Catalyst scoring prefers explicit `catalyst_score` or `score`, falls back to neutral `50` for
-  `status=completed` or `status=partial`, and treats a missing catalyst payload as unavailable/
-  neutral rather than bearish.
-- `planner/risk_overlay.json` applies market-calendar, capital, risk-tier, account, and data-status
-  gates before the final prompt writes narrative. It keeps `watchlist_candidates` separate from
-  `tradable_candidates`, so observe-only names are preserved even when nothing currently clears the
-  trading threshold.
-- `planner/premarket_diagnostics.json` is the deterministic debug summary for the run: candidate
-  counts, scored-candidate counts, watchlist/tradable counts, top score, score distribution,
-  thresholds, component coverage, score-status counts, unmapped technical actions, missing
-  catalyst-score counts, missing-component warnings, final overlay state, final plan state, and
-  concise warnings.
-- The diagnostics `thresholds` block records the active `scoring_profile`,
-  `watchlist_threshold`, `trade_threshold`, `high_conviction_threshold`, and
-  `min_effective_coverage`.
-- `planner/daily_plan.json` inherits executable gating from `planner/risk_overlay.json`. A
-  premarket run before the cash open is still valid; soft research partials lower confidence but do
-  not become a standalone `no_trade` reason. Its deterministic `plan_state` distinguishes
-  `no_trade`, `observe_only`, and `trade_ready`.
-- `planner/daily_usage.json` starts from the final premarket planner and is updated by paper fills.
-- `planner/daily_plan.zh.md` is the Chinese human-readable version of the premarket report.
-- `paper/day_start.json`, `paper/day_end.json`, `paper/equity_curve.jsonl`, and
-  `paper/postmarket_summary.json` are the visualization-friendly daily paper snapshots, equity
-  curve, and postmarket paper performance summary.
-- `paper/account.json`, `paper/positions.json`, and `paper/orders.jsonl` are the current simulated
-  account ledger used only in `TRADING_MODE=paper`.
-- `runtime/logs/runs/YYYY-MM-DD/progress/*.jsonl` records prompt-level progress. The Python runner
-  always writes started/skipped/completed/failed records; long research prompts are instructed to add
-  per-symbol progress records.
-- `runtime/logs/runs/YYYY-MM-DD/outputs/stdout/*.log` and `outputs/stderr/*.log` store per-prompt
-  subprocess output, while `outputs/codex_runs.log` remains the shared shell-level Codex run log.
-- `runtime/logs/runs/YYYY-MM-DD/audit/decisions.jsonl` and `audit/orders.jsonl` are the operator-facing
-  audit trail for intraday actions and review outcomes.
-- Paper mode starts from `PAPER_STARTING_CASH` when the local ledger does not yet exist.
-- In paper mode, policy loading first reads real snapshots and then overlays the paper ledger cash
-  and positions.
+---
 
 ## Lifecycle
 
 ### Premarket
 
-Run:
-
 ```bash
 python3 -m trading_agent premarket
-./src/scripts/entrypoints/run_premarket.sh
+./src/scripts/entrypoints/run_premarket.sh   # canonical: exports cron/launchd defaults + Kronos paths
 ```
 
-For full repo-local execution, prefer `./src/scripts/entrypoints/run_premarket.sh`. It exports the
-same runtime defaults used by cron and launchd, including local Kronos paths. The Python module
-entrypoint now falls back to repo-local `.vendor/kronos` and `.venv-kronos` defaults when those
-environment variables are unset, but the shell entrypoint remains the canonical operational path.
+Steps:
 
-Premarket does the following:
+1. Load runtime config and active watchlist.
+2. Codex `account_snapshot` → `planner/account_snapshot.json`.
+3. Local `capital_snapshot` separating paper sizing cash from real Robinhood buying power.
+4. Local `market_context` (active watchlist only, concurrent yfinance fetch + charts) → `market_feed/`.
+5. Parallel advisory layers: DSA scan (full universe), Kronos forecast (active), technical research
+   (active, may fan out to `TECHNICAL_MAX_SUBAGENTS` read-only subagents), market calendar, core quotes.
+6. Local `trader_watch_levels` (schema normalization of technical levels).
+7. Local `candidate_snapshot` from holdings + open orders + advisory signals.
+8. Local candidate quote snapshot, then parallel tradability + catalyst enrichment.
+9. Local `data_status_summary` with structured reason codes.
+10. Local `candidate_scores` (weighted aggregation) and `risk_overlay` (tier-aware gates).
+11. Codex final planner writes `daily_plan.*`, `today_allowlist.txt`, `dynamic_allowlist.json`,
+    reset `daily_usage.json`.
+12. Local normalize of `daily_plan.plan_state` from `risk_overlay`, then `premarket_diagnostics.json`.
+13. Local archive snapshot.
 
-1. Writes `planner/account_snapshot.json` with Robinhood account, positions, and open orders.
-2. Writes `planner/capital_snapshot.json`, separating paper sizing cash from real Robinhood buying
-   power.
-3. Collects deterministic market context with yfinance-backed data into `market_feed/`.
-4. Runs advisory layers in parallel:
-   - DSA-inspired signal scan through Codex, scoped to theme strength, cross-symbol priority,
-     crowding, macro sensitivity, and promote/demote/block classification rather than detailed
-     technical entries.
-   - Kronos forecast locally.
-   - Repo-owned technical research through Codex, with a single prompt run that may fan out into
-     up to `TECHNICAL_MAX_SUBAGENTS` read-only subagents.
-   - Market calendar snapshot through Codex.
-   - Core quote snapshot through Codex.
-5. Builds `planner/trader_watch_levels.json` locally from the technical layer. This is a schema
-   normalization step only; it does not create new technical opinions.
-6. Builds `planner/candidate_snapshot.json` locally from account holdings, open orders, and advisory
-   signals.
-7. Writes `planner/quote_snapshot_candidates.json` before downstream candidate gating so
-   tradability always reads a completed candidate quote snapshot.
-8. Runs deterministic tradability plus the catalyst enrichment prompt in parallel.
-9. Writes `planner/data_status_summary.json` with structured status reason codes.
-10. Writes `planner/candidate_scores.json` and `planner/risk_overlay.json` with deterministic
-   ranking and risk gates.
-11. Runs the final premarket planner prompt to write the final files and human narrative.
-11.5. Normalizes `daily_plan.json.plan_state` from `risk_overlay.json` and then writes
-   `planner/premarket_diagnostics.json` so diagnostics reflect the final planner output rather than
-   an earlier intermediate overlay state.
-12. Archives `archive/premarket_report.json`.
-13. Logs stage status to `runtime/logs/runs/YYYY-MM-DD/pipeline.jsonl`.
+**Scoring** aggregates existing layer outputs with transparent weights (DSA 0.25, technical 0.30,
+Kronos 0.15, quote 0.10, catalyst 0.20), normalized by effective coverage so missing optional
+components don't drag a symbol bearish. Thresholds come from `scoring_profiles.yaml` (default
+`aggressive_growth`: watchlist 35, trade 50, high-conviction 80, min coverage 0.5).
 
-The final planner writes:
+`daily_plan.plan_state`:
+- `no_trade` — a real market/account/capital/data blocker, or zero scored candidates.
+- `observe_only` — watchlist candidates exist but none currently tradable (keeps `today_watchlist`,
+  `allowed_actions=[]`).
+- `trade_ready` — at least one candidate clears the trade threshold and global gates are open.
 
-- `planner/today_allowlist.txt`
-- `planner/dynamic_allowlist.json`
-- `planner/daily_plan.json`
-- `planner/daily_plan.md`
-- `planner/daily_plan.zh.md`
-- `planner/daily_usage.json`
-- one `premarket_plan` record in `decisions.jsonl`
-
-Deterministic versus reasoning boundaries:
-
-- Python owns candidate merge, candidate quote extraction, candidate tradability gating,
-  trader-watch-level normalization, data-status normalization, scoring aggregation, and risk overlay.
-- Codex still owns DSA reasoning, technical research, catalyst interpretation, account/calendar/core
-  snapshot prompts, and final narrative writing.
-- Python scoring aggregates existing signal-layer outputs; it does not invent technical setups,
-  catalyst judgments, or DSA classifications.
-- `candidate_scores.json` includes per-symbol technical diagnostics: raw action, normalized action,
-  component score, base weight, weighted contribution, and an unmapped-action warning when the
-  prompt emits a non-canonical value. Unknown technical actions fall back to neutral `observe`
-  semantics rather than bullish scoring.
-- Catalyst fallback is intentionally neutral unless the payload is explicitly negative or blocking.
-  Prompt completion status means collection quality only; it does not imply a bullish catalyst.
-- Each candidate score now carries component-level diagnostics for DSA, technical, Kronos, quote,
-  and catalyst with `score`, `available`, `confidence`, `blocked`, `reason`, `weight`,
-  `effective_weight`, and `contribution`. Final candidate scoring is normalized by total effective
-  weight so missing optional components do not automatically drag the symbol bearish.
-- Candidate-level diagnostics include `score_status`, `coverage`, `missing_components`, and
-  `warnings`. Low effective coverage is marked as `insufficient_data` instead of being treated as a
-  bearish read.
-- `src/config/scoring_profiles.yaml` controls premarket watchlist/trade thresholds and minimum
-  effective coverage. `SCORING_PROFILE` selects the active profile and defaults to the YAML file's
-  `default_profile`.
-- `risk_overlay.json` uses a lower watchlist threshold than the trade threshold by default
-  (`35` versus `50` in the default `aggressive_growth` scoring profile). If scored candidates exist
-  but none clear the trade threshold, the overlay
-  keeps them in `today_watchlist`, leaves `allowed_actions=[]`, and records
-  `no_tradable_candidates_above_threshold` instead of `no_scored_candidates`.
-- `daily_plan.json.plan_state` semantics:
-  - `no_trade`: market, account, capital, or execution-blocking data gates are closed.
-  - `observe_only`: watchlist candidates exist, but none are currently tradable.
-  - `trade_ready`: at least one candidate clears the tradable threshold and the global gates are open.
-- `observe_only` must preserve `today_watchlist` and keep `allowed_actions=[]`.
-- `no_trade` means a real global blocker or zero scored candidates; it should not be used for
-  ordinary observe-only days.
-
-### Troubleshooting premarket outcomes
-
-- `observe_only` usually means scored candidates exist and remain on the watchlist, but none cleared
-  the tradable threshold. Check `planner/premarket_diagnostics.json` for the top score, threshold
-  gap, missing catalyst scores, and component-coverage warnings.
-- `planner/premarket_diagnostics.json` warnings are designed to explain mismatch states directly:
-  `technical_actions_unmapped:<actions>`, `catalyst_scores_missing_for_all_symbols`,
-  `top_score_below_trade_threshold_by:<delta>`, `scored_candidates_exist_but_none_tradable`,
-  `watchlist_candidates_exist_but_daily_plan_no_trade`, and
-  `high_score_but_insufficient_data:<symbols>`.
-- `no_trade` should now mean a real market/account/capital/data blocker or a true absence of scored
-  candidates, not a schema mismatch between technical/catalyst payloads and candidate scoring.
-- A missing numeric catalyst score is intentionally neutral by default. `status=completed` or
-  `status=partial` means collection quality, not a bullish or bearish catalyst by itself.
-- An unknown technical action is intentionally mapped back to neutral `observe` semantics with an
-  unmapped-action warning instead of being treated as bullish.
-- DSA is intentionally narrowed so it does not duplicate detailed technical levels, stop/target
-  ladders, or explicit catalyst scoring already owned by other layers.
-- The final planner preserves `planner/risk_overlay.json` executable actions when
-  `planner/data_status_summary.json.execution_blocking` is false. Soft partial research layers are
-  explanatory, not hard execution stops.
-
-Layer flags:
+Layer flags & manual runs:
 
 ```bash
-ENABLE_DSA_SIGNAL_LAYER=0 ./src/scripts/entrypoints/run_premarket.sh
 ENABLE_KRONOS_SIGNAL_LAYER=0 ./src/scripts/entrypoints/run_premarket.sh
-ENABLE_MARKET_FEED_LAYER=0 ./src/scripts/entrypoints/run_premarket.sh
-ENABLE_TECHNICAL_SIGNAL_LAYER=0 ./src/scripts/entrypoints/run_premarket.sh
-```
-
-Useful manual runs:
-
-```bash
 ./src/scripts/entrypoints/run_dsa_premarket_scan.sh
 ./src/scripts/data/run_market_feed_collection.sh
-./src/scripts/data/run_technical_research.sh
-./src/scripts/data/run_symbol_research.sh NVDA
 ./src/scripts/kronos/run_kronos_premarket_scan.sh
 ```
 
 ### Intraday
-
-Run:
 
 ```bash
 python3 -m trading_agent intraday
 ./src/scripts/entrypoints/run_intraday.sh
 ```
 
-Intraday is a Python policy-engine path:
+Deterministic Python policy path — **no direct Robinhood MCP calls**:
 
-1. Skips on weekends unless `ALLOW_WEEKEND_RUN=1`.
-2. Skips outside 06:45-12:55 America/Los_Angeles unless `ALLOW_OUTSIDE_MARKET_TEST=1`.
-3. Skips when `KILL_SWITCH` exists unless `ALLOW_KILL_SWITCH_PAPER_TEST=1`.
-4. Loads runtime mode and risk tier from config.
-5. Loads local policy inputs from config, planner files, signals, account snapshot, and quote
-   snapshots.
-6. In paper mode, overlays local paper cash/positions from `runtime/state/runs/YYYY-MM-DD/paper/`.
-7. Runs deterministic sell-first then buy policy.
-8. Appends exactly one decision to `runtime/logs/runs/YYYY-MM-DD/decisions.jsonl`.
+1. Skip on weekends unless `ALLOW_WEEKEND_RUN=1`.
+2. Skip outside 06:45–12:55 PT unless `ALLOW_OUTSIDE_MARKET_TEST=1`.
+3. Skip when `KILL_SWITCH` exists unless `ALLOW_KILL_SWITCH_PAPER_TEST=1`.
+4. Load runtime mode + effective risk tier.
+5. Load policy inputs from config, planner files, signals, account snapshot.
+6. **Refresh live quotes** (yfinance) for watchlist + allowlist + positions + open orders only
+   (no longer the full universe).
+7. Paper mode: reconcile pending paper orders against fresh quotes, then overlay paper cash/positions.
+8. Run deterministic **sell-first then buy** policy.
+9. Append exactly one decision to `decisions.jsonl`.
 
-Intraday does not call Robinhood MCP directly. If premarket snapshots are missing, the policy engine
-fails closed with blocked reasons such as `missing_daily_plan`, `missing_account`, or
-`missing_quote`.
+**Quote rules:** intraday uses only live quotes. If a quote is missing/unparsable → `missing_quote`;
+if older than `MAX_QUOTE_AGE_SECONDS` (default 600) → `stale_quote`. It never falls back to premarket
+snapshot quotes.
 
-Quote sources and execution rules:
+**Buy ranking** (`policy/candidate_selector.py`) — `trade_readiness_score`, weights sum to 1.00:
 
-- `planner/quote_snapshot_core.json` and `planner/quote_snapshot_candidates.json` are premarket
-  planning context only. They help premarket score symbols and explain the setup, but they are not
-  valid execution prices for intraday.
-- Intraday now refreshes current quotes live on every run through the repo's live-quote provider
-  before buy/sell policy evaluation.
-- Intraday execution does not fall back to premarket snapshot quotes. If live quotes are missing,
-  unparsable, or too old, policy blocks instead of trading on stale planner context.
-- A `stale_quote` block means the symbol price exists but the live quote timestamp is older than
-  `MAX_QUOTE_AGE_SECONDS`.
-- A `missing_quote` block means intraday could not fetch a usable current quote for that symbol.
-- An `outside_entry_zone` block means the live quote is fresh, but the current price is not inside
-  the allowed pullback entry zone and has not satisfied the allowed breakout condition.
+```
+0.35 * candidate_total      (premarket aggregate score)
+0.25 * technical_score
+0.15 * price_setup_score     ← live setup quality (entry-zone/breakout + reward:risk); pending calibration
+0.10 * liquidity_score
+0.10 * research_score
+0.05 * catalyst_score
+```
 
-Policy behavior:
+`price_setup_score` (`policy/technical.py:estimate_price_setup_score`) is computed at ranking time
+from current quote + watch levels: no-trade-zone/chase → 0, outside zone → 20, breakout → 60+RR
+bonus, pullback in entry zone → 70+RR bonus.
 
-- Sell evaluation runs before buy evaluation.
-- Sell can generate partial take-profit or risk-exit intents when the daily plan allows them.
-- Buy requires the intersection of `universe.txt`, `today_allowlist.txt`, and
-  `daily_plan.today_watchlist`.
-- The policy engine also hard-blocks on `KILL_SWITCH`, stale `daily_plan`, stale/missing quotes,
-  `data_status_summary.execution_blocking=true`, and `risk_overlay.market_regime in {no_trade,
-  risk_off}` even if orchestration changes later.
-- Buy ranks candidates deterministically from `candidate_scores`, `risk_overlay`,
-  `trader_watch_levels`, catalyst context, and the default `aggressive_growth` profile in
-  `src/config/policy_profiles.json`.
-- Buy price selection respects technical entry zones, breakout triggers, no-trade zones, chase
-  limits, and minimum reward/risk before an order intent is allowed.
-- Buy size selection uses stop distance, capital buffers, profile caps, and setup-quality
-  multipliers instead of flat notional sizing.
-- Sell logic uses technical targets, invalidation levels, and risk-reduction triggers to decide
-  partial take-profit versus defensive exit.
-- Buy requires a score of at least 80, a fresh quote, no open order, no average-down into a losing
-  position, daily cap room, single-order cap room, buying power, and a technically valid entry.
-- Quote freshness is bounded by `MAX_QUOTE_AGE_SECONDS` and defaults to 600 seconds.
-- Low-frequency controls block repeated re-entry through `cooldown_days_after_buy`,
-  `cooldown_days_after_stop`, `max_new_positions_per_day`, and `max_new_positions_per_week`.
-- Review/live currently block with `execution_not_wired`.
+**Buy gating:** requires intersection of `universe.txt` ∩ `today_allowlist.txt` ∩
+`daily_plan.today_watchlist`; score ≥ threshold; fresh quote; no open order; no average-down into a
+loser; daily/single-order cap room; buying power; valid technical entry; reward:risk ≥
+`min_reward_risk`. Hard-blocks also on `KILL_SWITCH`, stale plan, `execution_blocking`, and
+`market_regime in {no_trade, risk_off}`.
+
+**Sizing** (`policy/sizing_policy.py`) uses risk-budget (`per_trade_risk_pct` × portfolio equity ÷
+stop distance), then caps by single-order, daily-remaining, cash buffer, and per-stock / per-ETF /
+per-theme weight limits, then applies score × market × research multipliers.
+
+**Low-frequency controls:** `cooldown_days_after_buy`, `cooldown_days_after_stop`,
+`max_new_positions_per_day`, `max_new_positions_per_week`.
 
 ### Paper Mode
 
-Paper mode is the active execution simulation path.
+The active execution simulation path. On `would_trade`,
+`trading_agent.paper.broker.apply_paper_intent()`:
 
-When policy returns `would_trade`:
+- Uses `PAPER_FILL_MODEL` (default `conservative`): a buy fills only when current price ≤ limit; a
+  sell fills only when current price ≥ limit; otherwise it's logged **pending**.
+- Applies **slippage** (`PAPER_SLIPPAGE_BPS`, default 10 = 0.1%): buy fill =
+  `min(limit, ref×(1+slip))`, sell fill = `max(limit, ref×(1-slip))`. All accounting uses the fill
+  price, not the limit.
+- Buys reduce `paper/account.json` cash and update weighted average cost in `paper/positions.json`;
+  sells require an existing position, increase cash, reduce/remove position, update realized PnL.
+- Pending orders are reconciled on later intraday runs against fresh quotes; unfilled pending orders
+  are canceled at day-end when `PAPER_CANCEL_PENDING_AT_DAY_END=1` (default).
+- Every submission appends to `paper/orders.jsonl`; fills append to `paper/equity_curve.jsonl`.
+- Only filled orders update `daily_usage.json` (used/filled notional, order count, per-symbol
+  buy/sell/stop dates, new-position counters).
 
-- `trading_agent.paper.broker.apply_paper_intent()` uses `PAPER_FILL_MODEL`, which defaults to
-  `conservative`.
-- In `conservative` mode, a buy limit only fills when current price is at or below the limit, and a
-  sell limit only fills when current price is at or above the limit. Otherwise the order is logged
-  as pending/unfilled.
-- Buys reduce `paper/account.json` cash and update weighted average cost in `paper/positions.json`.
-- Sells require an existing paper position, increase cash, reduce/remove the position, and update
-  realized PnL.
-- Every submission appends to `paper/orders.jsonl`, including pending paper orders.
-- The first paper intraday run writes `paper/day_start.json` once.
-- Postmarket writes `paper/day_end.json`.
-- Paper fills append `fill` points to `paper/equity_curve.jsonl`; day start/end append their own
-  equity curve points.
-- Only filled paper orders update `planner/daily_usage.json`:
-  - `used_notional`
-  - `paper_filled_notional`
-  - `paper_order_count`
-  - `last_buy_date_by_symbol`
-  - `last_sell_date_by_symbol`
-  - `last_stop_date_by_symbol`
-  - `new_positions_today`
-  - `new_positions_this_week`
-  - `updated_at`
-- Postmarket writes `paper/postmarket_summary.json` before the Codex summary prompt runs. It records
-  starting/ending paper equity, cash change, realized PnL, filled notional, order counts, and open
-  paper positions for review and visualization.
+### Review / Live
 
-If paper cash or paper position quantity is insufficient, the fill is not applied and the reason is
-added to the decision.
-
-### Review And Live
-
-Review and live order execution are intentionally not wired into the Python policy path yet.
-
-Current behavior:
-
-- `TRADING_MODE=review`: policy may produce an order intent but returns `blocked` with
-  `execution_not_wired`.
-- `TRADING_MODE=live`: same fail-closed behavior.
-- `review_equity_order` and `place_equity_order` are not called by intraday Python.
-
-This keeps the system useful for paper operations while preserving a hard boundary before real
-execution is added.
+Intentionally **not wired**. `TRADING_MODE=review` or `live` may produce an order intent but returns
+`blocked` with `execution_not_wired`. `review_equity_order` and `place_equity_order` are never called
+by intraday Python.
 
 ### Postmarket
-
-Run:
 
 ```bash
 python3 -m trading_agent postmarket
 ./src/scripts/entrypoints/run_postmarket.sh
 ```
 
-Postmarket still runs the Codex prompt at `src/prompts/postmarket/summary.txt`. It is review-only and
-should read local runtime/state/logs plus Robinhood data to reconcile the day, identify rule violations or
-data failures, and write:
+Paper mode: writes `paper/day_end.json`, `paper/postmarket_summary.json` (start/end equity, cash
+change, realized PnL, filled notional, order counts, open positions), and a Chinese
+`postmarket_summary.md`. Then runs the Codex review prompt for reconciliation and rule-violation
+detection.
 
-- `runtime/logs/runs/YYYY-MM-DD/postmarket_summary.md`
-- `runtime/state/runs/YYYY-MM-DD/paper/postmarket_summary.json` in `TRADING_MODE=paper`
-- one `postmarket_summary` record in `decisions.jsonl`
+### Replay (paper analytics)
+
+```bash
+python3 -m trading_agent replay
+python3 -m trading_agent replay --since 2026-06-01 --until 2026-06-15
+python3 -m trading_agent replay --output replay.json
+```
+
+Locally computes, across all (or filtered) run dates:
+
+- **Fill rate** — filled / pending / canceled / rejected counts, fill-rate %, notional totals,
+  per-symbol breakdown. Merges per-order event streams (submission → `pending_filled` /
+  `day_end_cancel`) into a final status per order.
+- **Blocked-reason distribution** — would-trade vs no-trade split and ranked counts of every
+  `blocked_reason` across intraday evaluations.
+
+Score-bucket vs forward-return analysis is **not yet implemented** (needs multiple run dates of
+accumulated data — see `docs/roadmap.md`).
+
+---
+
+## Runtime State & Logs
+
+Each run date uses the same shape (all git-ignored):
+
+```text
+runtime/state/runs/YYYY-MM-DD/
+  market_feed/   manifest.json, charts/, ohlcv/, news/
+  signals/       dsa_signals.json, kronos_signals.json, technical_signals.json
+  planner/       account_snapshot, capital_snapshot, market_calendar, quote_snapshot_core,
+                 candidate_snapshot, candidate_scores, quote_snapshot_candidates,
+                 tradability_snapshot, catalyst_snapshot, trader_watch_levels,
+                 data_status_summary, risk_overlay, premarket_diagnostics,
+                 today_allowlist.txt, dynamic_allowlist.json,
+                 daily_plan.json/.md/.zh.md, daily_usage.json
+  paper/         account.json, positions.json, orders.jsonl, day_start.json, day_end.json,
+                 equity_curve.jsonl, postmarket_summary.json
+  archive/       premarket_report.json
+
+runtime/logs/runs/YYYY-MM-DD/
+  pipeline/      pipeline.jsonl
+  progress/      *.jsonl
+  outputs/       codex_runs.log, stdout/*.log, stderr/*.log
+  system/        errors.log
+  audit/         decisions.jsonl, orders.jsonl
+  reports/       postmarket_summary.md
+```
+
+Generated state and logs are git-ignored because they contain account size, decisions, symbols, and
+timestamps. Machine-specific values belong in `src/config/runtime.env.local` (also ignored).
+
+---
 
 ## Safety Model
 
-Hard defaults and rules:
+Hard rules:
 
 - only the dedicated Robinhood Agentic Account
-- only long equities or ETFs
-- no options
-- no crypto
-- no futures
-- no margin
-- no short selling
-- no leveraged or inverse ETFs
-- only limit orders
-- max single order and daily notional are capped by the configured risk tier and daily plan
-- if data is missing, stale, or inconsistent, do nothing
-- if `KILL_SWITCH` exists, intraday trading is blocked
-- DSA, Kronos, and technical signals are advisory only
-- intraday does not call Robinhood MCP directly
+- long equities/ETFs only — no options, crypto, futures, margin, shorts, leveraged/inverse ETFs
+- limit orders only
+- notional capped by effective risk tier and daily plan
+- missing/stale/inconsistent data → do nothing
+- `KILL_SWITCH` present → intraday blocked
+- DSA / Kronos / technical signals are advisory only
+- intraday never calls Robinhood MCP directly
 - real execution remains unwired in Python policy
 
-Project MCP approval policy:
-
-- Robinhood read tools are auto-approved for scheduled Codex prompts.
-- `review_equity_order` may be auto-approved for future review-mode simulation.
-- `place_equity_order`, cancellation, option order tools, and watchlist-write tools remain
-  prompt-gated.
-
-Run the safety check:
+MCP approval policy: Robinhood read tools auto-approved for scheduled prompts; `review_equity_order`
+may be auto-approved for future review simulation; `place_equity_order`, cancellation, option, and
+watchlist-write tools remain prompt-gated.
 
 ```bash
 ./src/scripts/safety/check_safety.sh
 ```
 
-## Repo-Owned Trading Skills
-
-This repo ships trading skill packs under `.agents/skills/`.
-
-Install or refresh them into local agent skill directories:
-
-```bash
-./src/scripts/skills/install_repo_skills.sh
-./src/scripts/skills/verify_repo_skills.sh
-```
-
-Current repo-owned skills:
-
-- `chan-structure-trading`
-- `brooks-trading-range-price-action`
-- `equity-fundamentals-analysis`
-- `trading-research-casebook-maintenance`
-
-The premarket technical research prompt uses these skills as analysis context. They remain advisory
-and cannot authorize trades.
+---
 
 ## Setup
 
-Install and authenticate Codex, then connect Robinhood Trading MCP:
-
 ```bash
+# Codex + Robinhood MCP
 codex login
 codex mcp add robinhood-trading --url https://agent.robinhood.com/mcp/trading
 codex
-/mcp
-```
+/mcp        # complete Robinhood Agentic Account auth on desktop
 
-Complete Robinhood Agentic Account authentication on desktop.
-
-Install repo-owned skills:
-
-```bash
+# Repo-owned trading skills
 ./src/scripts/skills/install_repo_skills.sh
 ./src/scripts/skills/verify_repo_skills.sh
-```
 
-Portable Kronos setup requires `git` and Python `3.11` or `3.12`. The setup script prefers
-`python3.12`, then `python3.11`, then a supported `python3`.
-
-The default Kronos model is `NeoQuasar/Kronos-base`, the best public checkpoint currently usable in
-this workflow. `Kronos-large` is not the default because the upstream model zoo marks it as not
-publicly available. The default tokenizer is `NeoQuasar/Kronos-Tokenizer-base`, with
-`KRONOS_LOOKBACK_BARS=512` to match the small/base context limit.
-
-```bash
+# Portable Kronos (needs git + Python 3.11/3.12)
 KRONOS_BOOTSTRAP_PYTHON=$(command -v python3.12) ./src/scripts/kronos/setup_kronos_env.sh
 ./src/scripts/kronos/verify_kronos_env.sh
 ```
 
-For a clean Kronos rebuild:
-
-```bash
-rm -rf .venv-kronos .vendor/kronos
-./src/scripts/kronos/setup_kronos_env.sh
-./src/scripts/kronos/verify_kronos_env.sh
-```
+Default Kronos model `NeoQuasar/Kronos-base`, tokenizer `NeoQuasar/Kronos-Tokenizer-base`,
+`KRONOS_LOOKBACK_BARS=512`. The setup script prefers `python3.12`, then `python3.11`.
 
 Portable rebuild and validation flow:
 
 ```bash
 git clone <repo-url>
 cd trading
-find scripts -name '*.sh' -exec chmod +x {} +
-./src/scripts/kronos/setup_kronos_env.sh
+find src/scripts -name '*.sh' -exec chmod +x {} +
+KRONOS_BOOTSTRAP_PYTHON=$(command -v python3.12) ./src/scripts/kronos/setup_kronos_env.sh
 ./src/scripts/kronos/verify_kronos_env.sh
 ./src/scripts/safety/check_safety.sh
 ALLOW_WEEKEND_RUN=1 KRONOS_USE_MOCK=1 ./src/scripts/kronos/run_kronos_premarket_scan.sh
 ALLOW_WEEKEND_RUN=1 CODEX_EXEC_DRY_RUN=1 ./src/scripts/entrypoints/run_premarket.sh
 ```
 
-## Dry Run And Local Tests
+Repo-owned skills (advisory context for technical research; cannot authorize trades):
+`chan-structure-trading`, `brooks-trading-range-price-action`, `equity-fundamentals-analysis`,
+`trading-research-casebook-maintenance`.
 
-Dry-run scheduled shell wrappers without invoking Codex:
+---
+
+## Dry Run & Tests
 
 ```bash
+# Dry-run shell wrappers without invoking Codex
 CODEX_EXEC_DRY_RUN=1 ./src/scripts/entrypoints/run_premarket.sh
-CODEX_EXEC_DRY_RUN=1 ./src/scripts/entrypoints/run_intraday.sh
-CODEX_EXEC_DRY_RUN=1 ./src/scripts/entrypoints/run_postmarket.sh
-```
 
-Run a full paper lifecycle locally:
-
-```bash
+# Full paper lifecycle locally (moves KILL_SWITCH aside, restores after)
 ALLOW_OUTSIDE_MARKET_TEST=1 ./src/scripts/entrypoints/run_all_paper_once.sh
-```
 
-`run_all_paper_once.sh` requires `TRADING_MODE=paper`, temporarily moves `KILL_SWITCH` aside, runs
-premarket, intraday, and postmarket, then restores `KILL_SWITCH`.
+# Portable rebuild + validation
+./src/scripts/kronos/setup_kronos_env.sh && ./src/scripts/kronos/verify_kronos_env.sh
+./src/scripts/safety/check_safety.sh
+ALLOW_WEEKEND_RUN=1 KRONOS_USE_MOCK=1 ./src/scripts/kronos/run_kronos_premarket_scan.sh
 
-Run unit tests:
-
-```bash
+# Unit tests (197 tests)
+python3 -m pytest tests/ -q
 python3 -m unittest discover -s tests -v
 ```
 
+---
+
 ## Schedule
 
-Times are America/Los_Angeles:
+America/Los_Angeles:
 
 - `05:30` premarket research
-- `06:45` first intraday check
-- every 30 minutes until `12:45`
+- `06:45` first intraday check, then every 30 min until `12:45`
 - `13:10` postmarket summary
 
 Use `cron.example` or `launchd/*.plist.example` after replacing `__REPO_ROOT__` with your local
-repository path.
+path.
 
-`launchd` is the built-in macOS scheduler. In this repo it serves the same role as `cron`: starting
-`premarket`, `intraday`, and `postmarket` runs on a schedule. Use `launchd` on macOS if you want the
-jobs managed by LaunchAgents; use `cron` if you prefer a shell-level scheduler.
+---
 
 ## Rollout
 
-Recommended rollout:
-
-1. Paper only: inspect `would_trade`, `paper_fill`, `blocked`, and `no_action` decisions.
-2. Paper with repeated intraday runs: confirm `paper/` ledger and `daily_usage.json` update
-   correctly.
-3. Review mode design: wire `review_equity_order` only after tests prove the review path remains
-   non-placing.
-4. Live tier 0: add live execution only after review logs are clean and a human explicitly removes
-   `KILL_SWITCH`.
+1. Paper only: inspect `would_trade` / `paper_fill` / `paper_pending` / `blocked` decisions.
+2. Paper with repeated intraday runs: confirm paper ledger + `daily_usage.json` + pending
+   reconciliation. Use `replay` to check fill rate and blocked-reason distribution.
+3. Review mode: wire `review_equity_order` only after tests prove the path stays non-placing.
+4. Live tier 0: add live execution only after clean review logs and a human removes `KILL_SWITCH`.
 5. Raise tiers manually only after clean postmarket summaries.
 
-Never let Codex edit `RISK_TIER` by itself. Postmarket may recommend a tier change, but the human
-changes it.
+Never let Codex edit `RISK_TIER` itself. Postmarket may *recommend* a change; a human makes it.
 
-## Generated Files
+---
 
-These are intentionally ignored by git:
+## Project Docs
 
-- `runtime/state/runs/YYYY-MM-DD/market_feed/`
-- `runtime/state/runs/YYYY-MM-DD/signals/`
-- `runtime/state/runs/YYYY-MM-DD/planner/`
-- `runtime/state/runs/YYYY-MM-DD/paper/`
-- `runtime/state/runs/YYYY-MM-DD/archive/`
-- `runtime/logs/runs/YYYY-MM-DD/`
-
-Keep generated state and logs local because they can contain account size, decisions, symbols,
-timestamps, and operational details.
-
-Project documentation under `docs/` is tracked when it describes setup, specs, or implementation
-plans. Machine-specific values belong in `src/config/runtime.env.local`, which is ignored by git.
+- `docs/project-status.md` — complete, block-by-block account of what is built and what is not.
+- `docs/roadmap.md` — detailed prioritized checklist of remaining work.
+- `docs/setup/` — setup notes. `docs/superpowers/` — design specs and plans.
