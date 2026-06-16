@@ -143,6 +143,23 @@ def record_paper_day_start(
 
 def record_paper_day_end(agent_root: Path, *, run_date: str) -> bool:
     paths = build_runtime_paths(agent_root, run_date=run_date)
+    if str(os.environ.get("PAPER_CANCEL_PENDING_AT_DAY_END", "1") or "1") == "1":
+        pending = pending_paper_orders(agent_root, run_date=run_date)
+        if pending:
+            now = datetime.now(tz=PT).isoformat()
+            for order in pending:
+                cancel_event = {
+                    "order_id": order.get("order_id"),
+                    "timestamp": now,
+                    "event": "day_end_cancel",
+                    "symbol": order.get("symbol"),
+                    "side": order.get("side"),
+                    "quantity": order.get("quantity"),
+                    "limit_price": order.get("limit_price"),
+                    "status": "pending_canceled",
+                    "reason": "day_end_expired",
+                }
+                _append_order_event(paths.paper_orders_log_path, cancel_event)
     account = _initialize_account(paths.paper_account_path, 0.0)
     positions = _read_json_or(paths.paper_positions_path, {})
     if not isinstance(positions, dict):
@@ -196,7 +213,23 @@ def _fill_model() -> str:
     return str(os.environ.get("PAPER_FILL_MODEL", "conservative") or "conservative").lower()
 
 
-def _order_payload(intent: OrderIntent, *, now: str, status: str, unfilled_reason: str = "") -> dict[str, Any]:
+def _slippage_factor() -> float:
+    bps = float(os.environ.get("PAPER_SLIPPAGE_BPS", "10") or "10")
+    return bps / 10000.0
+
+
+def _compute_fill_price(side: str, limit_price: float, reference_price: float, slippage: float) -> float:
+    """Return realistic fill price given conservative model already cleared.
+
+    Buy: pay at most limit; real fill is near reference (market) plus slippage.
+    Sell: receive at least limit; real fill is near reference minus slippage.
+    """
+    if side == "buy":
+        return round(min(limit_price, reference_price * (1.0 + slippage)), 4)
+    return round(max(limit_price, reference_price * (1.0 - slippage)), 4)
+
+
+def _order_payload(intent: OrderIntent, *, now: str, status: str, unfilled_reason: str = "", fill_price: float | None = None) -> dict[str, Any]:
     return {
         "order_id": f"paper-{intent.symbol.lower()}-{int(datetime.now(tz=PT).timestamp() * 1000)}",
         "timestamp": now,
@@ -208,7 +241,7 @@ def _order_payload(intent: OrderIntent, *, now: str, status: str, unfilled_reaso
         "notional": round(intent.quantity * intent.limit_price, 2),
         "status": status,
         "filled_at": now if status == "filled" else None,
-        "fill_price": intent.limit_price if status == "filled" else None,
+        "fill_price": fill_price if status == "filled" else None,
         "unfilled_reason": unfilled_reason or None,
         "reason_codes": list(intent.reason_codes),
         "confidence": intent.confidence,
@@ -233,9 +266,10 @@ def _can_fill(intent: OrderIntent) -> tuple[bool, str]:
     return False, "fill_model_not_supported"
 
 
-def _apply_buy(account: dict[str, Any], positions: dict[str, Any], intent: OrderIntent) -> PaperFillResult:
+def _apply_buy(account: dict[str, Any], positions: dict[str, Any], intent: OrderIntent, fill_price: float | None = None) -> PaperFillResult:
+    actual_price = fill_price if fill_price is not None else intent.limit_price
     cash = float(account.get("cash", 0) or 0)
-    notional = round(intent.quantity * intent.limit_price, 2)
+    notional = round(intent.quantity * actual_price, 2)
     if notional > cash:
         return PaperFillResult(False, "rejected", "insufficient_paper_cash")
     position = positions.get(intent.symbol, {})
@@ -247,13 +281,14 @@ def _apply_buy(account: dict[str, Any], positions: dict[str, Any], intent: Order
         "symbol": intent.symbol,
         "quantity": round(new_qty, 8),
         "average_cost": round(new_average, 4),
-        "market_price": intent.limit_price,
+        "market_price": actual_price,
     }
     account["cash"] = round(cash - notional, 2)
     return PaperFillResult(True, "filled")
 
 
-def _apply_sell(account: dict[str, Any], positions: dict[str, Any], intent: OrderIntent) -> PaperFillResult:
+def _apply_sell(account: dict[str, Any], positions: dict[str, Any], intent: OrderIntent, fill_price: float | None = None) -> PaperFillResult:
+    actual_price = fill_price if fill_price is not None else intent.limit_price
     position = positions.get(intent.symbol)
     if not position:
         return PaperFillResult(False, "rejected", "missing_paper_position")
@@ -261,15 +296,15 @@ def _apply_sell(account: dict[str, Any], positions: dict[str, Any], intent: Orde
     if old_qty < intent.quantity:
         return PaperFillResult(False, "rejected", "insufficient_paper_position")
     average_cost = float(position.get("average_cost", 0) or 0)
-    proceeds = round(intent.quantity * intent.limit_price, 2)
+    proceeds = round(intent.quantity * actual_price, 2)
     account["cash"] = round(float(account.get("cash", 0) or 0) + proceeds, 2)
-    account["realized_pnl"] = round(float(account.get("realized_pnl", 0) or 0) + (intent.limit_price - average_cost) * intent.quantity, 2)
+    account["realized_pnl"] = round(float(account.get("realized_pnl", 0) or 0) + (actual_price - average_cost) * intent.quantity, 2)
     new_qty = old_qty - intent.quantity
     if new_qty <= 0:
         positions.pop(intent.symbol, None)
     else:
         position["quantity"] = round(new_qty, 8)
-        position["market_price"] = intent.limit_price
+        position["market_price"] = actual_price
     return PaperFillResult(True, "filled")
 
 
@@ -321,12 +356,14 @@ def apply_paper_intent(
     if not can_fill:
         _append_order(paths.paper_orders_log_path, _order_payload(intent, now=now, status="pending", unfilled_reason=pending_reason))
         return PaperFillResult(False, "pending", pending_reason)
-    result = _apply_buy(account, positions, intent) if intent.side == "buy" else _apply_sell(account, positions, intent)
+    slippage = _slippage_factor()
+    fill_price = _compute_fill_price(intent.side, intent.limit_price, intent.reference_price or intent.limit_price, slippage)
+    result = _apply_buy(account, positions, intent, fill_price=fill_price) if intent.side == "buy" else _apply_sell(account, positions, intent, fill_price=fill_price)
     if not result.applied:
         return result
 
     account["updated_at"] = now
-    order = _order_payload(intent, now=now, status="filled")
+    order = _order_payload(intent, now=now, status="filled", fill_price=fill_price)
     write_json(paths.paper_account_path, account)
     write_json(paths.paper_positions_path, positions)
     _append_order(paths.paper_orders_log_path, order)
@@ -424,7 +461,9 @@ def reconcile_pending_paper_orders(
         can_fill, _ = _can_fill(refreshed_intent)
         if not can_fill:
             continue
-        result = _apply_buy(account, positions, refreshed_intent) if refreshed_intent.side == "buy" else _apply_sell(account, positions, refreshed_intent)
+        slippage = _slippage_factor()
+        fill_price = _compute_fill_price(refreshed_intent.side, refreshed_intent.limit_price, refreshed_intent.reference_price or refreshed_intent.limit_price, slippage)
+        result = _apply_buy(account, positions, refreshed_intent, fill_price=fill_price) if refreshed_intent.side == "buy" else _apply_sell(account, positions, refreshed_intent, fill_price=fill_price)
         if not result.applied:
             continue
         now = datetime.now(tz=PT).isoformat()
@@ -436,7 +475,7 @@ def reconcile_pending_paper_orders(
             "side": refreshed_intent.side,
             "quantity": refreshed_intent.quantity,
             "limit_price": refreshed_intent.limit_price,
-            "fill_price": refreshed_intent.limit_price,
+            "fill_price": fill_price,
             "status": "filled",
             "reason_codes": list(refreshed_intent.reason_codes),
         }
@@ -445,7 +484,7 @@ def reconcile_pending_paper_orders(
         usage = _apply_usage_fill(
             usage,
             run_date=run_date,
-            notional=round(refreshed_intent.quantity * refreshed_intent.limit_price, 2),
+            notional=round(refreshed_intent.quantity * fill_price, 2),
             timestamp=now,
         )
         events.append(fill_event)

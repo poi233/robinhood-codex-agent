@@ -2,9 +2,11 @@ import json
 import os
 import tempfile
 import unittest
+import unittest.mock
 from pathlib import Path
 
 from trading_agent.paper.broker import apply_paper_intent, pending_paper_orders, reconcile_pending_paper_orders, record_paper_day_end, record_paper_day_start
+from trading_agent.paper.broker import _compute_fill_price
 from trading_agent.policy.models import OrderIntent, PolicyDecision, Quote
 
 
@@ -203,14 +205,90 @@ class PaperBrokerTests(unittest.TestCase):
             usage = json.loads((root / "runtime" / "state" / "runs" / "2026-06-14" / "planner" / "daily_usage.json").read_text(encoding="utf-8"))
             active_pending = pending_paper_orders(root, run_date="2026-06-14")
 
+        # With PAPER_SLIPPAGE_BPS=10 (default): fill_price = min(100, 99.5*1.001) = 99.5995
+        # notional = 0.1 * 99.5995 = 9.9600 (rounded to 2dp)
+        # cash remaining = 25.0 - 9.96 = 15.04
+        expected_fill_price = round(min(100.0, 99.5 * 1.001), 4)
+        expected_notional = round(0.1 * expected_fill_price, 2)
         self.assertFalse(pending.applied)
         self.assertEqual(pending.status, "pending")
         self.assertEqual(len(events), 1)
         self.assertEqual(events[0]["status"], "filled")
-        self.assertEqual(account["cash"], 15.0)
+        self.assertAlmostEqual(account["cash"], round(25.0 - expected_notional, 2), places=2)
         self.assertEqual(positions["NVDA"]["quantity"], 0.1)
-        self.assertEqual(usage["paper_filled_notional"], 10.0)
+        self.assertAlmostEqual(usage["paper_filled_notional"], expected_notional, places=2)
         self.assertEqual(active_pending, [])
+
+    def test_slippage_reduces_buy_fill_below_limit_when_reference_below_limit(self) -> None:
+        self.assertAlmostEqual(_compute_fill_price("buy", 100.0, 98.0, 0.001), 98.098, places=3)
+        self.assertEqual(_compute_fill_price("buy", 100.0, 100.0, 0.001), 100.0)
+        self.assertAlmostEqual(_compute_fill_price("sell", 99.0, 101.0, 0.001), 100.899, places=3)
+
+    def test_buy_fill_accounting_uses_slippage_price(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            decision = PolicyDecision(
+                trading_mode="paper",
+                checked_symbols=["NVDA"],
+                decision="would_trade",
+                intent=OrderIntent(
+                    symbol="NVDA",
+                    side="buy",
+                    order_type="limit",
+                    limit_price=100.0,
+                    reference_price=98.0,
+                    estimated_notional=9.8,
+                    quantity=0.1,
+                ),
+            )
+            # fill_price = min(100.0, 98.0 * 1.001) = 98.098
+            with unittest.mock.patch.dict(os.environ, {"PAPER_FILL_MODEL": "conservative", "PAPER_SLIPPAGE_BPS": "10"}, clear=False):
+                result = apply_paper_intent(root, run_date="2026-06-14", decision=decision, starting_cash=200.0)
+
+            account = json.loads((root / "runtime" / "state" / "runs" / "2026-06-14" / "paper" / "account.json").read_text(encoding="utf-8"))
+            positions = json.loads((root / "runtime" / "state" / "runs" / "2026-06-14" / "paper" / "positions.json").read_text(encoding="utf-8"))
+            order_line = (root / "runtime" / "state" / "runs" / "2026-06-14" / "paper" / "orders.jsonl").read_text(encoding="utf-8").splitlines()[0]
+            order = json.loads(order_line)
+
+        self.assertTrue(result.applied)
+        expected_fill = round(min(100.0, 98.0 * 1.001), 4)  # 98.098
+        expected_notional = round(0.1 * expected_fill, 2)    # 9.81 (rounded 2dp)
+        expected_avg_cost = round(expected_notional / 0.1, 4)  # derived from rounded notional
+        self.assertAlmostEqual(order["fill_price"], expected_fill, places=3)
+        self.assertEqual(order["limit_price"], 100.0)
+        self.assertAlmostEqual(account["cash"], round(200.0 - expected_notional, 2), places=2)
+        self.assertAlmostEqual(positions["NVDA"]["average_cost"], expected_avg_cost, places=3)
+
+    def test_day_end_cancels_pending_orders_by_default(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            decision = PolicyDecision(
+                trading_mode="paper",
+                checked_symbols=["NVDA"],
+                decision="would_trade",
+                intent=OrderIntent(
+                    symbol="NVDA",
+                    side="buy",
+                    order_type="limit",
+                    limit_price=100.0,
+                    reference_price=101.0,
+                    estimated_notional=10.0,
+                    quantity=0.1,
+                ),
+            )
+            with unittest.mock.patch.dict(os.environ, {"PAPER_FILL_MODEL": "conservative"}, clear=False):
+                apply_paper_intent(root, run_date="2026-06-14", decision=decision, starting_cash=200.0)
+                remaining_before = pending_paper_orders(root, run_date="2026-06-14")
+                record_paper_day_end(root, run_date="2026-06-14")
+                remaining_after = pending_paper_orders(root, run_date="2026-06-14")
+            orders_log = (root / "runtime" / "state" / "runs" / "2026-06-14" / "paper" / "orders.jsonl").read_text(encoding="utf-8").splitlines()
+            cancel_events = [json.loads(line) for line in orders_log if json.loads(line).get("event") == "day_end_cancel"]
+
+        self.assertEqual(len(remaining_before), 1)
+        self.assertEqual(len(remaining_after), 0)
+        self.assertEqual(len(cancel_events), 1)
+        self.assertEqual(cancel_events[0]["status"], "pending_canceled")
+        self.assertEqual(cancel_events[0]["reason"], "day_end_expired")
 
     def test_day_start_is_not_overwritten_and_day_end_records_current_state(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
