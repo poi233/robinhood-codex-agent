@@ -26,9 +26,11 @@ def build_parser() -> argparse.ArgumentParser:
 
 def _run_doctor(agent_root: Path) -> int:
     from trading_agent.core.config import TierMisconfigurationError, load_runtime_config
+    from trading_agent.strategy.registry import load_active_strategy
 
     config = load_runtime_config(agent_root)
     env = os.environ
+    active_strategy = load_active_strategy(agent_root)
 
     tier_misconfigured = False
     try:
@@ -58,6 +60,10 @@ def _run_doctor(agent_root: Path) -> int:
         "",
         f"  TRADING_MODE              = {config.trading_mode}",
         f"  KILL_SWITCH               = {'ACTIVE (file present)' if kill_switch else 'inactive'}",
+        "",
+        "  --- Strategy ---",
+        f"  active_strategy            = {active_strategy['strategy_id']}  [{active_strategy['status']}]",
+        f"  change_reason              = {active_strategy['change_reason']}",
         "",
         "  --- Risk Tiers ---",
         f"  RISK_TIER (live/review)   = {config.risk_tier}  [{tier_caps(config.risk_tier)}]",

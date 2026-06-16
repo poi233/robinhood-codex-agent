@@ -65,6 +65,50 @@ class CoreRuntimeTests(unittest.TestCase):
             root = Path(tmpdir)
             load_env_files(root)
 
+    def test_load_env_files_backfills_risk_tier_from_strategy_registry(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            (root / "src" / "config").mkdir(parents=True)
+            (root / "src" / "config" / "strategy_registry.yaml").write_text(
+                "active_strategy: experimental_v2\n"
+                "strategies:\n"
+                "  experimental_v2:\n"
+                "    scoring_profile: conservative\n"
+                "    policy_profile: conservative\n"
+                "    risk_tier_paper: 2\n"
+                "    risk_tier_live: 1\n"
+                "    change_reason: \"test\"\n",
+                encoding="utf-8",
+            )
+
+            with mock.patch.dict(os.environ, {}, clear=False):
+                for key in ("SCORING_PROFILE", "POLICY_PROFILE", "RISK_TIER", "PAPER_RISK_TIER"):
+                    os.environ.pop(key, None)
+                load_env_files(root)
+                self.assertEqual(os.environ["SCORING_PROFILE"], "conservative")
+                self.assertEqual(os.environ["RISK_TIER"], "1")
+                self.assertEqual(os.environ["PAPER_RISK_TIER"], "2")
+
+    def test_load_env_files_lets_runtime_env_local_override_strategy_registry(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            (root / "src" / "config").mkdir(parents=True)
+            (root / "src" / "config" / "strategy_registry.yaml").write_text(
+                "active_strategy: experimental_v2\n"
+                "strategies:\n"
+                "  experimental_v2:\n"
+                "    risk_tier_live: 1\n"
+                "    risk_tier_paper: 2\n"
+                "    change_reason: \"test\"\n",
+                encoding="utf-8",
+            )
+            (root / "src" / "config" / "runtime.env.local").write_text("RISK_TIER=0\n", encoding="utf-8")
+
+            with mock.patch.dict(os.environ, {}, clear=False):
+                os.environ.pop("RISK_TIER", None)
+                load_env_files(root)
+                self.assertEqual(os.environ["RISK_TIER"], "0")
+
     def test_effective_risk_tier_fails_closed_for_live_mode_at_tier_4(self) -> None:
         config = RuntimeConfig(
             trading_mode="live",

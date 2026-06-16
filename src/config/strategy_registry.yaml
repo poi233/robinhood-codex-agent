@@ -1,0 +1,11 @@
+active_strategy: baseline_v1
+strategies:
+  baseline_v1:
+    status: active
+    scoring_profile: aggressive_growth
+    policy_profile: aggressive_growth
+    watchlist: active_watchlist.txt
+    risk_tier_paper: 4
+    risk_tier_live: 3
+    parent: null
+    change_reason: "Initial registration of the strategy in effect before this registry existed (RISK_TIER=3 live / PAPER_RISK_TIER=4 paper, aggressive_growth scoring + policy profiles). No behavior change."

@@ -1,7 +1,7 @@
 # 项目状态总表 — 做了什么 / 没做什么
 
 > 最后更新：2026-06-15
-> 范围：`src/trading_agent/`（约 6500 行 Python）+ 配置 + 编排 + 入口 + 测试（242 passed）
+> 范围：`src/trading_agent/`（约 6500 行 Python）+ 配置 + 编排 + 入口 + 测试（248 passed）
 > 用途：**单一权威的"现状"文档**，按子系统逐块说明已实现与未实现。未来要做的事另见
 > [`roadmap.md`](./roadmap.md)。
 >
@@ -53,6 +53,11 @@
   `intraday.py`/`premarket.py`（`run_risk_overlay`）均无 try/except 包裹，异常会一路冒泡到进程崩溃。
   `doctor` 单独捕获该异常，打印 `FAIL-CLOSED: ...` 并把退出码改为 `2`（而不是让诊断命令本身崩溃）。
   paper 模式不受影响。
+- **（roadmap B2）** 新增 `strategy/registry.py` + `src/config/strategy_registry.yaml`：`load_env_files()`
+  在合并完 env 文件后，会用 `active_strategy` 条目回填 `SCORING_PROFILE`/`POLICY_PROFILE`/
+  `RISK_TIER`/`PAPER_RISK_TIER`（仅填未设置的 key；shell export 和 env 文件永远优先）。
+  `runtime.env` 不再硬编码这两个 tier 值——现在由 registry 的 `baseline_v1` 条目提供（数值不变）。
+  `doctor` 新增 `--- Strategy ---` 段显示当前 `active_strategy`/`change_reason`。
 
 **没做 / 注意**
 - `doctor` 默认值字符串仍写 `'10'`（DSA/TECHNICAL subagents 旧默认），实际 runtime.env 已是 3；
@@ -224,6 +229,7 @@
 | **P5-A1** 正确性 | env 加载提前到 skip-gate 判断之前（premarket/intraday/postmarket） | `7f69775` |
 | **P5-A2** 正确性 | Tier 4 非 paper fail-closed（`TierMisconfigurationError` + doctor 退出码 2） | 见 git log |
 | **P5-A3** 正确性 | 配置化魔数：`max_scored_candidates`/`max_watchlist`/`max_tradable` 进 `scoring_profiles.yaml` | 见 git log |
+| **P5-B2** 数据可追溯 | `strategy_registry.yaml` + `strategy/registry.py`；接入 `load_env_files` | 见 git log |
 
 ---
 
@@ -233,8 +239,8 @@
 
 - **A 正确性与安全闸**：A1/A2/A3 均已完成（见上方 P5-A1/P5-A2/P5-A3）。下一批是 B 阶段
   （数据可追溯基建：run_manifest / strategy_registry / analytics.db）。
-- **B 数据可追溯基建（P0）**：run_manifest（每次 lifecycle run）、strategy_registry、
-  analytics.db builder、strategy-changelog。
+- **B 数据可追溯基建（P0）**：run_manifest（每次 lifecycle run）、analytics.db builder、
+  strategy-changelog。（strategy_registry 已完成，见上方 P5-B2 与下方第 1 节。）
 - **C 只读可视化与观测**：Strategy Lab dashboard（Streamlit 只读）、theme/speculative 集中度诊断。
 - **D 工程优化**：market_feed 跨日缓存/batch、Kronos batch 推理、paper 部分成交模型。
   （DSA/Technical token 优化已完成，见上方 P4 与 roadmap D1。）

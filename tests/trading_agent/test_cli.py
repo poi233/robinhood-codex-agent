@@ -46,6 +46,8 @@ class PackageCliTests(unittest.TestCase):
         self.assertIn("TRADING_MODE", result.stdout)
         self.assertIn("PAPER_RISK_TIER", result.stdout)
         self.assertIn("effective_risk_tier", result.stdout)
+        self.assertIn("active_strategy", result.stdout)
+        self.assertIn("baseline_v1", result.stdout)
 
     def test_doctor_respects_env_override(self) -> None:
         import os

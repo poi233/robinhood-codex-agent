@@ -4,6 +4,8 @@ import os
 from dataclasses import dataclass
 from pathlib import Path
 
+from trading_agent.strategy.registry import apply_active_strategy_env_defaults
+
 
 PAPER_ONLY_RISK_TIER = 4
 
@@ -47,6 +49,11 @@ def load_env_files(agent_root: Path) -> None:
     allow-flags) so that overrides set only in runtime.env.local take effect
     on direct Python invocations, not just shell-wrapper runs that source the
     same files before exec'ing python.
+
+    After the env files are merged in, also backfills SCORING_PROFILE/
+    POLICY_PROFILE/RISK_TIER/PAPER_RISK_TIER from strategy_registry.yaml's
+    active strategy (lowest priority — only fills keys still unset), so that
+    switching active_strategy changes the whole profile/tier combo at once.
     """
     merged: dict[str, str] = {}
     for filename in ("runtime.env", "runtime.env.local"):
@@ -65,6 +72,7 @@ def load_env_files(agent_root: Path) -> None:
     for key, value in merged.items():
         if key not in os.environ:
             os.environ[key] = value
+    apply_active_strategy_env_defaults(agent_root)
 
 
 def load_runtime_config(agent_root: Path) -> RuntimeConfig:
