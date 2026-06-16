@@ -160,10 +160,20 @@ watchlist/tradable 分层、observe_only/no_trade 区分都对。小点：`today
 ### P1 — 校准能力 + 选股池分层（两条独立轨道，可并行）
 **轨道 A：校准（用数据调参，而非拍脑袋）**
 6. 新增 `replay` 子命令：score 桶 vs 未来 1/3/5 日收益、entry-zone 命中率、breakout 成功率、paper 成交率、blocked 原因分布、**component attribution**。**从"凭感觉"到"凭数据"的分水岭。**
-7. paper broker v2：滑点 + 日终撤 pending（§10），让成交统计可信。
+   - ✅ **paper broker v2 完成**：滑点（`PAPER_SLIPPAGE_BPS=10`）+ 日终撤 pending（`PAPER_CANCEL_PENDING_AT_DAY_END=1`）`6754d41`
+   - ⏳ **replay 子命令 — 待做，阻塞于数据积累**：
+     - fill rate + blocked reason distribution（本地可计算，不依赖外部数据，待实现）
+     - score bucket vs 1/3/5d forward return（需要 yfinance 历史 + 多个 run date 的 candidate_scores.json；当前只有 1 个 run date，先跑数据再实现）
+     - 建议：等积累 2–3 周 paper runs 后再回来实现这块
 
 **轨道 B：active_watchlist（独立、低风险，可与轨道 A 并行）**
 8. 建 `active_watchlist.txt`（≤30）+ `universe_meta.json`（先手动从 `universe.txt` 现有 theme 分组 bootstrap，不必一上来搞 ETF holdings 自动构建），**只让重活（Kronos、technical AI、market_feed 4 timeframe）跑 active**；DSA 可扫全 universe 但只输出 top N（§2、§4）。
+   - ✅ **轨道 B 完成** `96a5a8f`：
+     - `src/config/active_watchlist.txt`（28 个高优先级 symbol）
+     - `src/config/universe_meta.json`（88 symbol，tier/theme/liquidity 标注）
+     - `universe.py`: `parse_active_watchlist()` + fallback
+     - `market_context.py`: 新增 `symbols=` 覆盖参数
+     - `premarket.py`: Kronos + market_feed 均按 active_watchlist 运行；DSA 仍扫全 universe.txt
    - **理由更正**：上调它的优先级是为了**降延迟/成本（尤其 Kronos 本地推理）+ 候选来源质量**，**不是**"防止 replay 被大池子污染"——评分漏斗本就已收敛到 `selected[:20]` 打分 / `watchlist[:8]`（`candidates.py:78`、`risk_overlay.py:143-150`），replay 看不到全 88。
 
 ### P2 — 策略质量
