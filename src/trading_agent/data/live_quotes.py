@@ -15,7 +15,7 @@ def fetch_yfinance_live_quotes(symbols: list[str]) -> list[dict[str, Any]]:
 
     frame = yf.download(
         tickers=requested,
-        period="1d",
+        period="5d",
         interval="1m",
         auto_adjust=False,
         prepost=True,
@@ -28,17 +28,19 @@ def fetch_yfinance_live_quotes(symbols: list[str]) -> list[dict[str, Any]]:
     quotes: list[dict[str, Any]] = []
     if len(requested) == 1:
         symbol = requested[0]
-        latest = frame.dropna(how="all").tail(1)
-        if latest.empty:
+        series = frame["Close"].dropna()
+        if series.empty:
             return []
-        row = latest.iloc[0]
-        timestamp = latest.index[-1]
+        today_date = series.index[-1].date()
+        prev_series = series[series.index.date < today_date]
+        price = float(series.values[-1])
+        previous_close = float(prev_series.values[-1]) if not prev_series.empty else price
         quotes.append(
             {
                 "symbol": symbol,
-                "price": float(row["Close"]),
-                "previous_close": float(row["Close"]),
-                "timestamp": timestamp.isoformat(),
+                "price": price,
+                "previous_close": previous_close,
+                "timestamp": series.index[-1].isoformat(),
                 "is_fresh": True,
                 "source": "yfinance_live",
             }
@@ -54,11 +56,15 @@ def fetch_yfinance_live_quotes(symbols: list[str]) -> list[dict[str, Any]]:
         series = closes[symbol].dropna()
         if series.empty:
             continue
+        today_date = series.index[-1].date()
+        prev_series = series[series.index.date < today_date]
+        price = float(series.values[-1])
+        previous_close = float(prev_series.values[-1]) if not prev_series.empty else price
         quotes.append(
             {
                 "symbol": symbol,
-                "price": float(series.iloc[-1]),
-                "previous_close": float(series.iloc[-1]),
+                "price": price,
+                "previous_close": previous_close,
                 "timestamp": series.index[-1].isoformat(),
                 "is_fresh": True,
                 "source": "yfinance_live",
