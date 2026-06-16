@@ -1,0 +1,35 @@
+{
+  "enabled": true,
+  "mode": "paper_only",
+  "proposal": {
+    "max_new_proposals_per_week": 2,
+    "min_days_between_proposals": 5,
+    "require_human_approval": true
+  },
+  "allowed_mutations": {
+    "scoring": {
+      "trade_threshold": {"min": 30, "max": 80, "max_delta": 10},
+      "watchlist_threshold": {"min": 20, "max": 70, "max_delta": 10},
+      "component_weights": {"max_delta_per_component": 0.10, "total_weight_min": 0.95, "total_weight_max": 1.05}
+    },
+    "policy": {
+      "price_setup_weight": {"min": 0.05, "max": 0.35, "max_delta": 0.10},
+      "min_reward_risk": {"min": 1.2, "max": 2.5, "max_delta": 0.25}
+    },
+    "setups": {
+      "enabled_setups": {"allowed": ["pullback", "breakout", "trend_continuation"]}
+    }
+  },
+  "forbidden_mutations": [
+    "TRADING_MODE", "RISK_TIER", "PAPER_RISK_TIER", "KILL_SWITCH",
+    "MCP_APPROVAL", "place_equity_order", "per_trade_risk_pct",
+    "max_daily_risk_pct", "max_single_stock_weight"
+  ],
+  "promotion_rules": {
+    "min_shadow_days": 10,
+    "min_trading_days": 8,
+    "fill_rate_not_worse_than_champion": true,
+    "max_drawdown_not_worse_than_champion": true,
+    "require_human_final_approval": true
+  }
+}
