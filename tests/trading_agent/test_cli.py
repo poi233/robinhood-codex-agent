@@ -32,3 +32,32 @@ class PackageCliTests(unittest.TestCase):
         )
         self.assertEqual(result.returncode, 0, msg=result.stderr)
         self.assertIn("--dry-run", result.stdout)
+
+    def test_doctor_command_prints_effective_config(self) -> None:
+        result = subprocess.run(
+            [sys.executable, "-m", "trading_agent", "doctor"],
+            cwd=REPO_ROOT,
+            capture_output=True,
+            text=True,
+            check=False,
+            env={**__import__("os").environ, "PYTHONPATH": str(REPO_ROOT / "src")},
+        )
+        self.assertEqual(result.returncode, 0, msg=result.stderr)
+        self.assertIn("TRADING_MODE", result.stdout)
+        self.assertIn("PAPER_RISK_TIER", result.stdout)
+        self.assertIn("effective_risk_tier", result.stdout)
+
+    def test_doctor_respects_env_override(self) -> None:
+        import os
+        env = {**os.environ, "PYTHONPATH": str(REPO_ROOT / "src"), "TRADING_MODE": "review", "RISK_TIER": "2"}
+        result = subprocess.run(
+            [sys.executable, "-m", "trading_agent", "doctor"],
+            cwd=REPO_ROOT,
+            capture_output=True,
+            text=True,
+            check=False,
+            env=env,
+        )
+        self.assertEqual(result.returncode, 0, msg=result.stderr)
+        self.assertIn("TRADING_MODE              = review", result.stdout)
+        self.assertIn("effective_risk_tier now   = 2", result.stdout)
