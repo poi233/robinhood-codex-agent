@@ -35,7 +35,7 @@
 | **D 工程优化 · 不阻塞** | D1 | DSA/Technical token 优化 | design doc | ✅ **已完成**（2026-06-15，见下方实现记录） |
 | | D2 | market_feed 跨日缓存 / batch | 旧 R4 | 🟡 部分完成（2026-06-15，缓存做了，batch 未做） |
 | | D3 | Kronos batch 推理 | 旧 R5 | ✅ 可立即做（需接口确认） |
-| | D4 | paper 部分成交模型 | 旧 R6 + docx P3 | ✅ 可立即做 |
+| | D4 | paper 部分成交模型 | 旧 R6 + docx P3 | ✅ **已完成**（2026-06-15） |
 | **E 数据驱动校准** | E1 | replay 校准：forward/benchmark returns + 命中率 + attribution | 旧 R1 + docx P1 | ⏳ 阻塞于 2–3 周 paper 数据 |
 | | E2 | 评分 / 价格 setup 权重校准 | 旧 R2 | ⏳ 依赖 E1 |
 | | E3 | near-miss tracking | docx P2 | ⏳ 建议随数据建设 |
@@ -425,19 +425,37 @@ speculative 占比分别有独立 cap）；阈值通过 `scoring_profiles.yaml` 
 
 ---
 
-## D4 — paper 部分成交模型（旧 R6 / docx P3）
+## D4 — paper 部分成交模型（旧 R6 / docx P3） — ✅ 已完成（2026-06-15）
 
 **目标**：当前 paper 只有「全成或不成」，加部分成交让仿真更真实。
 
-**具体步骤**：
-1. `paper/broker.py` 引入 `PAPER_PARTIAL_FILL`（默认关）：quote 在 limit 附近时按概率/比例部分成交。
-2. orders.jsonl 记 `filled_qty < quantity`，余量转 pending；reconcile 累积。
+**实现记录**：
+- `paper/broker.py` 新增 `PAPER_PARTIAL_FILL`（默认 `0`，关）+ `PAPER_PARTIAL_FILL_MIN_RATIO`（默认
+  0.3）+ `PAPER_PARTIAL_FILL_THRESHOLD_BPS`（默认 20）。`_partial_fill_ratio()` 是**确定性**模型
+  （非随机）：quote 刚好打到 limit → 按 `MIN_RATIO` 成交；超过 limit `THRESHOLD_BPS` 以上 → 全部成交；
+  中间线性插值。选确定性而非真随机是为了让部分成交测试可重复、不受 RNG seed 影响——roadmap 原文
+  "概率/比例" 里选了"比例"那一半。
+  - `_resolve_fill_quantity()`：`PAPER_PARTIAL_FILL=0` 时直接返回满量（`remaining_qty=0`），不调用
+    `_partial_fill_ratio`——保证默认关闭时这条新代码路径完全不影响现有行为（已用全部 9 个既有
+    `test_broker.py` 测试验证，一字未改全部通过）。
+  - `apply_paper_intent()` 和 `reconcile_pending_paper_orders()` 都接入：成交记录新增
+    `filled_qty`/`remaining_qty`/`original_quantity` 字段，状态在 `remaining_qty > 0` 时写
+    `"partial_filled"`（不是 `"filled"`）；同一个 `order_id` 下追加一条 `event:
+    "partial_remainder_pending"` 的 `status: "pending"` 续接记录，把 `quantity` 更新为剩余量——
+    这样 `pending_paper_orders()`（取每个 order_id 最新一行）自然在下次 reconcile 时捡到剩余量
+    重新尝试成交，不需要新的"待成交队列"概念。
+- **未做（roadmap 已预告）**：`replay/analysis.py` 的 `_resolve_final_orders`/`fill_rate_summary`
+  和 B3 `analytics.db` 的 `orders`/`decisions` 表目前只从 follow-up 事件里继承 `status`/`fill_price`，
+  不继承 `filled_qty`；一个部分成交后还有余量的订单，在 replay/analytics 里会被计成"pending"且
+  notional 计 0，而不是"部分成交"。这正是 roadmap 原文那条"注意：会改变 fill rate 统计语义，E1
+  replay 需相应处理"——按计划留给 E1 阶段处理，不在这次 D4 范围内。
 
-**涉及文件**：`paper/broker.py`、`test_broker.py`、`runtime.env`（新 flag）。
+**涉及文件**：`paper/broker.py`、`tests/trading_agent/paper/test_broker.py`、`runtime.env`、`cli.py`。
 
-**验收**：部分成交路径有测试；daily_usage/positions 记账正确；默认关闭时行为不变。
-
-**注意**：会改变 fill rate 统计语义，E1 replay 需相应处理。
+**验收**：✅ 部分成交路径有测试（6 个新测试：ratio 计算 3 个、`apply_paper_intent` 部分成交 1 个、
+reconcile 补齐剩余量 1 个、关闭时走原逻辑 1 个）；daily_usage（`paper_filled_notional` 按实际成交量算）
+/positions（持仓按实际成交量算）记账正确；默认关闭时既有 9 个测试逐字不改全部通过，行为不变。
+288 测试通过（+6 新增）。
 
 ---
 

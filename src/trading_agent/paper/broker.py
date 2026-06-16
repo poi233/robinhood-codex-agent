@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -229,6 +229,63 @@ def _compute_fill_price(side: str, limit_price: float, reference_price: float, s
     return round(max(limit_price, reference_price * (1.0 - slippage)), 4)
 
 
+def _partial_fill_enabled() -> bool:
+    return str(os.environ.get("PAPER_PARTIAL_FILL", "0") or "0") == "1"
+
+
+def _partial_fill_min_ratio() -> float:
+    return float(os.environ.get("PAPER_PARTIAL_FILL_MIN_RATIO", "0.3") or "0.3")
+
+
+def _partial_fill_threshold_bps() -> float:
+    return float(os.environ.get("PAPER_PARTIAL_FILL_THRESHOLD_BPS", "20") or "20")
+
+
+def _partial_fill_ratio(side: str, limit_price: float, reference_price: float) -> float:
+    """Deterministic fill ratio for a quote that has just barely cleared the
+    limit vs. one that has moved solidly through it (`_can_fill` already
+    confirmed the limit is cleared before this runs).
+
+    A quote sitting right at the limit fills at PAPER_PARTIAL_FILL_MIN_RATIO;
+    a quote PAPER_PARTIAL_FILL_THRESHOLD_BPS or more through the limit fills
+    in full. Linear in between. Deterministic (not random) so partial-fill
+    tests are reproducible.
+    """
+    if limit_price <= 0:
+        return 1.0
+    if side == "buy":
+        progress = (limit_price - reference_price) / limit_price
+    else:
+        progress = (reference_price - limit_price) / limit_price
+    threshold = _partial_fill_threshold_bps() / 10000.0
+    if threshold <= 0 or progress >= threshold:
+        return 1.0
+    min_ratio = _partial_fill_min_ratio()
+    if progress <= 0:
+        return min_ratio
+    return min_ratio + (1.0 - min_ratio) * (progress / threshold)
+
+
+def _resolve_fill_quantity(intent: OrderIntent) -> tuple[float, float]:
+    """Return (filled_qty, remaining_qty) for this fill attempt.
+
+    remaining_qty > 0 means the order is only partially filled and the
+    remainder should be re-queued as a pending order for a later reconcile
+    pass to pick up.
+    """
+    if not _partial_fill_enabled():
+        return intent.quantity, 0.0
+    reference_price = intent.reference_price if intent.reference_price is not None else intent.limit_price
+    ratio = _partial_fill_ratio(intent.side, intent.limit_price, reference_price)
+    if ratio >= 1.0:
+        return intent.quantity, 0.0
+    filled_qty = round(intent.quantity * ratio, 8)
+    remaining_qty = round(intent.quantity - filled_qty, 8)
+    if filled_qty <= 0 or remaining_qty <= 0:
+        return intent.quantity, 0.0
+    return filled_qty, remaining_qty
+
+
 def _order_payload(intent: OrderIntent, *, now: str, status: str, unfilled_reason: str = "", fill_price: float | None = None) -> dict[str, Any]:
     return {
         "order_id": f"paper-{intent.symbol.lower()}-{int(datetime.now(tz=PT).timestamp() * 1000)}",
@@ -358,25 +415,51 @@ def apply_paper_intent(
         return PaperFillResult(False, "pending", pending_reason)
     slippage = _slippage_factor()
     fill_price = _compute_fill_price(intent.side, intent.limit_price, intent.reference_price or intent.limit_price, slippage)
-    result = _apply_buy(account, positions, intent, fill_price=fill_price) if intent.side == "buy" else _apply_sell(account, positions, intent, fill_price=fill_price)
+    filled_qty, remaining_qty = _resolve_fill_quantity(intent)
+    fill_intent = intent if remaining_qty <= 0 else replace(intent, quantity=filled_qty)
+    result = (
+        _apply_buy(account, positions, fill_intent, fill_price=fill_price)
+        if intent.side == "buy"
+        else _apply_sell(account, positions, fill_intent, fill_price=fill_price)
+    )
     if not result.applied:
         return result
 
     account["updated_at"] = now
-    order = _order_payload(intent, now=now, status="filled", fill_price=fill_price)
+    status = "partial_filled" if remaining_qty > 0 else "filled"
+    order = _order_payload(fill_intent, now=now, status=status, fill_price=fill_price)
+    order["filled_qty"] = filled_qty
+    order["remaining_qty"] = remaining_qty
+    order["original_quantity"] = intent.quantity
     write_json(paths.paper_account_path, account)
     write_json(paths.paper_positions_path, positions)
     _append_order(paths.paper_orders_log_path, order)
     usage = _read_json_or(paths.daily_usage_path, {})
     if not isinstance(usage, dict):
         usage = {}
-    _update_trade_counters(usage, run_date=run_date, intent=intent)
+    _update_trade_counters(usage, run_date=run_date, intent=fill_intent)
     write_json(paths.daily_usage_path, usage)
     _update_daily_usage(paths.daily_usage_path, run_date=run_date, notional=order["notional"], timestamp=now)
     _append_equity_point(
         paths.paper_equity_curve_path,
         _snapshot_payload(run_date=run_date, event="fill", account=account, positions=positions, timestamp=now),
     )
+    if remaining_qty > 0:
+        _append_order_event(
+            paths.paper_orders_log_path,
+            {
+                "order_id": order["order_id"],
+                "timestamp": now,
+                "event": "partial_remainder_pending",
+                "symbol": intent.symbol,
+                "side": intent.side,
+                "quantity": remaining_qty,
+                "limit_price": intent.limit_price,
+                "status": "pending",
+                "reason_codes": list(intent.reason_codes),
+                "confidence": intent.confidence,
+            },
+        )
     return result
 
 
@@ -463,7 +546,13 @@ def reconcile_pending_paper_orders(
             continue
         slippage = _slippage_factor()
         fill_price = _compute_fill_price(refreshed_intent.side, refreshed_intent.limit_price, refreshed_intent.reference_price or refreshed_intent.limit_price, slippage)
-        result = _apply_buy(account, positions, refreshed_intent, fill_price=fill_price) if refreshed_intent.side == "buy" else _apply_sell(account, positions, refreshed_intent, fill_price=fill_price)
+        filled_qty, remaining_qty = _resolve_fill_quantity(refreshed_intent)
+        fill_intent = refreshed_intent if remaining_qty <= 0 else replace(refreshed_intent, quantity=filled_qty)
+        result = (
+            _apply_buy(account, positions, fill_intent, fill_price=fill_price)
+            if fill_intent.side == "buy"
+            else _apply_sell(account, positions, fill_intent, fill_price=fill_price)
+        )
         if not result.applied:
             continue
         now = datetime.now(tz=PT).isoformat()
@@ -471,23 +560,41 @@ def reconcile_pending_paper_orders(
             "order_id": order.get("order_id"),
             "timestamp": now,
             "event": "pending_filled",
-            "symbol": refreshed_intent.symbol,
-            "side": refreshed_intent.side,
-            "quantity": refreshed_intent.quantity,
-            "limit_price": refreshed_intent.limit_price,
+            "symbol": fill_intent.symbol,
+            "side": fill_intent.side,
+            "quantity": fill_intent.quantity,
+            "limit_price": fill_intent.limit_price,
             "fill_price": fill_price,
-            "status": "filled",
-            "reason_codes": list(refreshed_intent.reason_codes),
+            "status": "partial_filled" if remaining_qty > 0 else "filled",
+            "filled_qty": filled_qty,
+            "remaining_qty": remaining_qty,
+            "reason_codes": list(fill_intent.reason_codes),
         }
         _append_order_event(paths.paper_orders_log_path, fill_event)
-        _update_trade_counters(usage, run_date=run_date, intent=refreshed_intent)
+        _update_trade_counters(usage, run_date=run_date, intent=fill_intent)
         usage = _apply_usage_fill(
             usage,
             run_date=run_date,
-            notional=round(refreshed_intent.quantity * fill_price, 2),
+            notional=round(fill_intent.quantity * fill_price, 2),
             timestamp=now,
         )
         events.append(fill_event)
+        if remaining_qty > 0:
+            _append_order_event(
+                paths.paper_orders_log_path,
+                {
+                    "order_id": order.get("order_id"),
+                    "timestamp": now,
+                    "event": "partial_remainder_pending",
+                    "symbol": refreshed_intent.symbol,
+                    "side": refreshed_intent.side,
+                    "quantity": remaining_qty,
+                    "limit_price": refreshed_intent.limit_price,
+                    "status": "pending",
+                    "reason_codes": list(refreshed_intent.reason_codes),
+                    "confidence": refreshed_intent.confidence,
+                },
+            )
 
     if events:
         write_json(paths.paper_account_path, account)

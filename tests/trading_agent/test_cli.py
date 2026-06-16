@@ -50,6 +50,7 @@ class PackageCliTests(unittest.TestCase):
         self.assertIn("active_strategy", result.stdout)
         self.assertIn("baseline_v1", result.stdout)
         self.assertIn("ENABLE_OHLCV_CACHE", result.stdout)
+        self.assertIn("PAPER_PARTIAL_FILL", result.stdout)
 
     def test_doctor_respects_env_override(self) -> None:
         import os
