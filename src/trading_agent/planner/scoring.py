@@ -509,16 +509,21 @@ def build_candidate_scores_from_paths(agent_root: Path, run_date: str) -> dict[s
     quote_candidates = _read_json_or_empty(paths.quote_snapshot_candidates_path)
     quote = {"symbols": {**(quote_core.get("symbols") or {}), **(quote_candidates.get("symbols") or {})}}
     selected_symbols = [str(symbol).upper() for symbol in candidate_snapshot.get("selected_symbols", [])]
+    dsa = _read_json_or_empty(paths.dsa_signals_path)
+    kronos = _read_json_or_empty(paths.kronos_signals_path)
+    technical = _read_json_or_empty(paths.technical_signals_path)
+    catalyst = _read_json_or_empty(paths.catalyst_snapshot_path)
+    min_coverage = float(scoring_profile.get("min_effective_coverage", MIN_EFFECTIVE_COVERAGE))
 
     symbols = {
         symbol: score_candidate(
             symbol=symbol,
-            dsa=_read_json_or_empty(paths.dsa_signals_path),
-            kronos=_read_json_or_empty(paths.kronos_signals_path),
-            technical=_read_json_or_empty(paths.technical_signals_path),
+            dsa=dsa,
+            kronos=kronos,
+            technical=technical,
             quote=quote,
-            catalyst=_read_json_or_empty(paths.catalyst_snapshot_path),
-            min_effective_coverage=float(scoring_profile.get("min_effective_coverage", MIN_EFFECTIVE_COVERAGE)),
+            catalyst=catalyst,
+            min_effective_coverage=min_coverage,
         )
         for symbol in selected_symbols
     }
