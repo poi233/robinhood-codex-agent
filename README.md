@@ -214,6 +214,7 @@ and sets `RISK_TIER`; Codex never does. Postmarket may *recommend* a tier change
 
 ## Docs
 
+- [`docs/daily-strategy-playbook.md`](docs/daily-strategy-playbook.md) — **what to do each day/week/month to keep improving the strategy** (start here for operations).
+- [`docs/roadmap.md`](docs/roadmap.md) — prioritized remaining work; see the "🎯 当前焦点" block for the next steps.
 - [`docs/project-status.md`](docs/project-status.md) — block-by-block account of what's built (and what isn't).
-- [`docs/roadmap.md`](docs/roadmap.md) — prioritized remaining work + the self-growth G-phase.
 - `docs/setup/` — setup notes · `docs/superpowers/` — design specs & plans.
