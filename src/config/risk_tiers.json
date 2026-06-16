@@ -26,5 +26,12 @@
     "max_daily_notional": 20000,
     "max_live_orders_per_day": 4,
     "promotion_requirement": "Only for a small dedicated Agentic Account after stable live operation."
+  },
+  "4": {
+    "name": "paper_max",
+    "max_single_order_notional": 100000,
+    "max_daily_notional": 400000,
+    "max_live_orders_per_day": 10,
+    "promotion_requirement": "Paper-only. Notional limits are intentionally uncapped so portfolio-weight and risk-budget constraints become the binding limit, not the notional hard cap."
   }
 }
