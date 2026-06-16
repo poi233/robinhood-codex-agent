@@ -340,4 +340,8 @@ def load_policy_inputs(
         _hydrate_robinhood_inputs(inputs, robinhood_gateway)
     _hydrate_paper_ledger_if_present(inputs, paths)
     _hydrate_live_quotes(inputs, quote_provider, require_live_quotes=require_live_quotes)
+    if not inputs.today_allowlist and inputs.risk_overlay:
+        tradable = [str(s).upper() for s in (inputs.risk_overlay.get("tradable_candidates") or []) if s]
+        if tradable:
+            inputs.today_allowlist = tradable
     return inputs

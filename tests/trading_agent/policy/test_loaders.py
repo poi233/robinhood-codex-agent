@@ -366,6 +366,46 @@ class PolicyLoaderTests(unittest.TestCase):
         self.assertEqual(inputs.positions["NVDA"].quantity, 0.1)
         self.assertEqual(inputs.quotes["NVDA"].price, 101.0)
 
+    def test_load_policy_inputs_falls_back_to_risk_overlay_when_allowlist_missing(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            planner_dir = root / "runtime" / "state" / "runs" / "2026-06-14" / "planner"
+            planner_dir.mkdir(parents=True)
+            (root / "src" / "config").mkdir(parents=True)
+            write_json(root / "src" / "config" / "risk_tiers.json", {"0": {"max_single_order_notional": 10, "max_daily_notional": 25}})
+            write_json(
+                planner_dir / "risk_overlay.json",
+                {
+                    "date": "2026-06-14",
+                    "tradable_candidates": ["NVDA", "SMH"],
+                    "watchlist_candidates": ["TSLA"],
+                },
+            )
+
+            inputs = load_policy_inputs(root, run_date="2026-06-14", trading_mode="paper", risk_tier=0)
+
+        self.assertEqual(inputs.today_allowlist, ["NVDA", "SMH"])
+
+    def test_load_policy_inputs_does_not_override_allowlist_when_file_exists(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            planner_dir = root / "runtime" / "state" / "runs" / "2026-06-14" / "planner"
+            planner_dir.mkdir(parents=True)
+            (root / "src" / "config").mkdir(parents=True)
+            write_json(root / "src" / "config" / "risk_tiers.json", {"0": {"max_single_order_notional": 10, "max_daily_notional": 25}})
+            (planner_dir / "today_allowlist.txt").write_text("AAPL\n", encoding="utf-8")
+            write_json(
+                planner_dir / "risk_overlay.json",
+                {
+                    "date": "2026-06-14",
+                    "tradable_candidates": ["NVDA", "SMH"],
+                },
+            )
+
+            inputs = load_policy_inputs(root, run_date="2026-06-14", trading_mode="paper", risk_tier=0)
+
+        self.assertEqual(inputs.today_allowlist, ["AAPL"])
+
 
 if __name__ == "__main__":
     unittest.main()
