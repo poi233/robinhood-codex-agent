@@ -60,7 +60,7 @@
 | ~~H2 价量因子层~~ | ~~`ENABLE_PRICE_FACTOR_LAYER`~~ | premarket local 因子层 | ✅ 已完成并清除 flag（无条件运行；write-only，不进 champion 打分） |
 | ~~H3 AI 结构化 schema~~ | ~~`ENABLE_AI_STRUCTURED_SIGNALS`~~ | 原计划：各 AI prompt 的输出契约 | ✅ **改走 normalizer 路线，flag 未用**（2026-06-17）：不动 prompt、只读已有输出落 advisory `ai_signals.json`，不碰热路径故无需 flag（同 H2 最终形态） |
 | H4 shadow re-score | `ENABLE_SHADOW_RESCORE` | shadow runner 的 challenger 重打分路径 | factor/analyzer/setup 类 challenger 能在隔离账本跑通 |
-| H6 evidence-based proposals | `ENABLE_EVIDENCE_PROPOSALS` | growth propose 的证据校验 | proposal 必须带 calibration/factor/ai evidence 才生成 |
+| H6 evidence-based proposals | `ENABLE_EVIDENCE_PROPOSALS` | growth propose 的证据校验 | ✅ **gate 已建（2026-06-17，默认 0）**：开时 proposal 必须带 calibration/weight evidence 才生成；更多 evidence 类型增量加后翻默认 |
 
 > 注：纯手动命令（`analytics calibrate`、`growth observe/propose`）和 shadow-only 路径**天然隔离**（不在热
 > 路径、不动 champion），可以不强制 flag；**强制 flag 的是会接进 premarket/intraday 热路径的模块**（H2/H3/H4）。
@@ -111,7 +111,7 @@
 | | ~~H3~~ | AI signal 结构化 + 归因 + ablation（ChatGPT Phase 3） | ChatGPT | ✅ **已完成（2026-06-17，step 1+2+3）**：标准化 AI 信封 + 校验 + normalizer + `ai_signals.json`（write-only advisory，无 flag）；`analytics ai-signal-study`（calibration/方向/code lift）+ `analytics ai-ablation`（每层 marginal IC + AI-vs-因子） |
 | | H4 | factor/analyzer/setup shadow 策略（ChatGPT Phase 4 增量） | ChatGPT | ⏳ 依赖 H2 + premarket re-score 路径 |
 | | ~~H5~~ | dashboard calibration 子视图扩展（ChatGPT Phase 5 增量） | ChatGPT | ✅ **已完成（2026-06-17）**：Calibration tab 加 fill-quality（E4）+ AI signal study + AI ablation（H3）+ 多 horizon Rank IC/t-stat（H1）子视图；只读、headless 渲染验证 |
-| | H6 | self-growth 用 calibration/factor/AI evidence 生成 proposal（ChatGPT Phase 6） | ChatGPT | ⏳ 依赖 H1–H3 产出 evidence |
+| | H6 | self-growth 用 calibration/factor/AI evidence 生成 proposal（ChatGPT Phase 6） | ChatGPT | 🟡 **evidence gate 已建（2026-06-17）**：`ENABLE_EVIDENCE_PROPOSALS` 下 proposal 必须带 calibration/weight evidence 才生成（只更严不更松）；更多 evidence 类型增量加 |
 | | H7 | fundamental quality 层（ChatGPT Phase 7） | ChatGPT | ⛔ 故意推后（数据更复杂） |
 | | H8 | earnings / analyst revision 事件层（ChatGPT Phase 8） | ChatGPT | ⛔ 故意推后 |
 | **I 运维与自动化** | ~~I1~~ | 夜间分析/自成长自动化 cron（收盘后自动跑 analytics/calibrate/growth） | 用户新增 | ✅ **已完成（2026-06-17）**：`run_nightly_analysis.sh` best-effort 批处理 + cron/launchd 示例 + `ENABLE_NIGHTLY_ANALYSIS`（doctor 回显） |
@@ -619,16 +619,23 @@ setups.*.enabled）；shadow runner 对这类 challenger 用其配置重算 scor
 
 ---
 
-## H6 — self-growth 用 calibration/factor/AI evidence 生成 proposal（ChatGPT Phase 6）— ⏳ 依赖 H1–H3
+## H6 — self-growth 用 calibration/factor/AI evidence 生成 proposal（ChatGPT Phase 6）— 🟡 evidence gate 已建（2026-06-17）
 
-让 G3 的 proposal generator **引用证据**：新增 observation 类型（`factor_no_incremental_value` /
-`factor_has_positive_ic` / `ai_warning_effective` / `ai_confidence_not_calibrated` / `setup_underperforming`
-/ `blocked_reason_missed_opportunity` 等），proposal **必须带 calibration/factor/ai_study 的 evidence**，
-没 evidence 不生成。validator 红线不变、promote check 仍只出草稿。
+让 `growth propose` **引用证据**。**已完成(核心 evidence gate)**：`growth/evidence.py`——
+- `gather_evidence(agent_root)`：读 `calibration_report`（near_miss + component IC）+ `weight_suggestion`，
+  组成 evidence bundle（缺报告降级空、不 crash）。
+- `evidence_for_proposal(proposal, evidence)`：按 proposal 改的 module/field 匹配支撑证据
+  （`trade_threshold` ← near_miss「门槛是否太严」；`scoring.*` ← component IC）。
+- `apply_evidence_gate(proposals, evidence)`：给每条 proposal 附 `evidence` 列表，**没 evidence 的直接丢弃**。
+- 接进 `build_proposals`：`ENABLE_EVIDENCE_PROPOSALS=1` 时启用 gate。validator 红线不变、promote 仍只出草稿、
+  whitelist 不变——gate **只让 propose 更严，绝不更松**。
 
-**Feature flag（`ENABLE_EVIDENCE_PROPOSALS`，默认 0）**：evidence 校验在 flag 后面建——flag 关时 `growth
-propose` 按现状（规则注册表）生成；要求 evidence 的版本做完后才翻默认。`growth propose` 本就只写文件、不
-启用，天然隔离，flag 主要为「半成品不改变现有 propose 行为」。
+**Feature flag（`ENABLE_EVIDENCE_PROPOSALS`，默认 0，doctor 回显）**：flag 关时 `growth propose` 逐字按现状
+（规则注册表）生成；flag 开时要求 evidence 才生成。`growth propose` 本就只写文件、不启用，天然隔离。
+
+**剩余（增量，待数据/后续）**：更多 evidence-based observation 类型（`factor_has_positive_ic` /
+`ai_warning_effective` / `ai_confidence_not_calibrated` / `setup_underperforming` 等）+ 把 factor/ai_study
+evidence 也接进 `evidence_for_proposal`——机器已就位，加一类 evidence = 加一个匹配分支，攒够数据后增量加。
 
 **verify gate（照搬 ChatGPT，已与 G7 一致）**：promote 需同时满足 min_shadow_days≥10 / min_trading_days≥8 /
 shadow_orders+equity 可用 / forward returns 可用 / benchmark 对照可用 / factor attribution 可用 / 无 safety

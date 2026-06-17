@@ -161,7 +161,15 @@ def build_proposals(
     observations = _flatten_observations(payload)
     policy = load_growth_policy(agent_root)
     current = _current_values(agent_root)
-    return proposals_from_observations(observations, policy, current, run_date=resolved_run_date)
+    proposals = proposals_from_observations(observations, policy, current, run_date=resolved_run_date)
+
+    # H6 (ENABLE_EVIDENCE_PROPOSALS): require calibration/weight evidence — attach it and drop
+    # proposals the data doesn't back. Default off => current behavior unchanged.
+    from trading_agent.growth.evidence import apply_evidence_gate, evidence_proposals_enabled, gather_evidence
+
+    if evidence_proposals_enabled():
+        proposals = apply_evidence_gate(proposals, gather_evidence(agent_root))
+    return proposals
 
 
 def default_proposals_dir(agent_root: Path, run_date: str) -> Path:

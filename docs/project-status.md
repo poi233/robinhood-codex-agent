@@ -359,6 +359,8 @@
 | **H3 step 3** AI 层 ablation | `replay/ai_ablation.py` + `analytics ai-ablation`：combined AI conviction = Σ(direction×confidence)，leave-one-out 重算 rank IC 得每层 `marginal_ic_of_layer`，外加 factor-only 与 AI+factor 对照；只读、用已落盘 signal 不重跑历史 AI | 见 git log |
 | **H5** dashboard 子视图 | Calibration tab 增 fill-quality（E4）+ AI signal study（H3 step 2）+ AI ablation（H3 step 3）+ 多 horizon Rank IC/t-stat（H1）子视图；3 个新 query + 3 个新 chart view，只读、缺报告显示运行提示、headless `AppTest` 覆盖空态/有数据态 | 见 git log |
 | **I1–I4** 夜间自动化 | `run_nightly_analysis.sh` best-effort 夜间批处理（只读/shadow-only，不下单/不 approve/不 promote）+ cron/launchd 示例 + `ENABLE_NIGHTLY_ANALYSIS`；`analytics snapshot`（I2 幂等日快照 + nightly_summary）+ `analytics trend`/`build_trend`（I3 逐日时间序列）+ dashboard 第 9 Trends tab（I4：新鲜度/日期回看/趋势折线） | 见 git log |
+| **E2** 权重建议机器 | `analytics weight-suggestion`：读 calibration component IC 产出 scoring 权重建议（IC 倾斜、合计 1.00、可调 damping）；只产建议绝不自动改，采纳走 B2/G6/G8 | 见 git log |
+| **H6** evidence gate | `growth/evidence.py` + `ENABLE_EVIDENCE_PROPOSALS`：proposal 必须带 calibration（near_miss/component IC）/weight evidence 才生成（只更严不更松）；flag 默认 0、doctor 回显 | 见 git log |
 | **G9** challenger 隔离账本 | `build_experiment_runtime_paths` + broker `paths_override`；shadow runner 跑 challenger 自己的 paper 账本；G7 出真实 fill/drawdown/PnL | 见 git log |
 | **B5** watchlist resolver | `parse_active_watchlist` 从 `active_strategy.watchlist` 解析文件名（+override），切策略真能切 watchlist，回退兼容 | 见 git log |
 | **TODO_FIX** technical 覆盖 | premarket 全天快照 + intraday merge；`run_symbol_research.sh` 单票输出改写到 `manual/<SYMBOL>/`（不再覆盖全局、可找到） | 见 git log |
