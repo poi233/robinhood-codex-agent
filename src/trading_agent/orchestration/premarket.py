@@ -61,6 +61,7 @@ class PremarketPipeline:
     run_final_planner: callable
     run_archive: callable
     run_price_factors: callable = lambda: None  # H2 price/volume factor layer (advisory; default no-op for callers that omit it)
+    run_ai_signals: callable = lambda: None  # H3 standardized AI-signal layer (advisory; default no-op for callers that omit it)
 
     def run(self) -> None:
         self.run_account_snapshot()
@@ -85,6 +86,9 @@ class PremarketPipeline:
                 executor.submit(self._run_advisory, self.run_catalyst_enrichment),
             ]
             wait(futures)
+        # H3 AI-signal normalization runs after DSA/Kronos/Catalyst have written their artifacts, so
+        # it can fold all three into one validated envelope file. Advisory + write-only.
+        self._run_advisory(self.run_ai_signals)
         self.run_data_status_summary()
         self.run_candidate_scoring()
         self.run_risk_overlay()
@@ -332,6 +336,15 @@ def run_premarket_pipeline(*, dry_run: bool) -> int:
 
         build_and_write_factor_layer(agent_root, run_date, active_symbols=active_symbols)
 
+    def run_ai_signals() -> None:
+        # H3 standardized AI-signal layer. Always runs (advisory): reads the DSA/Kronos/Catalyst
+        # artifacts and writes one validated, normalized ai_signals.json for calibration / AI-signal
+        # study. Write-only — does NOT change champion scoring/risk/decisions. _run_advisory wraps it
+        # so a failure never breaks premarket.
+        from trading_agent.analyzers.ai_signals import build_and_write_ai_signal_layer
+
+        build_and_write_ai_signal_layer(agent_root, run_date)
+
     def run_market_calendar() -> None:
         status = run_codex_prompt(
             "market_calendar",
@@ -429,6 +442,7 @@ def run_premarket_pipeline(*, dry_run: bool) -> int:
         run_kronos=lambda: run_stage("kronos", run_kronos),
         run_technical=lambda: run_stage("technical", run_technical),
         run_price_factors=lambda: run_stage("price_factors", run_price_factors),
+        run_ai_signals=lambda: run_stage("ai_signals", run_ai_signals),
         run_market_calendar=lambda: run_stage("market_calendar", run_market_calendar),
         run_quote_snapshot_core=lambda: run_stage("quote_snapshot_core", run_quote_snapshot_core),
         run_trader_watch_levels=lambda: run_stage("trader_watch_levels", run_trader_watch_levels),
