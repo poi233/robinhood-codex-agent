@@ -31,7 +31,7 @@
 | 自成长平台（observe→propose→shadow→promote） | ✅ G-pre/G0–G9 全闭环（challenger 有隔离 paper 账本，G7 出真实 fill/drawdown/PnL；paper/shadow only，promote 仅人工，见 roadmap G/G9） |
 | 自成长诊断/提议/shadow/推荐（growth 全命令树） | ✅ observe/propose/validate/experiments/shadow/evaluate/recommend/promote check 全部上线 |
 | 量化价量因子层（非 AI alpha 腿） | ✅ 已完成并上线（H2：registry+factor_alpha+premarket 无条件落盘+校准 pickup+dashboard；flag 已开启并清除，write-only、不进 champion 打分，见 roadmap H2） |
-| AI signal 结构化 + 归因 / ablation | 🟡 component IC 已覆盖 dsa/tech/kronos/catalyst；✅ AI schema 标准化已落（H3 step 1，2026-06-17：统一信封 + 校验 + 三层 normalizer + `ai_signals.json`）；confidence calibration + ablation replay 待做（H3 step 2/3） |
+| AI signal 结构化 + 归因 / ablation | 🟡 component IC 已覆盖 dsa/tech/kronos/catalyst；✅ AI schema 标准化（H3 step 1）+ AI 信号研究（H3 step 2：confidence calibration / 方向准确率 / code lift）已落（2026-06-17）；剩 ablation replay（H3 step 3） |
 | 调度自动化 | 🟡 交易生命周期已 cron 化（premarket/intraday/postmarket）；**分析/自成长命令仍手动**，夜间自动化批处理待做（roadmap I1） |
 | 止损/退出逻辑 | 🟠 有自动 `full_invalidation_exit`（跌破技术 invalidation 全清），但 `risk_exit` 分级减仓事实失效、无固定兜底硬止损、且 strategy.md 文案与 code 不一致——**live 前必修**（roadmap J1） |
 | review/live 真实下单 | ⛔ 故意未接线 |
@@ -355,6 +355,7 @@
 | **H1** 校准补强 | `forward_returns` horizon 扩 (1/5/21/63d) + 逐候选 `excess` vs SPY（桶报 `mean_excess_return`）；`component_ic_summary` 多 horizon pooled IC + 逐 run-date 截面 IC 的 mean/std/t-stat，折进 `calibration_report` 的 `ic_summary` + markdown | 见 git log |
 | **E4** 成交质量 | `Quote`/`OrderIntent`/paper 订单记录捕获 bid/ask/mid/spread_bps/slippage_bps（point-in-time）；`replay/fill_quality.py` + `analytics fill-quality`：逐单 realized slippage + 按 spread/流动性分桶 + 保守成交敏感性（edge 缩水 bps + 美元）；`LIVE_QUOTES_CAPTURE_BOOK` 门控 book 探测 | 见 git log |
 | **H3 step 1** AI 信号结构化 | `analyzers/ai_signal_schema.py` 统一信封 + `validate_ai_signal` 强校验 + 三层 normalizer（kronos/dsa/catalyst）；`analyzers/ai_signals.py` 归一三件产物落 `signals/ai_signals.json`；premarket advisory 接入（normalizer 路线、write-only、不碰热路径，故无 flag） | 见 git log |
+| **H3 step 2** AI 信号研究 | `replay/ai_signal_study.py` + `analytics ai-signal-study`：把 AI 信封 join 候选 forward returns，按层出 confidence calibration（mean/hit 桶）、directional accuracy、confidence→return IC、reason/warning code lift；只读、可注入 loader 离线测 | 见 git log |
 | **G9** challenger 隔离账本 | `build_experiment_runtime_paths` + broker `paths_override`；shadow runner 跑 challenger 自己的 paper 账本；G7 出真实 fill/drawdown/PnL | 见 git log |
 | **B5** watchlist resolver | `parse_active_watchlist` 从 `active_strategy.watchlist` 解析文件名（+override），切策略真能切 watchlist，回退兼容 | 见 git log |
 | **TODO_FIX** technical 覆盖 | premarket 全天快照 + intraday merge；`run_symbol_research.sh` 单票输出改写到 `manual/<SYMBOL>/`（不再覆盖全局、可找到） | 见 git log |

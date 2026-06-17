@@ -32,6 +32,9 @@ def build_parser() -> argparse.ArgumentParser:
     analytics_fill_quality_parser = analytics_subparsers.add_parser("fill-quality", help="Write runtime/analytics/fill_quality_report.{json,md} (E4: realized slippage + conservative-fill sensitivity; local-only).")
     analytics_fill_quality_parser.add_argument("--since", metavar="YYYY-MM-DD", default=None)
     analytics_fill_quality_parser.add_argument("--until", metavar="YYYY-MM-DD", default=None)
+    analytics_ai_study_parser = analytics_subparsers.add_parser("ai-signal-study", help="Write runtime/analytics/ai_signal_study.{json,md} (H3: AI-signal confidence calibration + directional accuracy + code lift; needs network for yfinance).")
+    analytics_ai_study_parser.add_argument("--since", metavar="YYYY-MM-DD", default=None)
+    analytics_ai_study_parser.add_argument("--until", metavar="YYYY-MM-DD", default=None)
 
     subparsers.add_parser("dashboard", help="Launch the read-only Streamlit dashboard at http://localhost:8501.")
 
@@ -334,6 +337,15 @@ def _run_analytics_fill_quality(agent_root: Path, *, since: str | None, until: s
     return 0
 
 
+def _run_analytics_ai_signal_study(agent_root: Path, *, since: str | None, until: str | None) -> int:
+    from trading_agent.replay.ai_signal_study import write_ai_signal_study_report
+
+    json_path, md_path = write_ai_signal_study_report(agent_root, since=since, until=until)
+    print(f"Wrote {json_path}")
+    print(f"Wrote {md_path}")
+    return 0
+
+
 def _run_dashboard(agent_root: Path) -> int:
     import subprocess
     import sys
@@ -378,6 +390,8 @@ def main(argv: list[str] | None = None) -> int:
         return _run_analytics_calibrate(Path.cwd(), since=args.since, until=args.until)
     if args.command == "analytics" and args.analytics_command == "fill-quality":
         return _run_analytics_fill_quality(Path.cwd(), since=args.since, until=args.until)
+    if args.command == "analytics" and args.analytics_command == "ai-signal-study":
+        return _run_analytics_ai_signal_study(Path.cwd(), since=args.since, until=args.until)
     if args.command == "dashboard":
         return _run_dashboard(Path.cwd())
     if args.command == "growth" and args.growth_command == "observe":

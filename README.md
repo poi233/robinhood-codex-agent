@@ -56,6 +56,7 @@ shell wrappers in `src/scripts/entrypoints/` (they export the cron/launchd defau
 | `analytics build [--since --until]` | (Re)build `runtime/analytics/analytics.db` (SQLite) from run state — feeds the dashboard. |
 | `analytics calibrate [--since --until]` | E1 strategy calibration → `calibration_report.{json,md}`: score-bucket forward returns (1/5/21/63d) + per-candidate excess vs SPY, multi-horizon Rank IC + t-stat, benchmark alpha, setup outcomes (needs network for yfinance). |
 | `analytics fill-quality [--since --until]` | E4 fill-quality → `fill_quality_report.{json,md}`: realized per-order slippage + conservative-fill sensitivity (how much paper edge shrinks under spread-aware fills). Local-only. |
+| `analytics ai-signal-study [--since --until]` | H3 AI-signal study → `ai_signal_study.{json,md}`: per-layer (DSA/Kronos/Catalyst) confidence calibration, directional accuracy, confidence→return IC, reason/warning-code lift (needs network for yfinance). |
 | `dashboard` | Read-only Streamlit UI at `localhost:8501`: sidebar + 8 tabs (Today / Candidates / Decisions / Paper / **Strategy Comparison** / **Calibration** / Self-Growth / Themes). |
 
 ### Self-growth (paper/shadow only — proposes, never auto-applies)
