@@ -8,7 +8,19 @@ from trading_agent.dashboard import charts, queries
 
 st.set_page_config(page_title="Trading Agent — Read-Only Dashboard", layout="wide")
 
-AGENT_ROOT = Path.cwd()
+
+def _resolve_agent_root() -> Path:
+    """Resolve the repository root from the installed module location.
+
+    The dashboard is frequently launched from `src/` during local development, so
+    relying on `Path.cwd()` would point at the wrong directory and hide valid run
+    data under `repo_root/runtime/state/runs/`.
+    """
+
+    return Path(__file__).resolve().parents[3]
+
+
+AGENT_ROOT = _resolve_agent_root()
 
 st.title("Trading Agent — Read-Only Dashboard")
 st.caption(
