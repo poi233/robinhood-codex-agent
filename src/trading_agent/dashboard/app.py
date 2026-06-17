@@ -46,6 +46,7 @@ today_tab, candidates_tab, decisions_tab, paper_tab, compare_tab, calibration_ta
 
 with today_tab:
     st.header(f"Today — {selected_run_date}")
+    charts.regime_banner(queries.regime_state(AGENT_ROOT, selected_run_date))
     charts.today_view(
         queries.overview(AGENT_ROOT, selected_run_date),
         queries.decisions_timeline(AGENT_ROOT, selected_run_date),

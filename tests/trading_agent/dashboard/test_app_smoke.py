@@ -80,6 +80,9 @@ def _seed(root: Path) -> None:
         "position_weights": {"NVDA": 0.4}, "theme_exposure": {"ai_semiconductor": 0.4},
         "breaches": {"below_cash_target": False, "oversize_positions": ["NVDA"], "overexposed_themes": ["ai_semiconductor"]},
         "notes": "Advisory only."})
+    write_json(run / "planner" / "regime_state.json", {
+        "date": rd, "regime": "neutral", "multiplier": 1.0, "applied_multiplier": 1.0,
+        "reasons": ["no risk-off / bull trigger"], "indicators": {}})
     build_analytics_db(root)
 
 

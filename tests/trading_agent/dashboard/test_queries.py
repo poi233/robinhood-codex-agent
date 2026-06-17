@@ -391,3 +391,14 @@ def test_portfolio_target_query(tmp_path):
     p.parent.mkdir(parents=True, exist_ok=True)
     p.write_text(json.dumps({"total_equity": 100000.0, "cash_weight": 0.2, "breaches": {}}), encoding="utf-8")
     assert portfolio_target(tmp_path, "2026-06-17")["total_equity"] == 100000.0
+
+
+def test_regime_state_query(tmp_path):
+    import json
+    from trading_agent.core.context import build_runtime_paths
+    from trading_agent.dashboard.queries import regime_state
+    assert regime_state(tmp_path, "2026-06-17") == {}
+    p = build_runtime_paths(tmp_path, run_date="2026-06-17").planner_dir / "regime_state.json"
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text(json.dumps({"regime": "bull", "applied_multiplier": 1.0, "reasons": []}), encoding="utf-8")
+    assert regime_state(tmp_path, "2026-06-17")["regime"] == "bull"

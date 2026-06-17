@@ -433,6 +433,13 @@ def portfolio_target(agent_root: Path, run_date: str) -> dict[str, Any]:
     return _read_json_or_empty(default_portfolio_target_path(agent_root, run_date))
 
 
+def regime_state(agent_root: Path, run_date: str) -> dict[str, Any]:
+    """Read-only: the K2 regime_state.json for a run date (quantitative regime + position multiplier)."""
+    from trading_agent.regime.engine import default_regime_state_path
+
+    return _read_json_or_empty(default_regime_state_path(agent_root, run_date))
+
+
 def factor_alpha(agent_root: Path, run_date: str) -> dict[str, Any]:
     """Read-only: the H2 factor_alpha.json for a run date (empty if premarket hasn't produced it)."""
     return _read_json_or_empty(build_runtime_paths(agent_root, run_date=run_date).factor_alpha_path)

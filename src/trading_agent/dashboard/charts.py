@@ -400,6 +400,21 @@ def ai_ablation_view(report: dict) -> None:
     st.dataframe(rows, use_container_width=True)
 
 
+def regime_banner(payload: dict) -> None:
+    """K2: quantitative market regime + position multiplier (advisory)."""
+    if not payload or not payload.get("regime"):
+        return
+    regime = payload["regime"]
+    emoji = {"bull": "🟢", "neutral": "⚪", "risk_off": "🟠", "panic": "🔴", "unknown": "⚫"}.get(regime, "")
+    applied = payload.get("applied_multiplier")
+    line = (f"{emoji} **Market regime (K2): {regime}** · position multiplier (de-risk only): "
+            f"{applied}× · reasons: {', '.join(payload.get('reasons') or [])}")
+    if regime in {"risk_off", "panic"}:
+        st.warning(line + "  (advisory — not wired into sizing yet)")
+    else:
+        st.info(line + "  (advisory — not wired into sizing yet)")
+
+
 def portfolio_target_view(payload: dict) -> None:
     """K1: current portfolio composition vs target caps + concentration breaches."""
     if not payload or payload.get("total_equity") is None:
