@@ -31,3 +31,19 @@ Regression coverage: `tests/trading_agent/policy/test_loaders.py`
 (`test_intraday_merges_full_snapshot_over_clobbered_technical_live_file`,
 `test_intraday_without_snapshot_uses_live_only`) and
 `tests/trading_agent/signals/test_technical_merge.py` (5 merge-semantics cases).
+
+## Resolution part 2 — single-symbol output now has its own home (2026-06-16)
+
+Root cause of "I ran a single-symbol analysis and can't find the output": `run_symbol_research.sh`
+collected the symbol's **input** market feed into
+`runtime/state/runs/<date>/manual/<SYMBOL>/market_feed/`, but the `technical_research` prompt still
+wrote its **output** to the *global* `signals/technical_signals.json` (overwriting the full-watchlist
+file). So the output wasn't in the `manual/<SYMBOL>/` dir where you'd look for it.
+
+Fix: `src/scripts/data/run_symbol_research.sh` now overrides `TECHNICAL_SIGNALS_PATH` to
+`runtime/state/runs/<date>/manual/<SYMBOL>/technical_signals.json` for that one invocation (the same
+per-invocation env mechanism the script already uses for `MARKET_FEED_DIR`), and prints
+`Symbol research output: <path>` at the end. So now an ad hoc single-symbol run:
+- writes its analysis next to its input under `manual/<SYMBOL>/` (findable), and
+- never touches the global `signals/technical_signals.json` at all (the clobber is eliminated at the
+  source, not just guarded against by the snapshot+merge above).
