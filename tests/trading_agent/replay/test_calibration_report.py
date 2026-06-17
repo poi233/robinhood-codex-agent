@@ -72,3 +72,19 @@ def test_calibration_report_buckets_components_dynamically(tmp_path):
     report = build_calibration_report(tmp_path, horizons=(1,), benchmarks=("SPY",), price_loader=_loader)
     assert "factor_alpha" in report["score_buckets"]   # auto-picked-up, no code change
     assert "technical" in report["score_buckets"]
+
+
+def test_calibration_auto_picks_up_factor_alpha_artifact(tmp_path):
+    # candidate_scores (for forward returns) + a factor_alpha.json artifact for NVDA.
+    run_dir = tmp_path / "runtime" / "state" / "runs" / "2026-06-15"
+    write_json(run_dir / "planner" / "candidate_scores.json", {"symbols": {
+        "NVDA": {"score": 66.0, "total_score": 66.0, "score_status": "scored", "components": {}}}})
+    write_json(run_dir / "planner" / "factor_alpha.json", {"date": "2026-06-15", "profile": "p", "symbols": {
+        "NVDA": {"factor_alpha_score": 78.5, "factor_components": {"momentum_12_1": 80.0}}}})
+
+    report = build_calibration_report(tmp_path, horizons=(1,), benchmarks=("SPY",), price_loader=_loader)
+
+    assert "factor_alpha" in report["score_buckets"]        # aggregate auto-picked-up
+    assert "momentum_12_1" in report["score_buckets"]        # individual factor rank too
+    attribution_components = {r["component"] for r in report["attribution"]["1"]}
+    assert "factor_alpha" in attribution_components          # IC attribution covers it

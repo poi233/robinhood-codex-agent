@@ -105,6 +105,26 @@ def _candidate_scores_for_run(agent_root: Path, run_date: str) -> dict[str, dict
             # Latest row wins (file is appended chronologically).
             entry["trade_readiness_score"] = _as_float(row.get("trade_readiness_score"))
             entry["price_setup_score"] = _as_float(row.get("price_setup_score"))
+
+    # H2 auto-pickup: fold factor_alpha + per-factor ranks into components so the dynamic
+    # calibration bucketing + IC attribution cover them by name with zero extra code.
+    if paths.factor_alpha_path.exists():
+        payload = read_json(paths.factor_alpha_path)
+        symbols = payload.get("symbols") if isinstance(payload, dict) else None
+        if isinstance(symbols, dict):
+            for symbol, data in symbols.items():
+                if not isinstance(data, dict):
+                    continue
+                entry = scores.setdefault(str(symbol).upper(), {"candidate_score": None,
+                                          "trade_readiness_score": None, "price_setup_score": None, "components": {}})
+                comps = entry.setdefault("components", {})
+                alpha = _as_float(data.get("factor_alpha_score"))
+                if alpha is not None:
+                    comps["factor_alpha"] = alpha
+                for fname, rank in (data.get("factor_components") or {}).items():
+                    val = _as_float(rank)
+                    if val is not None:
+                        comps[fname] = val
     return scores
 
 
