@@ -1,0 +1,23 @@
+{
+  "_comment": "Price/volume factor weighting profiles (H2). JSON (not YAML) for the 3-level nesting, consistent with growth_policy.json. Weight keys are factor names from features/factors_price.py FACTORS. A POSITIVE weight = higher raw value is better; a NEGATIVE weight = lower raw value is better (e.g. realized_vol, amihud illiquidity). factor_alpha aggregates cross-sectional rank-normalized factor values weighted by |weight|, coverage-normalized. Adding a factor = register it in factors_price.py + add one weight line here.",
+  "default_profile": "baseline_price_factors_v1",
+  "profiles": {
+    "baseline_price_factors_v1": {
+      "enabled": true,
+      "weights": {
+        "residual_momentum_6m": 0.25,
+        "momentum_12_1": 0.20,
+        "high_52w_proximity": 0.15,
+        "short_term_reversal_5d": 0.10,
+        "realized_vol_20d": -0.10,
+        "dollar_volume_20d": 0.10,
+        "amihud_20d": -0.10
+      },
+      "risk_filters": {
+        "max_beta_60d": 2.5,
+        "min_dollar_volume_20d": 50000000,
+        "max_realized_vol_20d": 0.80
+      }
+    }
+  }
+}
