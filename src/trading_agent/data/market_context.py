@@ -65,31 +65,83 @@ def build_mock_rows(run_date: date, timeframe: str) -> list[dict[str, object]]:
     return rows
 
 
+_INTERVAL_MAP = {"1w": "1wk", "1d": "1d", "1h": "60m", "15m": "15m"}
+_PERIOD_MAP = {"1w": "3y", "1d": "1y", "1h": "60d", "15m": "30d"}
+
+
+def _frame_to_rows(frame: Any) -> list[dict[str, object]]:
+    """Convert a yfinance OHLCV frame into our row dicts, skipping fully-empty rows (which appear for
+    a symbol's gaps in a multi-ticker batch download)."""
+    rows: list[dict[str, object]] = []
+    for idx, row in frame.iterrows():
+        try:
+            close = row["Close"]
+            if close != close:  # NaN (no data for this symbol at this bar)
+                continue
+            rows.append(
+                {
+                    "timestamp": idx.isoformat() if hasattr(idx, "isoformat") else str(idx),
+                    "open": round(float(row["Open"]), 4),
+                    "high": round(float(row["High"]), 4),
+                    "low": round(float(row["Low"]), 4),
+                    "close": round(float(close), 4),
+                    "volume": int(row["Volume"]) if row["Volume"] == row["Volume"] else 0,
+                }
+            )
+        except (KeyError, TypeError, ValueError):
+            continue
+    return rows
+
+
 def fetch_live_rows(symbol: str, timeframe: str, *, period: str | None = None) -> list[dict[str, object]]:
     try:
         import yfinance as yf
     except Exception as exc:
         raise RuntimeError(f"yfinance import failed: {exc}") from exc
 
-    interval = {"1w": "1wk", "1d": "1d", "1h": "60m", "15m": "15m"}[timeframe]
-    period = period or {"1w": "3y", "1d": "1y", "1h": "60d", "15m": "30d"}[timeframe]
+    interval = _INTERVAL_MAP[timeframe]
+    period = period or _PERIOD_MAP[timeframe]
     frame = yf.Ticker(symbol).history(period=period, interval=interval, auto_adjust=False)
     if frame.empty:
         raise RuntimeError(f"empty history for {symbol} {timeframe}")
+    return _frame_to_rows(frame)
 
-    rows: list[dict[str, object]] = []
-    for idx, row in frame.iterrows():
-        rows.append(
-            {
-                "timestamp": idx.isoformat() if hasattr(idx, "isoformat") else str(idx),
-                "open": round(float(row["Open"]), 4),
-                "high": round(float(row["High"]), 4),
-                "low": round(float(row["Low"]), 4),
-                "close": round(float(row["Close"]), 4),
-                "volume": int(row["Volume"]),
-            }
-        )
-    return rows
+
+def _rows_from_download_frame(frame: Any, symbols: list[str]) -> dict[str, list[dict[str, object]]]:
+    """Split a multi-ticker yf.download frame into per-symbol rows. Tolerates the single-ticker
+    (flat columns) and multi-ticker (MultiIndex columns) shapes, and symbols missing from the frame."""
+    import pandas as pd
+
+    if frame is None or getattr(frame, "empty", True):
+        return {s: [] for s in symbols}
+    multi = isinstance(frame.columns, pd.MultiIndex)
+    out: dict[str, list[dict[str, object]]] = {}
+    for symbol in symbols:
+        try:
+            sub = frame[symbol] if multi else frame
+        except KeyError:
+            out[symbol] = []
+            continue
+        out[symbol] = _frame_to_rows(sub)
+    return out
+
+
+def fetch_live_rows_batch(symbols: list[str], timeframe: str, *, period: str | None = None) -> dict[str, list[dict[str, object]]]:
+    """D2: fetch OHLCV for many symbols in ONE yf.download call instead of one Ticker().history per
+    symbol — far fewer round trips on a multi-symbol universe. Returns {symbol: rows} ([] per symbol
+    with no data). Cross-run-date caching (ohlcv_cache) still applies per symbol on top of this."""
+    requested = [str(s).upper() for s in symbols if str(s).strip()]
+    if not requested:
+        return {}
+    try:
+        import yfinance as yf
+    except Exception as exc:
+        raise RuntimeError(f"yfinance import failed: {exc}") from exc
+    interval = _INTERVAL_MAP[timeframe]
+    period = period or _PERIOD_MAP[timeframe]
+    frame = yf.download(tickers=requested, period=period, interval=interval, auto_adjust=False,
+                        group_by="ticker", progress=False, threads=True)
+    return _rows_from_download_frame(frame, requested)
 
 
 def build_mock_news_payload(symbol: str, run_date: str, limit: int) -> dict[str, object]:
