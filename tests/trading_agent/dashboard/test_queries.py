@@ -318,3 +318,14 @@ def test_calibration_report_missing_and_present(tmp_path):
     out = tmp_path / "runtime" / "analytics"; out.mkdir(parents=True)
     (out / "calibration_report.json").write_text(json.dumps({"sample_size": 3, "horizons": [1, 3, 5]}), encoding="utf-8")
     assert calibration_report(tmp_path)["sample_size"] == 3
+
+
+def test_factor_alpha_query(tmp_path):
+    import json
+    from trading_agent.core.context import build_runtime_paths
+    from trading_agent.dashboard.queries import factor_alpha
+    assert factor_alpha(tmp_path, "2026-06-15") == {}
+    p = build_runtime_paths(tmp_path, run_date="2026-06-15").factor_alpha_path
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text(json.dumps({"profile": "p", "symbols": {"NVDA": {"factor_alpha_score": 80.0}}}), encoding="utf-8")
+    assert factor_alpha(tmp_path, "2026-06-15")["symbols"]["NVDA"]["factor_alpha_score"] == 80.0

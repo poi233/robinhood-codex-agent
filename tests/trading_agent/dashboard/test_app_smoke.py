@@ -46,6 +46,7 @@ def _seed(root: Path) -> None:
         "attribution": {"1": [{"component": "technical", "n": 1, "ic": None}]},
         "benchmarks": {"SPY": {"1": {"count": 1, "mean_return": 0.002}}},
         "setup_outcomes": [{"setup_type": "breakout", "fills": 1, "target_first": 1, "stop_first": 0, "undecided": 0, "win_rate": 1.0}]})
+    write_json(run / "planner" / "factor_alpha.json", {"date": rd, "profile": "baseline_price_factors_v1", "symbols": {"NVDA": {"factor_alpha_score": 78.5, "coverage": 1.0, "risk_flags": [], "factor_components": {"momentum_12_1": 80.0}}}})
     build_analytics_db(root)
 
 

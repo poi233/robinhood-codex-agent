@@ -375,3 +375,8 @@ def calibration_report(agent_root: Path) -> dict[str, Any]:
     from trading_agent.replay.calibration import default_calibration_report_path
 
     return _read_json_or_empty(default_calibration_report_path(agent_root))
+
+
+def factor_alpha(agent_root: Path, run_date: str) -> dict[str, Any]:
+    """Read-only: the H2 factor_alpha.json for a run date (empty unless ENABLE_PRICE_FACTOR_LAYER)."""
+    return _read_json_or_empty(build_runtime_paths(agent_root, run_date=run_date).factor_alpha_path)

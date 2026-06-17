@@ -156,6 +156,28 @@ def candidates_with_rankings_view(rows: list[dict[str, Any]]) -> None:
     st.dataframe(rows, use_container_width=True)
 
 
+def factor_view(payload: dict) -> None:
+    symbols = payload.get("symbols") if isinstance(payload, dict) else None
+    if not symbols:
+        st.info("No price factors for this run date. Enable ENABLE_PRICE_FACTOR_LAYER=1 (H2) to compute "
+                "factor_alpha (write-only; not in champion scoring).")
+        return
+    st.caption(f"profile: {payload.get('profile', '?')}  ·  generated_at: {payload.get('generated_at', '?')}")
+    rows = []
+    for symbol, data in symbols.items():
+        rows.append({
+            "symbol": symbol,
+            "factor_alpha_score": data.get("factor_alpha_score"),
+            "coverage": data.get("coverage"),
+            "risk_flags": ", ".join(data.get("risk_flags") or []),
+            **(data.get("factor_components") or {}),
+        })
+    rows.sort(key=lambda r: (r["factor_alpha_score"] is not None, r["factor_alpha_score"] or 0), reverse=True)
+    _horizontal_bar_chart([(r["symbol"], float(r["factor_alpha_score"] or 0)) for r in rows],
+                          x_title="factor_alpha_score", y_title="symbol")
+    st.dataframe(rows, use_container_width=True)
+
+
 def equity_curve_view(series: list[dict[str, Any]]) -> None:
     if not series:
         st.info("No paper equity history yet.")

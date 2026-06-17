@@ -55,6 +55,8 @@ with today_tab:
 with candidates_tab:
     st.header("Candidates & Scores")
     charts.candidates_with_rankings_view(queries.candidates_with_rankings(AGENT_ROOT, selected_run_date))
+    st.subheader("Price factors (H2 — factor_alpha)")
+    charts.factor_view(queries.factor_alpha(AGENT_ROOT, selected_run_date))
 
 with decisions_tab:
     st.header("Decisions & Blocked Reasons")
