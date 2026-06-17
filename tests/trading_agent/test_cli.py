@@ -119,6 +119,9 @@ def test_growth_observe_writes_artifact(tmp_path, monkeypatch, capsys):
     run_dir.mkdir(parents=True)
     (run_dir / "run_manifest.json").write_text(json.dumps({"strategy_id": "baseline_v1"}), encoding="utf-8")
     monkeypatch.chdir(tmp_path)
+    # main() resolves its root from the code location (cron robustness), not cwd, so point it at the
+    # tmp sandbox explicitly — otherwise the command would read/write the real repo.
+    monkeypatch.setattr("trading_agent.cli.resolve_agent_root", lambda: tmp_path)
 
     rc = main(["growth", "observe"])
     assert rc == 0
@@ -147,6 +150,9 @@ def test_growth_propose_writes_validated_proposals(tmp_path, monkeypatch, capsys
             fh.write(json.dumps({"timestamp": f"2026-06-15T07:0{i}:00-0700",
                                  "decision": "no_trade", "blocked_reasons": ["below_trade_threshold"]}) + "\n")
     monkeypatch.chdir(tmp_path)
+    # main() resolves its root from the code location (cron robustness), not cwd, so point it at the
+    # tmp sandbox explicitly — otherwise the command would read/write the real repo.
+    monkeypatch.setattr("trading_agent.cli.resolve_agent_root", lambda: tmp_path)
 
     rc = main(["growth", "propose"])
     assert rc == 0
@@ -175,6 +181,9 @@ def test_growth_experiments_add_approve_archive_flow(tmp_path, monkeypatch, caps
         "mutation": {"module": "scoring", "field": "trade_threshold", "current": 50.0, "proposed": 40.0},
     }), encoding="utf-8")
     monkeypatch.chdir(tmp_path)
+    # main() resolves its root from the code location (cron robustness), not cwd, so point it at the
+    # tmp sandbox explicitly — otherwise the command would read/write the real repo.
+    monkeypatch.setattr("trading_agent.cli.resolve_agent_root", lambda: tmp_path)
 
     assert main(["growth", "experiments", "add", str(proposal_path)]) == 0
     rows = load_experiments(tmp_path)
@@ -202,6 +211,9 @@ def test_growth_evaluate_writes_report(tmp_path, monkeypatch, capsys):
     (config_dir / "growth_policy.json").write_text(
         (Path.cwd() / "src" / "config" / "growth_policy.json").read_text(encoding="utf-8"), encoding="utf-8")
     monkeypatch.chdir(tmp_path)
+    # main() resolves its root from the code location (cron robustness), not cwd, so point it at the
+    # tmp sandbox explicitly — otherwise the command would read/write the real repo.
+    monkeypatch.setattr("trading_agent.cli.resolve_agent_root", lambda: tmp_path)
 
     assert main(["growth", "evaluate"]) == 0
     assert (tmp_path / "runtime" / "analytics" / "experiment_report.json").exists()
@@ -230,6 +242,9 @@ def test_growth_promote_check_drafts_without_touching_registry(tmp_path, monkeyp
         "    parent_strategy_id: baseline_v1\n    module: scoring\n    field: trade_threshold\n"
         "    current: 50.0\n    proposed: 40.0\n", encoding="utf-8")
     monkeypatch.chdir(tmp_path)
+    # main() resolves its root from the code location (cron robustness), not cwd, so point it at the
+    # tmp sandbox explicitly — otherwise the command would read/write the real repo.
+    monkeypatch.setattr("trading_agent.cli.resolve_agent_root", lambda: tmp_path)
 
     assert main(["growth", "promote", "check", "exp_x"]) == 0
     assert "exp_x" in capsys.readouterr().out
@@ -245,6 +260,9 @@ def test_analytics_calibrate_writes_report(tmp_path, monkeypatch, capsys):
     write_json(tmp_path / "runtime" / "state" / "runs" / rd / "planner" / "candidate_scores.json",
                {"symbols": {"NVDA": {"score": 66.0, "total_score": 66.0, "score_status": "scored", "components": {}}}})
     monkeypatch.chdir(tmp_path)
+    # main() resolves its root from the code location (cron robustness), not cwd, so point it at the
+    # tmp sandbox explicitly — otherwise the command would read/write the real repo.
+    monkeypatch.setattr("trading_agent.cli.resolve_agent_root", lambda: tmp_path)
     # Inject an offline price loader so no network is needed.
     import trading_agent.replay.forward_returns as fr
     import trading_agent.replay.benchmark_returns as br

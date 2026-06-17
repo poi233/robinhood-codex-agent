@@ -15,6 +15,9 @@ class PostmarketPaperSnapshotTests(unittest.TestCase):
             paper_dir = root / "runtime" / "state" / "runs" / "2026-06-14" / "paper"
             paper_dir.mkdir(parents=True)
             (root / "src" / "config").mkdir(parents=True)
+            # resolve_agent_root() treats a dir as the repo root only when both src/config and
+            # src/trading_agent exist; create the latter so the pipeline targets this tmp sandbox.
+            (root / "src" / "trading_agent").mkdir(parents=True)
             (root / "src" / "config" / "runtime.env").write_text("TRADING_MODE=paper\n", encoding="utf-8")
             (root / "src" / "config" / "runtime.env.local").write_text(
                 "ALLOW_WEEKEND_RUN=1\n", encoding="utf-8"
@@ -50,6 +53,9 @@ class PostmarketPaperSnapshotTests(unittest.TestCase):
             paper_dir = root / "runtime" / "state" / "runs" / "2026-06-14" / "paper"
             paper_dir.mkdir(parents=True)
             (root / "src" / "config").mkdir(parents=True)
+            # resolve_agent_root() treats a dir as the repo root only when both src/config and
+            # src/trading_agent exist; create the latter so the pipeline targets this tmp sandbox.
+            (root / "src" / "trading_agent").mkdir(parents=True)
             (root / "src" / "config" / "runtime.env").write_text("TRADING_MODE=paper\n", encoding="utf-8")
 
             original_cwd = os.getcwd()
@@ -72,6 +78,9 @@ class PostmarketPaperSnapshotTests(unittest.TestCase):
             paper_dir = root / "runtime" / "state" / "runs" / "2026-06-14" / "paper"
             paper_dir.mkdir(parents=True)
             (root / "src" / "config").mkdir(parents=True)
+            # resolve_agent_root() treats a dir as the repo root only when both src/config and
+            # src/trading_agent exist; create the latter so the pipeline targets this tmp sandbox.
+            (root / "src" / "trading_agent").mkdir(parents=True)
             (root / "src" / "config" / "runtime.env").write_text("TRADING_MODE=paper\n", encoding="utf-8")
             (paper_dir / "account.json").write_text(
                 json.dumps({"cash": 15.0, "starting_cash": 25.0, "realized_pnl": 0.0}),
@@ -124,6 +133,9 @@ class PostmarketPaperSnapshotTests(unittest.TestCase):
             paper_dir.mkdir(parents=True)
             planner_dir.mkdir(parents=True)
             (root / "src" / "config").mkdir(parents=True)
+            # resolve_agent_root() treats a dir as the repo root only when both src/config and
+            # src/trading_agent exist; create the latter so the pipeline targets this tmp sandbox.
+            (root / "src" / "trading_agent").mkdir(parents=True)
             (root / "src" / "config" / "runtime.env").write_text("TRADING_MODE=paper\n", encoding="utf-8")
             (paper_dir / "day_start.json").write_text(
                 json.dumps(
