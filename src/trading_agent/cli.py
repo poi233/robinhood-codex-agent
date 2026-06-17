@@ -50,6 +50,9 @@ def build_parser() -> argparse.ArgumentParser:
     analytics_weights_parser.add_argument("--horizon", metavar="DAYS", default=None, help="Horizon (e.g. 1/5/21) to read component IC from; default: first calibrated horizon.")
     analytics_weights_parser.add_argument("--damping", type=float, default=0.5, help="Tilt strength 0..1 (0 = no change, 1 = full IC tilt). Default 0.5.")
     analytics_subparsers.add_parser("nightly-health", help="Write runtime/analytics/nightly_health.json (L4: report freshness + last nightly run's failed steps).")
+    analytics_thesis_parser = analytics_subparsers.add_parser("thesis", help="Write runtime/analytics/thesis_attribution.{json,md} (K3: per-thesis win rate / mean forward return; needs network for yfinance).")
+    analytics_thesis_parser.add_argument("--since", metavar="YYYY-MM-DD", default=None)
+    analytics_thesis_parser.add_argument("--until", metavar="YYYY-MM-DD", default=None)
 
     subparsers.add_parser("dashboard", help="Launch the read-only Streamlit dashboard at http://localhost:8501.")
 
@@ -411,6 +414,15 @@ def _run_analytics_nightly_health(agent_root: Path) -> int:
     return 0
 
 
+def _run_analytics_thesis(agent_root: Path, *, since: str | None, until: str | None) -> int:
+    from trading_agent.replay.thesis import write_thesis_attribution
+
+    json_path, md_path = write_thesis_attribution(agent_root, since=since, until=until)
+    print(f"Wrote {json_path}")
+    print(f"Wrote {md_path}")
+    return 0
+
+
 def _run_dashboard(agent_root: Path) -> int:
     import subprocess
     import sys
@@ -468,6 +480,8 @@ def main(argv: list[str] | None = None) -> int:
         return _run_analytics_weight_suggestion(agent_root, horizon=args.horizon, damping=args.damping)
     if args.command == "analytics" and args.analytics_command == "nightly-health":
         return _run_analytics_nightly_health(agent_root)
+    if args.command == "analytics" and args.analytics_command == "thesis":
+        return _run_analytics_thesis(agent_root, since=args.since, until=args.until)
     if args.command == "dashboard":
         return _run_dashboard(agent_root)
     if args.command == "growth" and args.growth_command == "observe":

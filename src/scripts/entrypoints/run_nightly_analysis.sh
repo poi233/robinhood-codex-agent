@@ -55,6 +55,7 @@ run_step "analytics calibrate"      "$python_bin" -m trading_agent analytics cal
 run_step "analytics fill-quality"   "$python_bin" -m trading_agent analytics fill-quality
 run_step "analytics ai-signal-study" "$python_bin" -m trading_agent analytics ai-signal-study
 run_step "analytics ai-ablation"    "$python_bin" -m trading_agent analytics ai-ablation
+run_step "analytics thesis"         "$python_bin" -m trading_agent analytics thesis
 run_step "analytics weight-suggestion" "$python_bin" -m trading_agent analytics weight-suggestion
 
 # 2) Self-growth: observe -> propose (writes files only) -> validate -> shadow (approved-only) ->

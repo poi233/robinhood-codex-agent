@@ -122,7 +122,7 @@
 | | ~~J2~~ | Codex-facing 文档旧路径统一 | 评审 | ✅ **已完成（2026-06-16）** |
 | **K 组合与归因（评审一·真缺口）** | K1 | **Portfolio Layer**（cash/theme exposure + 单仓上限目标） | 评审一 | 🟡 **第一版已建（2026-06-17）**：`portfolio/target.py` 算当前组合 cash/单仓/主题敞口 vs 目标上限 + 超限 flag，premarket advisory 落 `portfolio_target.json`，dashboard Themes tab 显示；write-only、绝不加买入、只能收紧。第二版接 sizing 上限待校准 |
 | | K2 | **量化 Market Regime 引擎**（Bull/Neutral/RiskOff/Panic + 仓位乘子） | 评审一 | 🟡 **第一版已建（2026-06-17）**：`regime/engine.py` 确定性分类（SPY/QQQ 趋势 + VIX → bull/neutral/risk_off/panic + 乘子 1.2/1.0/0.5/0.0），premarket advisory 落 `regime_state.json`，dashboard Today tab banner；write-only、接 sizing 时 `applied_multiplier=min(1.0,·)` 只降风险。VIX 自动接入 + 接 sizing 待后续 |
-| | K3 | **Thesis Tracker**（交易绑主题标签 → 主题级胜率归因） | 评审一 | 🟡 缺口：回答「哪些 thesis 真赚钱」而非「哪只票赚钱」；归因工具、非信号 |
+| | K3 | **Thesis Tracker**（交易绑主题标签 → 主题级胜率归因） | 评审一 | 🟡 **第一版已建（2026-06-17）**：`replay/thesis.py` + `analytics thesis`——thesis 标签（universe_meta theme + DSA primary_theme/strategy_matches）join E1 forward returns，按 thesis 出胜率/均值；接进夜间批 + I2 快照；只读、无需 flag。统计意义待数据 |
 | **L 收口与验证（评审二·P0）** | L1 | 文档权威源收敛 | 评审二 | 🟢 **进行中（2026-06-17）**：project-status 漂移已修（顶部 point-in-time 约定 + 状态表更正）；README 已重写 |
 | | ~~L2~~ | 完整 smoke checklist → `docs/smoke-test.md` | 评审二 | ✅ **已完成（2026-06-17）**：`src/scripts/smoke/run_smoke.sh`（doctor/safety/analytics/growth 一条龙 + PASS/FAIL 汇总；网络/lifecycle 步骤 opt-in）；实跑 13/13 本地命令 PASS；`docs/smoke-test.md` |
 | | ~~L3~~ | H2 factor **benchmark coverage 审计** | 评审二 | ✅ **已完成（2026-06-17）**：market_feed 永远采 `BENCHMARK_SYMBOLS`（SPY/QQQ/SMH/IWM）；factor_panel/alpha 报告 coverage%（多少 active_symbol 有 bars + benchmark 是否齐）；dashboard 显示 |
@@ -179,8 +179,14 @@
 
 ## 🎯 当前焦点（2026-06-17 · 两份外部评审整合）：收口 + 验证 + 跑数据，暂停叠加 alpha
 
+> **进度（2026-06-17 收口轮）**：✅ **L1–L5 收口/验证全部完成**（文档权威源收敛 + smoke 脚本 + factor benchmark
+> coverage 审计 + nightly health + advisory-failure 测试）；✅ **K1–K3 第一版全部完成**（Portfolio Layer /
+> 量化 Regime 引擎 / Thesis Tracker——均 advisory/只读、绝不加买入、不接 sizing）。**现在进入 L6：冻结 alpha
+> 接线、跑 paper 15–30 天**，再用数据决定第一个真 challenger。剩下都是「待数据/待人工」的第二版接入。
+
 > 系统已从 paper bot 长成**策略实验平台**（E1 校准 / H2 因子 / H3 AI 归因+ablation / H4 shadow 重打分 /
-> H5 dashboard / H6 evidence proposal / I1–I4 夜间自动化 / E2 权重建议 / J1 兜底硬止损 / H7–H8 骨架）。
+> H5 dashboard / H6 evidence proposal / I1–I4 夜间自动化 / E2 权重建议 / J1 兜底硬止损 / H7–H8 骨架 /
+> K1–K3 组合·regime·thesis）。
 > 两份评审的共识：**现在不缺功能，缺的是 (a) 文档收口——已经开始漂移、会误导喂进来的 AI；(b) 15–30 个
 > 交易日的真实 paper 样本来证明哪些信号真赚钱**。第二份评审还明确点出：**别再叠加 alpha 信号进 scoring 热
 > 路径**——H2+H3+H7+H8 若同时进打分，attribution 将无法判断谁真有贡献。
@@ -984,20 +990,23 @@ regime 是否真改善收益曲线；校准后接 sizing（只缩不放，Panic=
 
 **验收**：每个 run 产 `regime_state.json`；regime × forward-return 对照可看；第一版不改交易行为。
 
-## K3 — Thesis Tracker（主题级归因）— 🟡 中优先级
+## K3 — Thesis Tracker（主题级归因）— 🟡 第一版已建（2026-06-17）
 
-**问题**：现在只能（部分）回答「哪只票赚钱」，不能回答「**哪些 thesis/主题真赚钱**」。DSA 有 `primary_theme`、
-C2 有 theme 诊断，但交易没绑一组结构化 thesis 标签做胜率归因。
+**问题**：现在只能（部分）回答「哪只票赚钱」，不能回答「**哪些 thesis/主题真赚钱**」。
 
-**具体**：买入 intent / decision 落盘时附 `thesis` 标签（来自 DSA primary_theme + strategy_matches + 因子触发，
-如 `["AI_INFRA","CPO","MOMENTUM"]`）；新增 `analytics thesis`（复用 E1 forward returns）按 thesis 聚合
-forward-return 胜率/均值：
-```
-AI_INFRA 胜率 61% · CPO 68% · NUCLEAR 39% ...
-```
-天然隔离、只读、像 fill_quality 一样无需 flag。
+**已完成（第一版，只读）**：`replay/thesis.py` + `analytics thesis`——
+- `thesis_tags_for(symbol, dsa_signal, theme_map)`：thesis 标签 = universe_meta theme ∪ DSA primary_theme ∪
+  DSA strategy_matches（标准化大写、去重，如 `AI_SEMICONDUCTOR / AI_INFRA / MOMENTUM`）。**从已落盘产物派生**，
+  无需新捕获。
+- `thesis_attribution`：把标签 join E1 forward returns，按 thesis 聚合 **win_rate / mean_return / count**
+  （`min_count` 过滤小样本），按胜率排序。`analytics thesis` → `thesis_attribution.{json,md}`。
+- 接进夜间批处理 + I2 快照归档；天然隔离、只读、无需 flag。
 
-**验收**：交易/候选带 thesis 标签落盘；`analytics thesis` 输出各主题胜率/均值；不改交易行为。
+**剩余（增量）**：把 thesis 标签也**落进 buy intent/decision**（当前是分析时动态重建；落盘后可做更细的逐单
+thesis 归因 + dashboard 视图）；factor 触发也并入标签。统计意义待 15–30 交易日。
+
+**验收**：✅ `analytics thesis` 输出各 thesis 胜率/均值（如 `AI_INFRA 胜率 61% · CPO 68% · NUCLEAR 39%`）；
+✅ 只读不改交易行为。476 测试通过。
 
 ---
 

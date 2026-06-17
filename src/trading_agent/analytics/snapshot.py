@@ -24,6 +24,7 @@ _SNAPSHOT_FILES = (
     "fill_quality_report.json",
     "ai_signal_study.json",
     "ai_ablation.json",
+    "thesis_attribution.json",
     "growth_observations.json",
     "experiment_report.json",
     "promotion_recommendation.md",
