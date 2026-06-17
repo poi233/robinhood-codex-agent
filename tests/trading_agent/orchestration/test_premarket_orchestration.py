@@ -473,3 +473,33 @@ class PremarketOrchestrationTests(unittest.TestCase):
         self.assertEqual(status, 0)
         self.assertEqual(diagnostics["final_daily_plan_state"]["plan_state"], "trade_ready")
         self.assertEqual(diagnostics["final_risk_overlay_state"]["tradable_candidates"], ["NVDA"])
+
+
+class PremarketAdvisoryFailureTests(unittest.TestCase):
+    def test_advisory_signal_failure_does_not_break_pipeline(self) -> None:
+        """L5: an advisory signal layer (here the H2 factor layer) raising must NOT abort premarket —
+        the pipeline still completes and the deterministic score/plan tail still runs."""
+        events: list[str] = []
+
+        def boom() -> None:
+            events.append("price_factors_attempted")
+            raise RuntimeError("factor layer blew up")
+
+        names = ["run_account_snapshot", "run_capital_snapshot", "collect_market_context", "run_dsa",
+                 "run_kronos", "run_technical", "run_market_calendar", "run_quote_snapshot_core",
+                 "run_trader_watch_levels", "run_candidate_merge", "run_quote_snapshot_candidates",
+                 "run_tradability_candidates", "run_catalyst_enrichment", "run_data_status_summary",
+                 "run_candidate_scoring", "run_risk_overlay", "run_final_planner", "run_archive"]
+        kwargs = {n: (lambda n=n: events.append(n)) for n in names}
+        kwargs["run_price_factors"] = boom
+        kwargs["run_ai_signals"] = lambda: events.append("run_ai_signals")
+
+        pipeline = PremarketPipeline(**kwargs)
+        pipeline.run()  # must not raise despite the advisory failure
+
+        self.assertIn("price_factors_attempted", events)        # the failing stage was attempted
+        # the deterministic score/plan tail still ran:
+        for required in ("run_candidate_scoring", "run_risk_overlay", "run_final_planner", "run_archive"):
+            self.assertIn(required, events)
+        # a sibling advisory stage after the failing one still ran:
+        self.assertIn("run_ai_signals", events)
