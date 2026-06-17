@@ -14,13 +14,57 @@
 >
 > 每项给：目标、阻塞依赖、具体步骤、涉及文件、验收标准。
 >
-> **四条贯穿原则**
+> **五条贯穿原则**
 > - **不用魔数换魔数**：任何新权重/阈值在固化前必须经回看数据校准。
 > - **可追溯优先**：先有 `run_manifest` + `analytics.db`，再做任何会改变行为的改动（token 优化、权重校准
 >   都应记为一个**新的 strategy version**），否则积累的 paper 数据无法横向对比。
 > - **paper-only 安全**：review/live 继续不接线，dashboard 第一版只读、不可改交易参数。
 > - **自成长受控**：自成长只能在 paper / shadow paper / replay 内运行，**只提议、不自动改 champion，
 >   绝不自动升级 live**（不动 TRADING_MODE / RISK_TIER / KILL_SWITCH / 真实下单）。详见 G 阶段。
+> - **大模块一律 feature-flag 门控、默认关、做完才翻、稳定后清除**：每个会接进 premarket/intraday 热路径
+>   的大模块都用一个 `ENABLE_<MODULE>` env flag（**默认 0**）包起来，**无论做到哪一步，flag 关着时新代码
+>   路径完全不被调用、对现有系统零影响**；整模块做完 + 测试 + 验收后才把默认翻成 1（或由人工开）；上线
+>   稳定一段时间后再做一个清理任务**移除 flag、让行为变成无条件**。详见下方「增量开发与 feature flag 约定」。
+
+---
+
+## 增量开发与 feature flag 约定（贯穿全局）
+
+> 目标：**每个大模块都可以做到一半，但只有整模块完全做完才被真正使用；中间任何状态都不影响已有系统运行。**
+> 复用代码库现成的 `ENABLE_<X>` env-flag 习惯（`ENABLE_DSA_SIGNAL_LAYER` / `ENABLE_KRONOS_SIGNAL_LAYER` /
+> `ENABLE_TECHNICAL_FEATURES_PRECOMPUTE` / `ENABLE_OHLCV_CACHE` … 都是这套）。
+
+**生命周期（每个大模块都走这四步）**：
+1. **建设期（flag 默认 0 = 关）**：模块代码全部新增在**独立文件/包**里，只在**热路径的接入点**用一个
+   `if os.environ.get("ENABLE_<MODULE>", "0") == "1":` 包住调用。flag 关着 → 新代码路径**完全不被调用**，
+   premarket/intraday/scoring/paper 一字不变。做到一半也安全。
+2. **完成期（验收后翻默认）**：整模块（计算 + 落盘 + 接校准/ dashboard + 测试 + 文档）都做完、既有测试
+   全绿、`doctor` 能回显该 flag 后，才把默认从 `0` 改成 `1`（或交给人工在 `runtime.env.local` 开）。
+3. **稳定期**：上线观察一段时间，确认无回归。
+4. **清理期（移除 flag）**：稳定后做一个独立的 cleanup 任务——**删掉 flag 判断、让行为无条件生效**，
+   避免 flag 长期堆积。清理本身也是一次可回退的小改动。
+
+**硬约束（保证"半成品零影响"）**：
+- **默认 0**：任何未完成的大模块，flag 默认必须是关。
+- **加法式、隔离**：新模块只**新增**文件 + 新增输出产物（`runtime/...`）+ 新增 dashboard 区块；**绝不修改**
+  现有 scoring / risk_overlay / paper broker / decision 路径的行为（除了那一行 `if flag` 包住的接入点）。
+- **只读 / 只写新产物**：和 calibration / growth 一样，新模块只读历史 + 写自己的新文件，不碰 champion
+  的 scoring/paper/decisions。
+- **既有测试逐字不变全绿**：证明 flag 关着时行为零变化；新代码自己有独立测试（flag 开/关两条路径都测）。
+- **`doctor` 回显**：每个 flag 加进 `cli.py` 的 doctor 输出，随时能看当前开关状态。
+
+**各模块的 flag 一览（建设期默认全 0）**：
+
+| 模块 | flag | 接入点 | 翻默认的完成门槛 |
+|---|---|---|---|
+| H2 价量因子层 | `ENABLE_PRICE_FACTOR_LAYER` | premarket 增一个 local 因子层 | 因子计算+落盘+factor_alpha+校准自动 pickup+dashboard 全做完且测试绿 |
+| H3 AI 结构化 schema | `ENABLE_AI_STRUCTURED_SIGNALS` | 各 AI prompt 的输出契约 | 所有 AI 层都带 asof_date/confidence/reason_codes 且校验通过 |
+| H4 shadow re-score | `ENABLE_SHADOW_RESCORE` | shadow runner 的 challenger 重打分路径 | factor/analyzer/setup 类 challenger 能在隔离账本跑通 |
+| H6 evidence-based proposals | `ENABLE_EVIDENCE_PROPOSALS` | growth propose 的证据校验 | proposal 必须带 calibration/factor/ai evidence 才生成 |
+
+> 注：纯手动命令（`analytics calibrate`、`growth observe/propose`）和 shadow-only 路径**天然隔离**（不在热
+> 路径、不动 champion），可以不强制 flag；**强制 flag 的是会接进 premarket/intraday 热路径的模块**（H2/H3/H4）。
+> 已完成的 E1/E3/G9/C3/B5 都属于"手动命令或 shadow-only"，本来就零热路径影响。
 
 ---
 
@@ -1283,15 +1327,50 @@ vol、beta、Amihud 非流动性、dollar volume、volume shock。
 `src/config/factor_profiles.yaml`。输出 `signals/factor_panel.json` + `planner/factor_alpha.json`
 （schema 见 ChatGPT 计划）。
 
-**接入（分两步，守纪律）**：
-1. **第一版只落盘 + 进 dashboard/calibration，不碰 champion 打分**。**关键：立刻接进 premarket**（在
-   market_context 之后、与 DSA/technical 并列的一个 local 层），让 `factor_panel`/`factor_alpha` 从今天
-   开始每天落盘——这样 `bucket_returns`/`component_attribution` 立刻能把 `factor_alpha_score` 当成又一个
-   分量做桶 + IC（**几乎不用写新校准代码**）。
+### 可扩展性硬约束（让"以后随手加因子"成立 —— 用户明确要求）
+
+> 调研结论：最贵的**校准归因层已经因子无关**（`component_attribution` 自动发现 `components` 里的任意键）；
+> 但因子层没建、champion `scoring.WEIGHTS` 写死、`calibration._SCORE_FIELDS` 写死。H2 必须按下面 5 条建成
+> **可插拔**，达到「加一个因子 = ① 写函数并注册 ② `factor_profiles.yaml` 加一行权重，下游全自动」：
+>
+> 1. **因子注册表**：`FACTORS: dict[str, Callable[[OHLCV], float]]`（同 self-growth diagnosers / E1
+>    proposal rules 的注册表模式）。加因子 = 注册一行，算面板代码不动。
+> 2. **开放式 schema**：`factor_panel.json` / `factor_alpha.json` 的 `symbols[sym]` 是开放 dict，读取方
+>    容忍未知键（新因子 = 新键，老代码不炸）。
+> 3. **配置驱动权重**：`factor_alpha` 聚合器**遍历 `factor_profiles.yaml` 的 weights dict**（像
+>    `scoring.score_candidate` 那样对 components 通用聚合），加因子 = 加一行权重，聚合器零改动。**别学
+>    champion `WEIGHTS` 写死。**
+> 4. **校准自动 pickup**：让 factor 分数流进校准 records 的 `components`（或并一个 factor components）→
+>    `component_attribution` 自动出 IC；**配套把 `calibration._SCORE_FIELDS` 改成动态**（自动包含所有
+>    因子），分桶也自动覆盖。
+> 5. **自成长通用因子权重 mutation**：`growth_policy.json` 加一个通用 `factor_weights` 类目（带
+>    min/max/max_delta + 和约束），让 self-growth 能对**任意因子**权重在边界内提实验（validator 现成的
+>    `_validate_weights` 直接复用）。
+
+> 小独立前置：第 4 条里「`_SCORE_FIELDS` 动态化」是个**现在就能做、低风险、独立**的小改动，可先于 H2 落地，
+> 让校准分桶和归因一样自动覆盖任意新分量。
+
+### Feature flag 门控（`ENABLE_PRICE_FACTOR_LAYER`，默认 0）
+
+按「增量开发与 feature flag 约定」：H2 全程在 `ENABLE_PRICE_FACTOR_LAYER` 后面建，**默认关**。
+- **建设期（flag=0）**：所有因子代码新增在 `features/` + `analyzers/` 里；premarket 只在一处用
+  `if ENABLE_PRICE_FACTOR_LAYER:` 包住「算并落盘 factor_panel/factor_alpha」这一步。flag 关 → premarket
+  一字不变，`baseline_v1` 零影响，做到一半也安全。
+- **接入点**：premarket 在 market_context 之后、与 DSA/technical 并列的一个 **local 因子层**（纯本地计算，
+  不用 Codex）。
+- **完成门槛（翻默认）**：因子计算 + 开放式落盘 + factor_alpha 配置聚合 + 校准自动 pickup（含动态
+  `_SCORE_FIELDS`）+ dashboard factor 视图 + 测试（flag 开/关两条路径）+ `doctor` 回显，全做完才把默认翻 1。
+- **清理期**：稳定后单独移除 flag，让因子层无条件落盘（仍只落盘、不进 champion 打分）。
+
+**两步接入（守 shadow-only 纪律）**：
+1. 第一版（本 flag）**只落盘 + 进 dashboard/calibration，绝不碰 champion 打分**。因子值是 point-in-time 的，
+   **flag 翻开后从那天起每天落盘**，`bucket_returns`/`component_attribution` 立刻把 `factor_alpha_score`
+   当成又一个分量做桶 + IC。
 2. 第二版才作为 **shadow strategy**（H4 的 `baseline_v1_plus_price_factors_shadow`）的输入。
 
-**验收**：factor_panel/factor_alpha 可生成；缺数据降 coverage 不 crash；`baseline_v1` 行为零变化；
-dashboard 能显示 factor values；calibration 能对 factor 做 bucket/IC。
+**验收**：flag=0 时 premarket / `baseline_v1` 行为逐字不变（既有测试全绿）；flag=1 时 factor_panel/
+factor_alpha 可生成、缺数据降 coverage 不 crash；加一个新因子只需「注册 + 配一行权重」，dashboard / 校准
+IC / 分桶全自动覆盖；`doctor` 回显 flag。
 
 ---
 
@@ -1309,7 +1388,13 @@ dashboard 能显示 factor values；calibration 能对 factor 做 bucket/IC。
 **防作弊（照搬 ChatGPT，且地基已在）**：asof_date 必填、输出不可事后覆盖、prompt/model/config hash 入
 manifest（`run_manifest` 已记 git_commit+config_hash）、历史重跑不联网、不用最终 PnL 单独判 AI。
 
-**验收**：AI score bucket / confidence calibration / reason_code·warning_code 效果 / 层 ablation 可看；不改交易行为。
+**Feature flag（`ENABLE_AI_STRUCTURED_SIGNALS`，默认 0）**：标准化 schema 是 AI prompt 的输出契约改动（热
+路径），全程在 flag 后面建——flag 关时 AI 层按现状输出（既有契约/测试不变）；所有 AI 层都带齐
+asof_date/confidence/reason_codes 且校验通过后才翻默认。`ai_signal_study` / `ai_ablation` 本身是手动
+replay 命令、读已落盘数据，天然隔离、可不强制 flag。
+
+**验收**：AI score bucket / confidence calibration / reason_code·warning_code 效果 / 层 ablation 可看；
+flag=0 时 AI 输出契约逐字不变；不改交易行为。
 
 ---
 
@@ -1324,8 +1409,12 @@ premarket 打分，需要 shadow runner 支持**按 challenger 配置重跑 prem
 setups.*.enabled）；shadow runner 对这类 challenger 用其配置重算 scoring + risk_overlay（复用
 `planner/scoring.py` + `risk_overlay.py`）再跑隔离账本。
 
-**验收**：champion 输出零变化；challenger 在 `experiments/<id>/` 有独立账本；dashboard 能比较；缺 forward
-returns / shadow equity 时不能 promote（G7 已强制）。
+**Feature flag（`ENABLE_SHADOW_RESCORE`，默认 0）**：重打分路径在 flag 后面建——flag 关时 shadow runner
+按现状只跑阈值类 challenger（既有行为/测试不变）；重打分路径做完测试绿后才翻默认。整条 shadow 本就只写
+`experiments/<id>/`、不碰 champion，双重隔离。
+
+**验收**：flag=0 时 shadow 行为逐字不变；flag=1 时 champion 输出仍零变化；challenger 在 `experiments/<id>/`
+有独立账本；dashboard 能比较；缺 forward returns / shadow equity 时不能 promote（G7 已强制）。
 
 ---
 
@@ -1343,6 +1432,10 @@ values、factor IC、AI calibration（score/confidence/reason/warning）、（se
 `factor_has_positive_ic` / `ai_warning_effective` / `ai_confidence_not_calibrated` / `setup_underperforming`
 / `blocked_reason_missed_opportunity` 等），proposal **必须带 calibration/factor/ai_study 的 evidence**，
 没 evidence 不生成。validator 红线不变、promote check 仍只出草稿。
+
+**Feature flag（`ENABLE_EVIDENCE_PROPOSALS`，默认 0）**：evidence 校验在 flag 后面建——flag 关时 `growth
+propose` 按现状（规则注册表）生成；要求 evidence 的版本做完后才翻默认。`growth propose` 本就只写文件、不
+启用，天然隔离，flag 主要为「半成品不改变现有 propose 行为」。
 
 **verify gate（照搬 ChatGPT，已与 G7 一致）**：promote 需同时满足 min_shadow_days≥10 / min_trading_days≥8 /
 shadow_orders+equity 可用 / forward returns 可用 / benchmark 对照可用 / factor attribution 可用 / 无 safety
