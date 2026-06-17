@@ -58,6 +58,8 @@ shell wrappers in `src/scripts/entrypoints/` (they export the cron/launchd defau
 | `analytics fill-quality [--since --until]` | E4 fill-quality → `fill_quality_report.{json,md}`: realized per-order slippage + conservative-fill sensitivity (how much paper edge shrinks under spread-aware fills). Local-only. |
 | `analytics ai-signal-study [--since --until]` | H3 AI-signal study → `ai_signal_study.{json,md}`: per-layer (DSA/Kronos/Catalyst) confidence calibration, directional accuracy, confidence→return IC, reason/warning-code lift (needs network for yfinance). |
 | `analytics ai-ablation [--since --until]` | H3 AI-layer ablation → `ai_ablation.{json,md}`: combined AI conviction rank IC with each layer left out (per-layer marginal IC) + factor-only and AI+factor comparison (needs network for yfinance). |
+| `analytics snapshot [--date]` | I2: archive a dated copy of tonight's reports to `runtime/analytics/history/<date>/` + `nightly_summary.json` (headline metrics). Idempotent. |
+| `analytics trend [--since --until --output]` | I3: aggregate `history/*/nightly_summary.json` into per-metric time series → `trend.json`. |
 | `dashboard` | Read-only Streamlit UI at `localhost:8501`: sidebar + 8 tabs (Today / Candidates / Decisions / Paper / **Strategy Comparison** / **Calibration** / Self-Growth / Themes). The Calibration tab also surfaces fill-quality (E4), AI signal study + ablation (H3), and multi-horizon Rank IC. |
 
 ### Self-growth (paper/shadow only — proposes, never auto-applies)

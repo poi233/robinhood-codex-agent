@@ -398,6 +398,27 @@ def ai_ablation(agent_root: Path) -> dict[str, Any]:
     return _read_json_or_empty(default_ai_ablation_path(agent_root))
 
 
+def analysis_history_dates(agent_root: Path) -> list[str]:
+    """Read-only: dates (newest first) that have an I2 nightly snapshot under analytics/history/."""
+    root = agent_root / "runtime" / "analytics" / "history"
+    if not root.exists():
+        return []
+    dates = [d.name for d in root.iterdir() if d.is_dir() and (d / "nightly_summary.json").exists()]
+    return sorted(dates, reverse=True)
+
+
+def analysis_snapshot(agent_root: Path, date: str) -> dict[str, Any]:
+    """Read-only: one night's nightly_summary.json (I2), empty if that date wasn't snapshotted."""
+    return _read_json_or_empty(agent_root / "runtime" / "analytics" / "history" / date / "nightly_summary.json")
+
+
+def analysis_trend(agent_root: Path, *, since: str | None = None, until: str | None = None) -> dict[str, Any]:
+    """Read-only: the I3 per-metric time series (reuses build_trend — one calc, shared with the CLI)."""
+    from trading_agent.analytics.trend import build_trend
+
+    return build_trend(agent_root, since=since, until=until)
+
+
 def factor_alpha(agent_root: Path, run_date: str) -> dict[str, Any]:
     """Read-only: the H2 factor_alpha.json for a run date (empty if premarket hasn't produced it)."""
     return _read_json_or_empty(build_runtime_paths(agent_root, run_date=run_date).factor_alpha_path)

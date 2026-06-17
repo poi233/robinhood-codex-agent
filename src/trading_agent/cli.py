@@ -40,6 +40,12 @@ def build_parser() -> argparse.ArgumentParser:
     analytics_ai_ablation_parser = analytics_subparsers.add_parser("ai-ablation", help="Write runtime/analytics/ai_ablation.{json,md} (H3: per-AI-layer marginal IC via leave-one-out + AI-vs-factor; needs network for yfinance).")
     analytics_ai_ablation_parser.add_argument("--since", metavar="YYYY-MM-DD", default=None)
     analytics_ai_ablation_parser.add_argument("--until", metavar="YYYY-MM-DD", default=None)
+    analytics_snapshot_parser = analytics_subparsers.add_parser("snapshot", help="Archive a dated copy of tonight's reports to runtime/analytics/history/<date>/ + nightly_summary.json (I2).")
+    analytics_snapshot_parser.add_argument("--date", metavar="YYYY-MM-DD", default=None, help="Snapshot date label (default: today PT).")
+    analytics_trend_parser = analytics_subparsers.add_parser("trend", help="Aggregate history/*/nightly_summary.json into per-metric time series (I3).")
+    analytics_trend_parser.add_argument("--since", metavar="YYYY-MM-DD", default=None)
+    analytics_trend_parser.add_argument("--until", metavar="YYYY-MM-DD", default=None)
+    analytics_trend_parser.add_argument("--output", metavar="PATH", default=None, help="Write JSON to this path instead of the default trend.json.")
 
     subparsers.add_parser("dashboard", help="Launch the read-only Streamlit dashboard at http://localhost:8501.")
 
@@ -155,6 +161,9 @@ def _run_doctor(agent_root: Path) -> int:
         f"  PAPER_PARTIAL_FILL_THRESHOLD_BPS = {env.get('PAPER_PARTIAL_FILL_THRESHOLD_BPS', '20')}",
         f"  PAPER_SLIPPAGE_BPS        = {env.get('PAPER_SLIPPAGE_BPS', '10')}",
         f"  LIVE_QUOTES_CAPTURE_BOOK  = {env.get('LIVE_QUOTES_CAPTURE_BOOK', '0')}",
+        "",
+        "  --- Automation ---",
+        f"  ENABLE_NIGHTLY_ANALYSIS   = {env.get('ENABLE_NIGHTLY_ANALYSIS', '1')}",
         "",
         "  --- Notifications ---",
         f"  ENABLE_TRADE_EMAIL        = {env.get('ENABLE_TRADE_EMAIL_NOTIFICATIONS', '1')}",
@@ -360,6 +369,22 @@ def _run_analytics_ai_ablation(agent_root: Path, *, since: str | None, until: st
     return 0
 
 
+def _run_analytics_snapshot(agent_root: Path, *, date: str | None) -> int:
+    from trading_agent.analytics.snapshot import write_analysis_snapshot
+
+    dest = write_analysis_snapshot(agent_root, date=date)
+    print(f"Wrote snapshot {dest}")
+    return 0
+
+
+def _run_analytics_trend(agent_root: Path, *, since: str | None, until: str | None, output: str | None) -> int:
+    from trading_agent.analytics.trend import write_trend
+
+    out = write_trend(agent_root, since=since, until=until, output=Path(output) if output else None)
+    print(f"Wrote {out}")
+    return 0
+
+
 def _run_dashboard(agent_root: Path) -> int:
     import subprocess
     import sys
@@ -409,6 +434,10 @@ def main(argv: list[str] | None = None) -> int:
         return _run_analytics_ai_signal_study(agent_root, since=args.since, until=args.until)
     if args.command == "analytics" and args.analytics_command == "ai-ablation":
         return _run_analytics_ai_ablation(agent_root, since=args.since, until=args.until)
+    if args.command == "analytics" and args.analytics_command == "snapshot":
+        return _run_analytics_snapshot(agent_root, date=args.date)
+    if args.command == "analytics" and args.analytics_command == "trend":
+        return _run_analytics_trend(agent_root, since=args.since, until=args.until, output=args.output)
     if args.command == "dashboard":
         return _run_dashboard(agent_root)
     if args.command == "growth" and args.growth_command == "observe":

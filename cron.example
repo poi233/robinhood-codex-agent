@@ -14,3 +14,9 @@ PATH=/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin
 
 # Postmarket summary, no trading.
 10 13 * * 1-5 __REPO_ROOT__/src/scripts/entrypoints/run_postmarket.sh
+
+# Nightly read-only / shadow-only analysis batch (I1): rebuilds analytics.db + refreshes
+# calibration / fill-quality / AI study / self-growth artifacts and archives a dated snapshot.
+# ~20:00 PT — after the close so yfinance's daily bar for the day has settled. Never trades,
+# never approves/promotes. Disable with ENABLE_NIGHTLY_ANALYSIS=0 in runtime.env.local.
+0 20 * * 1-5 __REPO_ROOT__/src/scripts/entrypoints/run_nightly_analysis.sh

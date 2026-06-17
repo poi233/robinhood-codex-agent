@@ -389,3 +389,42 @@ def ai_ablation_view(report: dict) -> None:
         rows.append({"variant": name, "ic": v.get("ic"), "n": v.get("n"),
                      "marginal_ic_of_layer": v.get("marginal_ic_of_layer")})
     st.dataframe(rows, use_container_width=True)
+
+
+def trends_view(history_dates: list, snapshot: dict, trend: dict) -> None:
+    """I4: data freshness + per-date snapshot lookback + trend lines over the nightly snapshots."""
+    # 1) Freshness bar.
+    if history_dates:
+        latest = history_dates[0]
+        gen = (snapshot or {}).get("generated_at", "?")
+        st.success(f"Latest nightly analysis: **{latest}**  (generated_at: {gen})")
+    else:
+        st.info("No nightly snapshots yet. Run: python3 -m trading_agent analytics snapshot "
+                "(or the nightly batch src/scripts/entrypoints/run_nightly_analysis.sh).")
+
+    # 2) Per-date snapshot lookback (the date is selected in app.py and passed in as `snapshot`).
+    if snapshot:
+        st.subheader("Snapshot for the selected date")
+        headline = {k: snapshot.get(k) for k in
+                    ("fill_rate_pct", "no_trade_rate_pct", "calibration_sample_size",
+                     "proposal_count", "active_shadow_count")}
+        st.dataframe([headline], use_container_width=True)
+        if snapshot.get("top_component_ic"):
+            ic_rows = [{"horizon": f"{h}d", "component": v.get("component"), "ic": v.get("ic")}
+                       for h, v in snapshot["top_component_ic"].items()]
+            st.caption("Top component IC (that night)")
+            st.dataframe(ic_rows, use_container_width=True)
+
+    # 3) Trend lines over all snapshots.
+    st.subheader("Trends across nightly snapshots")
+    if not trend or trend.get("status") != "ok":
+        st.info("Not enough snapshots for a trend yet (need ≥1 night). "
+                "Run the nightly batch on multiple days, or `analytics snapshot` per day.")
+        return
+    series = trend.get("series") or {}
+    for metric, points in series.items():
+        if not points:
+            continue
+        df = pd.DataFrame(points).set_index("date")[["value"]].rename(columns={"value": metric})
+        st.caption(metric)
+        st.line_chart(df, use_container_width=True)

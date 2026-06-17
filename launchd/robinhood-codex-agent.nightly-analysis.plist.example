@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <!-- Replace __REPO_ROOT__ with your local checkout path before loading. -->
+  <!-- Nightly read-only / shadow-only analysis batch (I1). Never trades, approves, or promotes. -->
+  <key>Label</key>
+  <string>com.example.robinhood-codex-agent.nightly-analysis</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/bash</string>
+    <string>__REPO_ROOT__/src/scripts/entrypoints/run_nightly_analysis.sh</string>
+  </array>
+  <!-- 20:00 PT on weekdays (after the close, so the day's daily bar has settled). -->
+  <key>StartCalendarInterval</key>
+  <array>
+    <dict><key>Weekday</key><integer>1</integer><key>Hour</key><integer>20</integer><key>Minute</key><integer>0</integer></dict>
+    <dict><key>Weekday</key><integer>2</integer><key>Hour</key><integer>20</integer><key>Minute</key><integer>0</integer></dict>
+    <dict><key>Weekday</key><integer>3</integer><key>Hour</key><integer>20</integer><key>Minute</key><integer>0</integer></dict>
+    <dict><key>Weekday</key><integer>4</integer><key>Hour</key><integer>20</integer><key>Minute</key><integer>0</integer></dict>
+    <dict><key>Weekday</key><integer>5</integer><key>Hour</key><integer>20</integer><key>Minute</key><integer>0</integer></dict>
+  </array>
+  <key>StandardOutPath</key>
+  <string>__REPO_ROOT__/runtime/logs/launchd.nightly-analysis.out</string>
+  <key>StandardErrorPath</key>
+  <string>__REPO_ROOT__/runtime/logs/launchd.nightly-analysis.err</string>
+</dict>
+</plist>

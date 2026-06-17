@@ -356,3 +356,18 @@ def test_ai_ablation_query(tmp_path):
     out = tmp_path / "runtime" / "analytics"; out.mkdir(parents=True, exist_ok=True)
     (out / "ai_ablation.json").write_text(json.dumps({"matched_symbol_runs": 4}), encoding="utf-8")
     assert ai_ablation(tmp_path)["matched_symbol_runs"] == 4
+
+
+def test_analysis_history_and_snapshot_queries(tmp_path):
+    import json
+    from trading_agent.dashboard.queries import analysis_history_dates, analysis_snapshot, analysis_trend
+    assert analysis_history_dates(tmp_path) == []
+    assert analysis_snapshot(tmp_path, "2026-06-17") == {}
+    assert analysis_trend(tmp_path)["status"] == "insufficient_data"
+    for d in ("2026-06-16", "2026-06-17"):
+        hist = tmp_path / "runtime" / "analytics" / "history" / d
+        hist.mkdir(parents=True)
+        (hist / "nightly_summary.json").write_text(json.dumps({"date": d, "fill_rate_pct": 100.0}), encoding="utf-8")
+    assert analysis_history_dates(tmp_path) == ["2026-06-17", "2026-06-16"]  # newest first
+    assert analysis_snapshot(tmp_path, "2026-06-17")["fill_rate_pct"] == 100.0
+    assert analysis_trend(tmp_path)["status"] == "ok"

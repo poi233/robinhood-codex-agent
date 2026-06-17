@@ -39,9 +39,9 @@ with st.sidebar:
     st.caption(f"{len(run_dates)} run date(s) available")
     st.caption("All views are read-only.")
 
-today_tab, candidates_tab, decisions_tab, paper_tab, compare_tab, calibration_tab, growth_tab, themes_tab = st.tabs(
+today_tab, candidates_tab, decisions_tab, paper_tab, compare_tab, calibration_tab, growth_tab, themes_tab, trends_tab = st.tabs(
     ["① Today", "② Candidates", "③ Decisions", "④ Paper", "⑤ Strategy Comparison",
-     "⑥ Calibration", "⑦ Self-Growth", "⑧ Themes"]
+     "⑥ Calibration", "⑦ Self-Growth", "⑧ Themes", "⑨ Trends"]
 )
 
 with today_tab:
@@ -101,3 +101,13 @@ with growth_tab:
 with themes_tab:
     st.header("Themes & Exposure")
     charts.theme_diagnostics_view(queries.theme_diagnostics(AGENT_ROOT, selected_run_date))
+
+with trends_tab:
+    st.header("Trends (I: nightly analysis snapshots over time)")
+    _history_dates = queries.analysis_history_dates(AGENT_ROOT)
+    _selected_snapshot_date = st.selectbox("Analysis snapshot date", _history_dates) if _history_dates else None
+    charts.trends_view(
+        _history_dates,
+        queries.analysis_snapshot(AGENT_ROOT, _selected_snapshot_date) if _selected_snapshot_date else {},
+        queries.analysis_trend(AGENT_ROOT),
+    )

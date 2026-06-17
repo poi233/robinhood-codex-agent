@@ -65,6 +65,12 @@ def _seed(root: Path) -> None:
         "variants": {"full_ai": {"ic": 0.9, "n": 2}, "drop_kronos": {"ic": None, "n": 2, "marginal_ic_of_layer": None},
                      "drop_dsa": {"ic": 0.9, "n": 2, "marginal_ic_of_layer": 0.0}, "factor_only": {"ic": None, "n": 0},
                      "ai_plus_factor": {"ic": None, "n": 0}}})
+    hist = root / "runtime" / "analytics" / "history" / rd
+    hist.mkdir(parents=True, exist_ok=True)
+    write_json(hist / "nightly_summary.json", {
+        "date": rd, "generated_at": "x", "fill_rate_pct": 100.0, "no_trade_rate_pct": 0.0,
+        "calibration_sample_size": 1, "proposal_count": 1, "active_shadow_count": 0,
+        "top_component_ic": {"1": {"component": "technical", "ic": 0.1}}, "champion": {"fill_rate_pct": 100.0}, "challengers": []})
     build_analytics_db(root)
 
 
@@ -74,7 +80,7 @@ def test_dashboard_renders_all_tabs_without_error(tmp_path, monkeypatch):
     app = AppTest.from_file(str(APP_PATH), default_timeout=60)
     app.run()
     assert not app.exception, app.exception
-    assert len(app.tabs) == 8
+    assert len(app.tabs) == 9
     headers = [h.value for h in app.header]
     assert any("Strategy Comparison" in h for h in headers)
     assert any("Calibration" in h for h in headers)
@@ -88,4 +94,4 @@ def test_dashboard_ignores_current_working_directory(tmp_path, monkeypatch):
     app = AppTest.from_file(str(APP_PATH), default_timeout=60)
     app.run()
     assert not app.exception, app.exception
-    assert len(app.tabs) == 8
+    assert len(app.tabs) == 9
