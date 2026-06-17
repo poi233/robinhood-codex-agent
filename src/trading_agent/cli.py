@@ -135,6 +135,7 @@ def _run_doctor(agent_root: Path) -> int:
         f"  TECHNICAL_MAX_SUBAGENTS   = {env.get('TECHNICAL_MAX_SUBAGENTS', '3')}",
         f"  ENABLE_TECHNICAL_FEATURES_PRECOMPUTE = {env.get('ENABLE_TECHNICAL_FEATURES_PRECOMPUTE', '1')}",
         f"  TECHNICAL_RECENT_BARS     = {env.get('TECHNICAL_RECENT_BARS', '30')}",
+        f"  ENABLE_PRICE_FACTOR_LAYER = {env.get('ENABLE_PRICE_FACTOR_LAYER', '0')}  (H2; write-only, not in champion scoring)",
         "",
         "  --- Paper ---",
         f"  PAPER_STARTING_CASH       = {env.get('PAPER_STARTING_CASH', '400000')}",

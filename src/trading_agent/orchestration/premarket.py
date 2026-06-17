@@ -60,6 +60,7 @@ class PremarketPipeline:
     run_risk_overlay: callable
     run_final_planner: callable
     run_archive: callable
+    run_price_factors: callable = lambda: None  # H2: gated by ENABLE_PRICE_FACTOR_LAYER (default no-op)
 
     def run(self) -> None:
         self.run_account_snapshot()
@@ -72,6 +73,7 @@ class PremarketPipeline:
                 executor.submit(self._run_advisory, self.run_technical),
                 executor.submit(self._run_advisory, self.run_market_calendar),
                 executor.submit(self._run_advisory, self.run_quote_snapshot_core),
+                executor.submit(self._run_advisory, self.run_price_factors),
             ]
             wait(futures)
         self.run_trader_watch_levels()
@@ -321,6 +323,18 @@ def run_premarket_pipeline(*, dry_run: bool) -> int:
         if paths.technical_signals_path.exists():
             write_json(paths.technical_signals_full_path, read_json(paths.technical_signals_path))
 
+    def run_price_factors() -> None:
+        # H2 price/volume factor layer. Flag-gated (default OFF): when off this is a no-op and
+        # premarket is byte-for-byte unchanged. Write-only (factor_panel.json + factor_alpha.json);
+        # does NOT feed champion scoring/risk_overlay. Enable ENABLE_PRICE_FACTOR_LAYER=1 in paper to
+        # start accumulating point-in-time factor data for calibration.
+        if os.environ.get("ENABLE_PRICE_FACTOR_LAYER", "0") != "1":
+            append_stage_log(agent_root, run_date, "price_factors", "skipped", "ENABLE_PRICE_FACTOR_LAYER!=1")
+            return
+        from trading_agent.features.factor_store import build_and_write_factor_layer
+
+        build_and_write_factor_layer(agent_root, run_date, active_symbols=active_symbols)
+
     def run_market_calendar() -> None:
         status = run_codex_prompt(
             "market_calendar",
@@ -417,6 +431,7 @@ def run_premarket_pipeline(*, dry_run: bool) -> int:
         run_dsa=lambda: run_stage("dsa", run_dsa),
         run_kronos=lambda: run_stage("kronos", run_kronos),
         run_technical=lambda: run_stage("technical", run_technical),
+        run_price_factors=lambda: run_stage("price_factors", run_price_factors),
         run_market_calendar=lambda: run_stage("market_calendar", run_market_calendar),
         run_quote_snapshot_core=lambda: run_stage("quote_snapshot_core", run_quote_snapshot_core),
         run_trader_watch_levels=lambda: run_stage("trader_watch_levels", run_trader_watch_levels),
