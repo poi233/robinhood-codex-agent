@@ -114,7 +114,7 @@
 | | H6 | self-growth 用 calibration/factor/AI evidence 生成 proposal（ChatGPT Phase 6） | ChatGPT | ⏳ 依赖 H1–H3 产出 evidence |
 | | H7 | fundamental quality 层（ChatGPT Phase 7） | ChatGPT | ⛔ 故意推后（数据更复杂） |
 | | H8 | earnings / analyst revision 事件层（ChatGPT Phase 8） | ChatGPT | ⛔ 故意推后 |
-| **I 运维与自动化** | I1 | 夜间分析/自成长自动化 cron（每天收盘后跑 analytics/calibrate/growth，刷新 dashboard） | 用户新增 | ⏳ 可现在做（小、加法式、只读/shadow-only） |
+| **I 运维与自动化** | I1 | 夜间分析/自成长自动化 cron（收盘后跑 analytics/calibrate/growth，**每天归档一份带日期快照 + 趋势**，刷新 dashboard） | 用户新增 | ⏳ 可现在做（小、加法式、只读/shadow-only）；**先放 roadmap，暂不执行** |
 
 > **新旧编号对照**：R1→E1（增 benchmark returns）、R2→E2、R3→A3、R4→D2、R5→D3、R6→D4、R7→F2；
 > token 优化设计→D1；docx 的 run_manifest→B1、registry→B2、analytics.db→B3、changelog→B4、
@@ -1498,12 +1498,20 @@ approve 的 active_shadow）/evaluate/promote-check（只出草稿），**绝不
    - `python3 -m trading_agent growth shadow`（跑 active_shadow challenger；无则 no-op）
    - `python3 -m trading_agent growth evaluate`（champion vs challenger 报告 + promotion_recommendation）
    - 把整段输出写 `runtime/logs/runs/<date>/nightly/analysis.log`（沿用现有日志根）。
-2. `cron.example` / `launchd/*.plist.example` 加一条**工作日夜间**调度（建议 ~20:00 PT——晚于收盘，确保
-   yfinance 当日日线已结算，forward returns 能含当天）：
-   `0 20 * * 1-5 __REPO_ROOT__/src/scripts/entrypoints/run_nightly_analysis.sh`。
-3. **dashboard 新鲜度**：①（最小）现有产物都带 `generated_at`，dashboard 顶部 / 各 tab 已显示；②（建议）
-   加一个小"数据新鲜度"条：读各 artifact 的 `generated_at` + 当天有没有跑过 nightly，显示"最近一次夜间
-   分析：<时间>"，让你一眼看出 dashboard 是不是当晚刷新的。
+2. **每天一份分析快照（关键，回应"每天有每天的分析结果吗"）**：现状是 `calibration_report.json` /
+   `growth_observations.json` / `experiment_report.json` / `analytics.db` 都**覆盖成单份最新**（proposal /
+   shadow 账本本就按天存）。所以夜间批处理跑完后，**额外把当晚的关键报告归档一份带日期的快照**到
+   `runtime/analytics/history/<date>/`（`calibration_report.json/.md`、`growth_observations.json`、
+   `experiment_report.json`、`promotion_recommendation.md`），并写一个 `nightly_summary.json`（当晚 headline：
+   fill rate / no-trade rate / top component IC / proposal 数 / active_shadow 数 等）。
+   - 这样**每天都有一份可回看的分析结果**，且能画**趋势**（factor/AI 的 IC 怎么随周数变化、no-trade rate
+     趋势……）——这才是"不断优化策略"最有用的视角。
+   - **语义澄清**：分析是**累积到当天**的（forward returns / IC 需要历史样本），所以"每天一份"= "当晚为止
+     的累积演变快照"，不是"只看当天一天的数据"。两种视角都有用，趋势看的就是累积演变。
+3. **dashboard：新鲜度 + 历史/趋势**：①"数据新鲜度"条（读各 artifact `generated_at` + 当天有没有跑过
+   nightly，显示"最近一次夜间分析：<时间>"）；②**分析日期选择器**（从 `history/<date>/` 选某晚的分析回看）；
+   ③**趋势视图**（读 `history/*/nightly_summary.json` 把关键指标按日期画折线：IC、no-trade rate、fill rate、
+   challenger vs champion 等）。①最小可先做，②③随 history 快照落地增量加。
 
 **安全（守红线）**：
 - 整批**只读历史 + 写新分析产物 + shadow-only**：不调用 `place_equity_order`、不动 `TRADING_MODE`/
@@ -1514,11 +1522,14 @@ approve 的 active_shadow）/evaluate/promote-check（只出草稿），**绝不
   分析照常跑（它只读历史，不下单），但可选地跳过 shadow 以保守。
 
 **涉及文件**：新增 `src/scripts/entrypoints/run_nightly_analysis.sh`、改 `cron.example`、`launchd/` 加一个
-plist 例子、`cli.py`（可选 doctor 回显 `ENABLE_NIGHTLY_ANALYSIS`）、（可选）`dashboard/queries.py` +
-`app.py` 的新鲜度条、对应测试（脚本 `bash -n` + 新鲜度 query 单测）。
+plist 例子、`cli.py`（可选新增 `analytics snapshot` 子命令做 history 归档 + doctor 回显
+`ENABLE_NIGHTLY_ANALYSIS`）、（可选）`dashboard/queries.py` + `app.py` 的新鲜度条 + 日期选择器 + 趋势视图、
+对应测试（脚本 `bash -n` + snapshot/趋势 query 单测）。
 
-**验收**：cron 装上后每晚自动重建 analytics.db + 刷新 calibration/growth 产物，dashboard 次日显示当晚数据；
-单步失败不阻断其余；全程不下单、不改 champion、不 approve/promote；`ENABLE_NIGHTLY_ANALYSIS=0` 可整段关。
+**验收**：cron 装上后每晚自动重建 analytics.db + 刷新 calibration/growth 产物；**每晚在
+`runtime/analytics/history/<date>/` 留一份带日期的分析快照 + `nightly_summary.json`，可逐天回看 + 画趋势**；
+dashboard 次日显示当晚数据 + 历史选择器 + 趋势；单步失败不阻断其余；全程不下单、不改 champion、不
+approve/promote；`ENABLE_NIGHTLY_ANALYSIS=0` 可整段关。
 
 > **与 H 阶段的关系**：H2/H3 落地后，夜间批处理自然把新因子/AI 校准也每天刷出来（命令不变，产物更丰富），
 > 无需改 cron。所以 I1 现在就能先把"夜间自动刷新"骨架搭好，H 阶段的数据一上线就自动进 dashboard。
