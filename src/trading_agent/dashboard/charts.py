@@ -2,7 +2,26 @@ from __future__ import annotations
 
 from typing import Any
 
+import pandas as pd
 import streamlit as st
+import altair as alt
+
+
+def _horizontal_bar_chart(items: list[tuple[str, float]], *, x_title: str, y_title: str) -> None:
+    if not items:
+        return
+    frame = pd.DataFrame(items, columns=[y_title, x_title])
+    chart = (
+        alt.Chart(frame)
+        .mark_bar()
+        .encode(
+            x=alt.X(f"{x_title}:Q", title=x_title),
+            y=alt.Y(f"{y_title}:N", title=y_title, sort="-x"),
+            tooltip=[alt.Tooltip(f"{y_title}:N", title=y_title), alt.Tooltip(f"{x_title}:Q", title=x_title)],
+        )
+        .properties(height=max(200, 28 * len(frame)))
+    )
+    st.altair_chart(chart, use_container_width=True)
 
 
 def overview_metrics(overview: dict[str, Any]) -> None:
@@ -24,8 +43,7 @@ def candidates_chart(rows: list[dict[str, Any]]) -> None:
     if not rows:
         st.info("No candidates for this run date.")
         return
-    chart_data = {row["symbol"]: row.get("candidate_score") or 0 for row in rows}
-    st.bar_chart(chart_data)
+    _horizontal_bar_chart([(row["symbol"], float(row.get("candidate_score") or 0)) for row in rows], x_title="candidate_score", y_title="symbol")
     st.dataframe(rows, use_container_width=True)
 
 
@@ -61,7 +79,7 @@ def replay_summary_view(report: dict[str, Any]) -> None:
     reason_counts = blocked.get("reason_counts") or {}
     if reason_counts:
         st.subheader("Top blocked reasons")
-        st.bar_chart(reason_counts)
+        _horizontal_bar_chart([(reason, float(count or 0)) for reason, count in reason_counts.items()], x_title="count", y_title="reason")
 
     by_symbol = fill_rate.get("by_symbol") or {}
     if by_symbol:
@@ -134,7 +152,7 @@ def candidates_with_rankings_view(rows: list[dict[str, Any]]) -> None:
     if not rows:
         st.info("No scored candidates for this run date.")
         return
-    st.bar_chart({row["symbol"]: row.get("candidate_score") or 0 for row in rows})
+    _horizontal_bar_chart([(row["symbol"], float(row.get("candidate_score") or 0)) for row in rows], x_title="candidate_score", y_title="symbol")
     st.dataframe(rows, use_container_width=True)
 
 
@@ -168,7 +186,7 @@ def strategy_comparison_view(rows: list[dict[str, Any]]) -> None:
     if len(rows) == 1:
         st.caption("Only one strategy version so far — side-by-side comparison appears after a second version accrues runs.")
     st.dataframe(rows, use_container_width=True)
-    st.bar_chart({row["strategy_id"]: row.get("fill_rate_pct") or 0 for row in rows})
+    _horizontal_bar_chart([(row["strategy_id"], float(row.get("fill_rate_pct") or 0)) for row in rows], x_title="fill_rate_pct", y_title="strategy_id")
 
 
 def champion_vs_challengers_view(report: dict[str, Any]) -> None:
@@ -215,7 +233,14 @@ def theme_diagnostics_view(diagnostics: dict[str, Any]) -> None:
         st.subheader(f"{bucket}")
         distribution = payload.get("theme_distribution")
         if isinstance(distribution, dict) and distribution:
-            st.bar_chart({theme: (info.get("pct") if isinstance(info, dict) else info) for theme, info in distribution.items()})
+            _horizontal_bar_chart(
+                [
+                    (theme, float(info.get("pct") if isinstance(info, dict) else info or 0))
+                    for theme, info in distribution.items()
+                ],
+                x_title="pct",
+                y_title="theme",
+            )
         st.json({k: v for k, v in payload.items() if k != "theme_distribution"})
 
 
