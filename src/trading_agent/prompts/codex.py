@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import subprocess
+import shutil
 from pathlib import Path
 from typing import Mapping
 
@@ -52,7 +53,22 @@ def run_codex_prompt(
         )
         return 0
 
-    codex_bin = os.environ.get("CODEX_BIN", "codex")
+    codex_bin = os.environ.get("CODEX_BIN")
+    if not codex_bin:
+        candidates = [
+            shutil.which("codex"),
+            "/opt/homebrew/bin/codex",
+            "/usr/local/bin/codex",
+            str(Path.home() / ".local" / "bin" / "codex"),
+        ]
+        for candidate in candidates:
+            if candidate and Path(candidate).exists():
+                codex_bin = candidate
+                break
+    if not codex_bin or not Path(codex_bin).exists():
+        raise FileNotFoundError(
+            f"missing codex executable: {codex_bin}. Set CODEX_BIN to a valid path or ensure codex is on PATH."
+        )
     model = os.environ.get("CODEX_MODEL", "gpt-5.4-mini")
     timeout_sec = int(os.environ.get("CODEX_EXEC_TIMEOUT_SEC", "3600"))
     try:

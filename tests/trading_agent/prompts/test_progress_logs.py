@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
+from unittest import mock
 
 from trading_agent.prompts.codex import run_codex_prompt
 from trading_agent.prompts.runtime_block import build_runtime_block
@@ -46,3 +48,19 @@ def test_run_codex_prompt_records_dry_run_progress(tmp_path: Path, monkeypatch) 
     assert status == 0
     assert [record["status"] for record in records] == ["started", "skipped"]
     assert records[0]["run_kind"] == "dsa_premarket_scan"
+
+
+def test_run_codex_prompt_resolves_codex_from_common_paths(tmp_path: Path, monkeypatch) -> None:
+    prompt = tmp_path / "prompt.txt"
+    prompt.write_text("Test prompt", encoding="utf-8")
+    fake_codex = tmp_path / "bin" / "codex"
+    fake_codex.parent.mkdir(parents=True)
+    fake_codex.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+    fake_codex.chmod(0o755)
+    monkeypatch.setenv("RUN_DATE_PT", "2026-06-14")
+    monkeypatch.delenv("CODEX_BIN", raising=False)
+
+    with mock.patch.dict(os.environ, {"PATH": str(tmp_path / "bin")}, clear=False):
+        status = run_codex_prompt("dsa_premarket_scan", tmp_path, prompt)
+
+    assert status == 0

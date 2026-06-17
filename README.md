@@ -136,6 +136,11 @@ turns into `daily_plan.json` — the single contract intraday consumes.
 chain of **fail-closed gates** followed by **sell-first, then buy**. It appends exactly one decision
 per run and, in paper mode, updates the local ledger.
 
+Both `intraday` and `postmarket` now resolve the repo root from the code location or an explicit
+`AGENT_ROOT` override, so they do not depend on the launchd working directory. `postmarket` also
+resolves the `codex` executable from `CODEX_BIN`, `PATH`, or common install locations, which avoids
+the launchd-only `codex: not found` failure.
+
 ```mermaid
 flowchart TD
     Start["intraday run"] --> Load["load daily_plan + account + scores<br/>+ refresh live quotes (yfinance)"]

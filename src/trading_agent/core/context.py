@@ -15,9 +15,20 @@ def resolve_agent_root() -> Path:
     not from ``cwd``.
     """
 
+    env_root = os.environ.get("AGENT_ROOT")
+    if env_root:
+        candidate = Path(env_root).expanduser().resolve()
+        if (candidate / "src" / "trading_agent").exists() and (candidate / "src" / "config").exists():
+            return candidate
+
     cwd = Path.cwd()
     if (cwd / "KILL_SWITCH").exists() or ((cwd / "src" / "config").exists() and (cwd / "src" / "trading_agent").exists()):
         return cwd
+
+    for candidate in Path(__file__).resolve().parents:
+        if (candidate / "KILL_SWITCH").exists() or ((candidate / "src" / "config").exists() and (candidate / "src" / "trading_agent").exists()):
+            return candidate
+
     return Path(__file__).resolve().parents[3]
 
 
