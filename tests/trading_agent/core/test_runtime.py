@@ -5,7 +5,7 @@ from pathlib import Path
 from unittest import mock
 
 from trading_agent.core.config import RuntimeConfig, TierMisconfigurationError, load_env_files
-from trading_agent.core.context import RuntimePaths, build_runtime_paths
+from trading_agent.core.context import RuntimePaths, build_runtime_paths, resolve_agent_root
 from trading_agent.core.time import pt_date_string
 
 
@@ -30,6 +30,23 @@ class CoreRuntimeTests(unittest.TestCase):
             self.assertEqual(paths.codex_run_log_path, root / "runtime" / "logs" / "runs" / paths.run_date / "outputs" / "codex_runs.log")
             self.assertEqual(paths.error_log_path, root / "runtime" / "logs" / "runs" / paths.run_date / "system" / "errors.log")
             self.assertEqual(paths.postmarket_summary_path, root / "runtime" / "logs" / "runs" / paths.run_date / "reports" / "postmarket_summary.md")
+
+    def test_resolve_agent_root_prefers_current_working_repo_root_when_present(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            (root / "src" / "config").mkdir(parents=True)
+            (root / "src" / "trading_agent").mkdir(parents=True)
+            (root / "src" / "config" / "runtime.env").write_text("", encoding="utf-8")
+            with mock.patch("trading_agent.core.context.Path.cwd", return_value=root):
+                self.assertEqual(resolve_agent_root(), root)
+
+    def test_resolve_agent_root_falls_back_when_cwd_is_not_repo_root(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            cwd = Path(tmpdir)
+            with mock.patch("trading_agent.core.context.Path.cwd", return_value=cwd):
+                resolved = resolve_agent_root()
+                self.assertTrue((resolved / "src" / "trading_agent").exists())
+                self.assertTrue((resolved / "src" / "config").exists())
 
     def test_runtime_paths_are_dataclass_like(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

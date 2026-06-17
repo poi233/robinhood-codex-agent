@@ -108,11 +108,17 @@ def write_json(path: Path, payload: object) -> None:
     path.write_text(json.dumps(payload), encoding="utf-8")
 
 
+def _prepare_repo_root(root: Path) -> None:
+    (root / "src" / "config").mkdir(parents=True, exist_ok=True)
+    (root / "src" / "trading_agent").mkdir(parents=True, exist_ok=True)
+    (root / "src" / "config" / "runtime.env").write_text("", encoding="utf-8")
+
+
 class IntradayPolicyIntegrationTests(unittest.TestCase):
     def test_weekend_gate_honors_runtime_env_local_override(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
-            (root / "src" / "config").mkdir(parents=True)
+            _prepare_repo_root(root)
             (root / "src" / "config" / "runtime.env.local").write_text(
                 "ALLOW_WEEKEND_RUN=1\n", encoding="utf-8"
             )
@@ -143,6 +149,7 @@ class IntradayPolicyIntegrationTests(unittest.TestCase):
     def test_weekend_gate_skips_without_override(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
+            _prepare_repo_root(root)
             original_cwd = os.getcwd()
             os.chdir(root)
             try:
@@ -161,6 +168,7 @@ class IntradayPolicyIntegrationTests(unittest.TestCase):
     def test_intraday_fails_closed_when_live_mode_has_tier_4(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
+            _prepare_repo_root(root)
             original_cwd = os.getcwd()
             os.chdir(root)
             try:
@@ -180,6 +188,7 @@ class IntradayPolicyIntegrationTests(unittest.TestCase):
     def test_intraday_uses_policy_and_does_not_call_codex_prompt(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
+            _prepare_repo_root(root)
             original_cwd = os.getcwd()
             os.chdir(root)
             try:
@@ -219,6 +228,7 @@ class IntradayPolicyIntegrationTests(unittest.TestCase):
     def test_intraday_persists_ranking_scores(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
+            _prepare_repo_root(root)
             original_cwd = os.getcwd()
             os.chdir(root)
             try:
@@ -247,7 +257,7 @@ class IntradayPolicyIntegrationTests(unittest.TestCase):
     def test_intraday_runs_active_shadow_experiment_in_isolated_ledger(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
-            (root / "src" / "config").mkdir(parents=True)
+            _prepare_repo_root(root)
             (root / "src" / "config" / "strategy_experiments.yaml").write_text(
                 "experiments:\n"
                 "  exp_2026-06-14_scoring_trade_threshold:\n"
@@ -281,6 +291,7 @@ class IntradayPolicyIntegrationTests(unittest.TestCase):
     def test_intraday_requires_live_quotes_in_loader(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
+            _prepare_repo_root(root)
             original_cwd = os.getcwd()
             os.chdir(root)
             try:
@@ -304,6 +315,7 @@ class IntradayPolicyIntegrationTests(unittest.TestCase):
     def test_review_mode_blocks_when_execution_is_unwired(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
+            _prepare_repo_root(root)
             original_cwd = os.getcwd()
             os.chdir(root)
             try:
@@ -327,6 +339,7 @@ class IntradayPolicyIntegrationTests(unittest.TestCase):
     def test_existing_kill_switch_skip_is_preserved(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
+            _prepare_repo_root(root)
             (root / "KILL_SWITCH").write_text("", encoding="utf-8")
             original_cwd = os.getcwd()
             os.chdir(root)
@@ -348,6 +361,7 @@ class IntradayPolicyIntegrationTests(unittest.TestCase):
     def test_pending_paper_order_blocks_duplicate_submission_on_next_run(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
+            _prepare_repo_root(root)
             original_cwd = os.getcwd()
             os.chdir(root)
             try:

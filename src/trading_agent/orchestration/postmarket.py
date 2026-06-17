@@ -4,7 +4,7 @@ import os
 from datetime import datetime
 from pathlib import Path
 
-from trading_agent.core.context import build_runtime_paths
+from trading_agent.core.context import build_runtime_paths, resolve_agent_root
 from trading_agent.core.io import ensure_dir, write_json
 from trading_agent.core.time import PT
 from trading_agent.core.config import load_env_files, load_runtime_config
@@ -21,7 +21,7 @@ def _is_weekday_pt() -> bool:
 
 def run_postmarket_pipeline(*, dry_run: bool) -> int:
     del dry_run
-    agent_root = Path.cwd()
+    agent_root = resolve_agent_root()
     load_env_files(agent_root)
     if not _is_weekday_pt() and os.environ.get("ALLOW_WEEKEND_RUN", "0") != "1":
         return 0

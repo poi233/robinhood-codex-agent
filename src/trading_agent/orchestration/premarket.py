@@ -9,7 +9,7 @@ from concurrent.futures import ThreadPoolExecutor, wait
 from dataclasses import dataclass
 from pathlib import Path
 
-from trading_agent.core.context import build_runtime_paths
+from trading_agent.core.context import build_runtime_paths, resolve_agent_root
 from trading_agent.core.io import read_json, write_json
 from trading_agent.core.run_history import append_stage_log, snapshot_stage_artifacts
 from trading_agent.core.time import PT, pt_date_string
@@ -170,7 +170,7 @@ def _write_kronos_signals(agent_root: Path, active_universe_file: Path | None = 
 
 
 def run_premarket_pipeline(*, dry_run: bool) -> int:
-    agent_root = Path.cwd()
+    agent_root = resolve_agent_root()
     load_env_files(agent_root)
     if not _is_weekday_pt() and os.environ.get("ALLOW_WEEKEND_RUN", "0") != "1":
         return 0

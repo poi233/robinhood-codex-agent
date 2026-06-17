@@ -5,6 +5,8 @@ import json
 import os
 from pathlib import Path
 
+from trading_agent.core.context import resolve_agent_root
+
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="trading_agent")
@@ -361,6 +363,7 @@ def _run_dashboard(agent_root: Path) -> int:
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
+    agent_root = resolve_agent_root()
     if args.command == "premarket":
         from trading_agent.orchestration.premarket import run_premarket_pipeline
 
@@ -378,34 +381,34 @@ def main(argv: list[str] | None = None) -> int:
 
         if args.dry_run:
             os.environ["CODEX_EXEC_DRY_RUN"] = "1"
-        run_dsa_scan(Path.cwd())
+        run_dsa_scan(agent_root)
         return 0
     if args.command == "doctor":
-        return _run_doctor(Path.cwd())
+        return _run_doctor(agent_root)
     if args.command == "replay":
-        return _run_replay(Path.cwd(), since=args.since, until=args.until, output=args.output)
+        return _run_replay(agent_root, since=args.since, until=args.until, output=args.output)
     if args.command == "analytics" and args.analytics_command == "build":
-        return _run_analytics_build(Path.cwd(), since=args.since, until=args.until)
+        return _run_analytics_build(agent_root, since=args.since, until=args.until)
     if args.command == "analytics" and args.analytics_command == "calibrate":
-        return _run_analytics_calibrate(Path.cwd(), since=args.since, until=args.until)
+        return _run_analytics_calibrate(agent_root, since=args.since, until=args.until)
     if args.command == "analytics" and args.analytics_command == "fill-quality":
-        return _run_analytics_fill_quality(Path.cwd(), since=args.since, until=args.until)
+        return _run_analytics_fill_quality(agent_root, since=args.since, until=args.until)
     if args.command == "analytics" and args.analytics_command == "ai-signal-study":
-        return _run_analytics_ai_signal_study(Path.cwd(), since=args.since, until=args.until)
+        return _run_analytics_ai_signal_study(agent_root, since=args.since, until=args.until)
     if args.command == "dashboard":
-        return _run_dashboard(Path.cwd())
+        return _run_dashboard(agent_root)
     if args.command == "growth" and args.growth_command == "observe":
-        return _run_growth_observe(Path.cwd(), since=args.since, until=args.until)
+        return _run_growth_observe(agent_root, since=args.since, until=args.until)
     if args.command == "growth" and args.growth_command == "propose":
-        return _run_growth_propose(Path.cwd(), since=args.since, until=args.until)
+        return _run_growth_propose(agent_root, since=args.since, until=args.until)
     if args.command == "growth" and args.growth_command == "validate":
-        return _run_growth_validate(Path.cwd(), path=args.path)
+        return _run_growth_validate(agent_root, path=args.path)
     if args.command == "growth" and args.growth_command == "experiments":
-        return _run_growth_experiments(Path.cwd(), args)
+        return _run_growth_experiments(agent_root, args)
     if args.command == "growth" and args.growth_command == "shadow":
-        return _run_growth_shadow(Path.cwd(), run_date=args.run_date)
+        return _run_growth_shadow(agent_root, run_date=args.run_date)
     if args.command == "growth" and args.growth_command in {"evaluate", "recommend"}:
-        return _run_growth_evaluate(Path.cwd(), since=args.since, until=args.until, print_md=args.growth_command == "recommend")
+        return _run_growth_evaluate(agent_root, since=args.since, until=args.until, print_md=args.growth_command == "recommend")
     if args.command == "growth" and args.growth_command == "promote" and args.promote_command == "check":
-        return _run_growth_promote_check(Path.cwd(), experiment_id=args.experiment_id)
+        return _run_growth_promote_check(agent_root, experiment_id=args.experiment_id)
     return 0

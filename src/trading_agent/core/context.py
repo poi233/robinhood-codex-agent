@@ -7,6 +7,20 @@ from pathlib import Path
 from trading_agent.core.time import pt_date_string
 
 
+def resolve_agent_root() -> Path:
+    """Resolve the repository root from the installed package location.
+
+    LaunchAgents and cron jobs can run with an arbitrary current working directory.
+    The trading agent should therefore derive its repo root from the code location,
+    not from ``cwd``.
+    """
+
+    cwd = Path.cwd()
+    if (cwd / "KILL_SWITCH").exists() or ((cwd / "src" / "config").exists() and (cwd / "src" / "trading_agent").exists()):
+        return cwd
+    return Path(__file__).resolve().parents[3]
+
+
 @dataclass(frozen=True)
 class RuntimePaths:
     agent_root: Path

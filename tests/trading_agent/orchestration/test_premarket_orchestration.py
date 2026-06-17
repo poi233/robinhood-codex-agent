@@ -10,6 +10,12 @@ from trading_agent.orchestration.premarket import PremarketPipeline
 from trading_agent.orchestration import premarket as premarket_module
 
 
+def _prepare_repo_root(root: Path) -> None:
+    (root / "src" / "config").mkdir(parents=True, exist_ok=True)
+    (root / "src" / "trading_agent").mkdir(parents=True, exist_ok=True)
+    (root / "src" / "config" / "runtime.env").write_text("", encoding="utf-8")
+
+
 class PremarketOrchestrationTests(unittest.TestCase):
     def test_pipeline_runs_account_snapshot_before_market_context_and_parallel_analyzers(self) -> None:
         events: list[str] = []
@@ -116,9 +122,7 @@ class PremarketOrchestrationTests(unittest.TestCase):
     def test_real_codex_dry_run_env_does_not_force_mock_market_feed(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
-            for dirname in ("config", "scripts", "state", "logs", "reports"):
-                (root / dirname).mkdir()
-            (root / "src" / "config").mkdir(parents=True)
+            _prepare_repo_root(root)
             (root / "src" / "config" / "universe.txt").write_text("NVDA\n", encoding="utf-8")
 
             with mock.patch.object(premarket_module, "_is_weekday_pt", return_value=True), \
@@ -153,9 +157,7 @@ class PremarketOrchestrationTests(unittest.TestCase):
     def test_ohlcv_cache_disabled_via_env_flag(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
-            for dirname in ("config", "scripts", "state", "logs", "reports"):
-                (root / dirname).mkdir()
-            (root / "src" / "config").mkdir(parents=True)
+            _prepare_repo_root(root)
             (root / "src" / "config" / "universe.txt").write_text("NVDA\n", encoding="utf-8")
 
             with mock.patch.object(premarket_module, "_is_weekday_pt", return_value=True), \
@@ -185,7 +187,7 @@ class PremarketOrchestrationTests(unittest.TestCase):
     def test_candidate_quote_and_tradability_stages_do_not_call_codex_prompts(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
-            (root / "src" / "config").mkdir(parents=True)
+            _prepare_repo_root(root)
             (root / "src" / "config" / "universe.txt").write_text("NVDA\n", encoding="utf-8")
 
             with mock.patch.object(premarket_module, "_is_weekday_pt", return_value=True), \
@@ -224,9 +226,7 @@ class PremarketOrchestrationTests(unittest.TestCase):
     def test_explicit_dry_run_uses_mock_market_feed(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
-            for dirname in ("config", "scripts", "state", "logs", "reports"):
-                (root / dirname).mkdir()
-            (root / "src" / "config").mkdir(parents=True)
+            _prepare_repo_root(root)
             (root / "src" / "config" / "universe.txt").write_text("NVDA\n", encoding="utf-8")
 
             with mock.patch.object(premarket_module, "_is_weekday_pt", return_value=True), \
@@ -264,7 +264,7 @@ class PremarketOrchestrationTests(unittest.TestCase):
     def test_weekend_gate_honors_runtime_env_local_override(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
-            (root / "src" / "config").mkdir(parents=True)
+            _prepare_repo_root(root)
             (root / "src" / "config" / "universe.txt").write_text("NVDA\n", encoding="utf-8")
             (root / "src" / "config" / "runtime.env.local").write_text(
                 "ALLOW_WEEKEND_RUN=1\n", encoding="utf-8"
@@ -293,7 +293,7 @@ class PremarketOrchestrationTests(unittest.TestCase):
     def test_weekend_gate_skips_without_override(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
-            (root / "src" / "config").mkdir(parents=True)
+            _prepare_repo_root(root)
             (root / "src" / "config" / "universe.txt").write_text("NVDA\n", encoding="utf-8")
 
             with mock.patch.object(premarket_module, "_is_weekday_pt", return_value=False), \
@@ -313,7 +313,7 @@ class PremarketOrchestrationTests(unittest.TestCase):
     def test_write_kronos_signals_uses_repo_defaults_when_env_is_missing(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
-            (root / "src" / "config").mkdir(parents=True)
+            _prepare_repo_root(root)
             (root / "src" / "config" / "universe.txt").write_text("NVDA\n", encoding="utf-8")
             (root / ".vendor" / "kronos").mkdir(parents=True)
             (root / ".venv-kronos" / "bin").mkdir(parents=True)
@@ -339,7 +339,7 @@ class PremarketOrchestrationTests(unittest.TestCase):
     def test_run_premarket_pipeline_writes_diagnostics_after_daily_plan_exists(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
-            (root / "src" / "config").mkdir(parents=True)
+            _prepare_repo_root(root)
             (root / "src" / "config" / "universe.txt").write_text("NVDA\n", encoding="utf-8")
             run_date = "2026-06-14"
             paths = build_runtime_paths(root, run_date=run_date)

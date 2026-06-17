@@ -7,7 +7,7 @@ from datetime import datetime
 from pathlib import Path
 
 from trading_agent.core.config import load_env_files, load_runtime_config
-from trading_agent.core.context import build_runtime_paths
+from trading_agent.core.context import build_runtime_paths, resolve_agent_root
 from trading_agent.core.time import PT
 from trading_agent.core.time import pt_date_string
 from trading_agent.data.live_quotes import fetch_yfinance_live_quotes
@@ -93,7 +93,7 @@ def _is_intraday_window_pt() -> bool:
 
 def run_intraday_pipeline(*, dry_run: bool) -> int:
     del dry_run
-    agent_root = Path.cwd()
+    agent_root = resolve_agent_root()
     load_env_files(agent_root)
     run_date = pt_date_string()
     runtime = load_runtime_config(agent_root)
