@@ -37,9 +37,14 @@ def build_calibration_report(
     run_dates = discover_run_dates(agent_root, since_date=since, until_date=until)
     records = compute_forward_return_records(agent_root, horizons=horizons, since=since, until=until, price_loader=price_loader)
 
+    # Dynamic: bucket the three headline scores PLUS every component/factor that appears in the
+    # records (dsa/technical/kronos/quote/catalyst today; factor_alpha + individual factors once H2
+    # lands) — so a newly added factor is auto-bucketed by name with zero calibration code change.
+    component_fields = sorted({name for rec in records for name in rec.components})
+    score_fields = list(_SCORE_FIELDS) + [f for f in component_fields if f not in _SCORE_FIELDS]
     score_buckets = {
         field: {str(h): bucket_returns(records, score_field=field, horizon=h, n_buckets=n_buckets) for h in horizons}
-        for field in _SCORE_FIELDS
+        for field in score_fields
     }
     attribution = {str(h): component_attribution(records, horizon=h) for h in horizons}
     benchmark = compute_benchmark_returns(agent_root, horizons=horizons, benchmarks=benchmarks, since=since, until=until, price_loader=price_loader)

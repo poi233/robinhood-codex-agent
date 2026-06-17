@@ -169,6 +169,18 @@ def compute_forward_return_records(
     return records
 
 
+HEADLINE_SCORE_FIELDS = ("candidate_score", "trade_readiness_score", "price_setup_score")
+
+
+def score_value(record: ForwardReturnRecord, field: str) -> float | None:
+    """Resolve a score for `field` from either a headline attribute (candidate_score / …) or the
+    record's `components` dict. This is what makes calibration factor-agnostic: any component or
+    factor that lands in `components` can be bucketed / IC'd by name without new code."""
+    if field in HEADLINE_SCORE_FIELDS:
+        return getattr(record, field)
+    return record.components.get(field)
+
+
 def bucket_returns(
     records: list[ForwardReturnRecord],
     *,
@@ -181,9 +193,9 @@ def bucket_returns(
     Bucket monotonicity (higher score → higher mean return) is the headline signal-quality check.
     Records missing the score or the horizon return are skipped."""
     usable = [
-        (getattr(rec, score_field), rec.returns.get(horizon))
+        (score_value(rec, score_field), rec.returns.get(horizon))
         for rec in records
-        if getattr(rec, score_field) is not None and rec.returns.get(horizon) is not None
+        if score_value(rec, score_field) is not None and rec.returns.get(horizon) is not None
     ]
     if not usable:
         return []

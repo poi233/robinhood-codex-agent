@@ -94,3 +94,18 @@ def test_bucket_returns_skips_missing_scores_and_returns():
     ]
     buckets = bucket_returns(records, score_field="candidate_score", horizon=1, n_buckets=1)
     assert sum(b["count"] for b in buckets) == 1  # only C is usable
+
+
+def test_bucket_returns_works_for_component_fields():
+    from trading_agent.replay.forward_returns import score_value
+    records = [
+        ForwardReturnRecord("d", f"S{i}", candidate_score=None, trade_readiness_score=None,
+                            price_setup_score=None, returns={1: 0.01 * i}, components={"factor_alpha": float(i)})
+        for i in range(1, 11)
+    ]
+    # score_value resolves component keys, not just headline attributes.
+    assert score_value(records[0], "factor_alpha") == 1.0
+    assert score_value(records[0], "candidate_score") is None
+    buckets = bucket_returns(records, score_field="factor_alpha", horizon=1, n_buckets=2)
+    assert len(buckets) == 2
+    assert buckets[1]["mean_return"] > buckets[0]["mean_return"]  # higher factor -> higher return

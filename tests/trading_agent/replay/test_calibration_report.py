@@ -61,3 +61,14 @@ def test_write_calibration_report_emits_json_and_md(tmp_path):
     payload = json.loads(json_path.read_text(encoding="utf-8"))
     assert "score_buckets" in payload
     assert "Calibration" in md_path.read_text(encoding="utf-8")
+
+
+def test_calibration_report_buckets_components_dynamically(tmp_path):
+    # candidate_scores carries a 'factor_alpha' component -> it must appear in score_buckets.
+    run_dir = tmp_path / "runtime" / "state" / "runs" / "2026-06-15"
+    write_json(run_dir / "planner" / "candidate_scores.json", {"symbols": {
+        "NVDA": {"score": 66.0, "total_score": 66.0, "score_status": "scored",
+                 "components": {"technical": 70.0, "factor_alpha": 80.0}}}})
+    report = build_calibration_report(tmp_path, horizons=(1,), benchmarks=("SPY",), price_loader=_loader)
+    assert "factor_alpha" in report["score_buckets"]   # auto-picked-up, no code change
+    assert "technical" in report["score_buckets"]
