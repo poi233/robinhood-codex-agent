@@ -46,6 +46,9 @@ def build_parser() -> argparse.ArgumentParser:
     analytics_trend_parser.add_argument("--since", metavar="YYYY-MM-DD", default=None)
     analytics_trend_parser.add_argument("--until", metavar="YYYY-MM-DD", default=None)
     analytics_trend_parser.add_argument("--output", metavar="PATH", default=None, help="Write JSON to this path instead of the default trend.json.")
+    analytics_weights_parser = analytics_subparsers.add_parser("weight-suggestion", help="Write runtime/analytics/weight_suggestion.json (E2: IC-backed scoring-weight SUGGESTION — never auto-applied).")
+    analytics_weights_parser.add_argument("--horizon", metavar="DAYS", default=None, help="Horizon (e.g. 1/5/21) to read component IC from; default: first calibrated horizon.")
+    analytics_weights_parser.add_argument("--damping", type=float, default=0.5, help="Tilt strength 0..1 (0 = no change, 1 = full IC tilt). Default 0.5.")
 
     subparsers.add_parser("dashboard", help="Launch the read-only Streamlit dashboard at http://localhost:8501.")
 
@@ -385,6 +388,14 @@ def _run_analytics_trend(agent_root: Path, *, since: str | None, until: str | No
     return 0
 
 
+def _run_analytics_weight_suggestion(agent_root: Path, *, horizon: str | None, damping: float) -> int:
+    from trading_agent.analytics.weight_suggestion import write_weight_suggestion_report
+
+    out = write_weight_suggestion_report(agent_root, horizon=horizon, damping=damping)
+    print(f"Wrote {out}  (suggestion only — never auto-applied)")
+    return 0
+
+
 def _run_dashboard(agent_root: Path) -> int:
     import subprocess
     import sys
@@ -438,6 +449,8 @@ def main(argv: list[str] | None = None) -> int:
         return _run_analytics_snapshot(agent_root, date=args.date)
     if args.command == "analytics" and args.analytics_command == "trend":
         return _run_analytics_trend(agent_root, since=args.since, until=args.until, output=args.output)
+    if args.command == "analytics" and args.analytics_command == "weight-suggestion":
+        return _run_analytics_weight_suggestion(agent_root, horizon=args.horizon, damping=args.damping)
     if args.command == "dashboard":
         return _run_dashboard(agent_root)
     if args.command == "growth" and args.growth_command == "observe":

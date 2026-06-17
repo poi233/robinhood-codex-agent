@@ -27,6 +27,7 @@ _SNAPSHOT_FILES = (
     "growth_observations.json",
     "experiment_report.json",
     "promotion_recommendation.md",
+    "weight_suggestion.json",
 )
 
 

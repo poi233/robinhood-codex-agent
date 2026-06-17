@@ -87,7 +87,7 @@
 | | D3 | Kronos batch 推理 | 旧 R5 | ✅ **已完成**（2026-06-16） |
 | | D4 | paper 部分成交模型 | 旧 R6 + docx P3 | ✅ **已完成**（2026-06-15） |
 | **E 数据驱动校准** | E1 | replay 校准：forward/benchmark returns + 命中率 + attribution + Calibration tab | 旧 R1 + docx P1 | ✅ **机器已建（2026-06-16）**；统计显著性待 paper 数据积累 |
-| | E2 | 评分 / 价格 setup 权重校准 | 旧 R2 | ⏳ 依赖 E1（P5） |
+| | E2 | 评分 / 价格 setup 权重校准 | 旧 R2 | 🟡 **建议机器已建（2026-06-17）**：`analytics weight-suggestion`（IC 倾斜建议，只产建议绝不自动改）；应用待数据 + 人工 B2/G6/G8 |
 | | E3 | near-miss tracking | docx P2 | ✅ **机器已建（2026-06-16，near-threshold 版）**；✅ per-candidate block 已开始落盘（2026-06-17，decision 增 `per_candidate_blocks`）；entry-zone/no-chase **分类分析**待 paper 数据积累 |
 | | ~~E4~~ | bid/ask/spread 成交质量 | docx P2 | ✅ **已完成（2026-06-17）**：book 捕获 + 逐单 slippage + `analytics fill-quality` 保守成交敏感性（无 flag，capture additive + replay 只读） |
 | **新增 · 校准期补强** | G9 | challenger 隔离 paper 账本（shadow orders/equity） | 我的建议 | ✅ **已完成（2026-06-16）** |
@@ -261,22 +261,27 @@ forward return 不劣于 champion、无 safety violation、人工 approve）；*
 > `daily_plan.json`、`decisions.jsonl`、paper `orders.jsonl` / `equity_curve.jsonl`、
 > `day_start.json` / `day_end.json` / `postmarket_summary.json`，以及 B1 的 `run_manifest.json`。
 
-## E2 — 评分 / 价格 setup 权重校准（旧 R2）
+## E2 — 评分 / 价格 setup 权重校准（旧 R2）— 🟡 建议机器已建（2026-06-17），应用待数据 + 人工
 
-**目标**：把 `trade_readiness_score` 六分量权重（含 `price_setup_score` 的 `0.15`）与 scoring 五分量
-权重（dsa 0.25 / technical 0.30 / kronos 0.15 / quote 0.10 / catalyst 0.20）从「保守先验」改成「数据校准值」。
+**目标**：把 scoring 五分量权重（dsa 0.25 / technical 0.30 / kronos 0.15 / quote 0.10 / catalyst 0.20）
+从「保守先验」改成「数据校准值」。
 
-**阻塞依赖**：E1 的 component attribution 输出。
+**已完成（建议机器，安全）**：`analytics/weight_suggestion.py` + `analytics weight-suggestion`——读 E1
+calibration 的 component IC，按 IC 把权重往预测力强的分量倾斜（正 IC 加权、负 IC 减权、归一化合计 1.00、
+`--damping` 控制幅度），产出 `weight_suggestion.json`（当前 vs 建议 + 逐分量 IC/delta + 免责声明）。
+数据不足时 `insufficient_data` 维持当前权重不报错。已接进夜间批处理 + I2 快照归档。
 
-**具体步骤**：
-1. 用 IC 排名按贡献重分配权重（约束合计 1.00）。
-2. 校准 `estimate_price_setup_score` 内部常数（20/60/70 基准、RR 奖励斜率）。
-3. 在 `policy_profiles.json` / `scoring_profiles.yaml` 配置化（见 A3），不再硬编码。
-4. 更新测试锁住新行为；新权重作为一个**新 strategy version**登记（B2）。
+> **红线（已内建）**：此命令**只产建议、绝不自动写** `scoring.WEIGHTS` 或任何 profile。报告 disclaimer 明确：
+> 采纳须**人工登记为新 strategy version（B2）→ 跑 shadow challenger（G6）→ 人工 promote（G8）**。
+> 「算出数据支撑的建议」≠「自动改策略」。
 
-**涉及文件**：`policy/candidate_selector.py`、`policy/technical.py`、`planner/scoring.py`、配置文件、测试。
+**剩余（待数据 + 人工，非代码阻塞）**：
+1. 攒够 15–30 交易日让 component IC 有统计意义后，人工审 `weight_suggestion.json`。
+2. 校准 `estimate_price_setup_score` 内部常数（20/60/70 基准、RR 奖励斜率）——可后续加进同一机器。
+3. trade_readiness 六分量权重建议——需先把六分量逐分量落盘进 calibration。
+4. 采纳的新权重走 B2 登记 + G6 shadow 验证后再 promote。
 
-**验收**：新权重有 attribution 支撑；文档记录「为什么是这个值」；回看胜率/收益不劣化。
+**验收（建议机器）**：✅ 有 IC 支撑的权重建议、合计 1.00、可调 damping；✅ 数据不足不报错；✅ 绝不自动应用。
 
 ---
 
