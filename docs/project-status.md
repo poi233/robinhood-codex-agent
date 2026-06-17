@@ -361,6 +361,7 @@
 | **I1–I4** 夜间自动化 | `run_nightly_analysis.sh` best-effort 夜间批处理（只读/shadow-only，不下单/不 approve/不 promote）+ cron/launchd 示例 + `ENABLE_NIGHTLY_ANALYSIS`；`analytics snapshot`（I2 幂等日快照 + nightly_summary）+ `analytics trend`/`build_trend`（I3 逐日时间序列）+ dashboard 第 9 Trends tab（I4：新鲜度/日期回看/趋势折线） | 见 git log |
 | **E2** 权重建议机器 | `analytics weight-suggestion`：读 calibration component IC 产出 scoring 权重建议（IC 倾斜、合计 1.00、可调 damping）；只产建议绝不自动改，采纳走 B2/G6/G8 | 见 git log |
 | **H6** evidence gate | `growth/evidence.py` + `ENABLE_EVIDENCE_PROPOSALS`：proposal 必须带 calibration（near_miss/component IC）/weight evidence 才生成（只更严不更松）；flag 默认 0、doctor 回显 | 见 git log |
+| **J1** 兜底硬止损 | `policy/sell.py::_evaluate_hard_stop`：任何持仓亏损超 `HARD_STOP_LOSS_PCT`（默认 8%）全平，独立于 allowed_actions/technical levels；strategy.md 改正「只 alert」误述；只改 paper、不接 live | 见 git log |
 | **G9** challenger 隔离账本 | `build_experiment_runtime_paths` + broker `paths_override`；shadow runner 跑 challenger 自己的 paper 账本；G7 出真实 fill/drawdown/PnL | 见 git log |
 | **B5** watchlist resolver | `parse_active_watchlist` 从 `active_strategy.watchlist` 解析文件名（+override），切策略真能切 watchlist，回退兼容 | 见 git log |
 | **TODO_FIX** technical 覆盖 | premarket 全天快照 + intraday merge；`run_symbol_research.sh` 单票输出改写到 `manual/<SYMBOL>/`（不再覆盖全局、可找到） | 见 git log |

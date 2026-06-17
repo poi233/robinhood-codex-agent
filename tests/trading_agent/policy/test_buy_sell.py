@@ -206,7 +206,9 @@ class PolicyBuySellTests(unittest.TestCase):
         inputs = base_inputs()
         inputs.today_allowlist = ["NVDA"]
         inputs.daily_plan["today_watchlist"] = ["NVDA"]
-        inputs.positions = {"NVDA": Position(symbol="NVDA", quantity=1, average_cost=110.0, market_price=100.0)}
+        # Loss is small (~5.7%, under the 8% hard stop) so this still exercises the average-down
+        # block rather than the J1 catastrophic stop.
+        inputs.positions = {"NVDA": Position(symbol="NVDA", quantity=1, average_cost=106.0, market_price=100.0)}
 
         decision = generate_order_intent(inputs)
 
@@ -284,3 +286,43 @@ class PolicyBuySellTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class HardStopTests(unittest.TestCase):
+    """J1: the catastrophic hard stop is the last-line safety net — fires even with no technical
+    levels and a plan that permits no discretionary sell action."""
+
+    def _inputs_with_position(self, *, average_cost: float, price: float):
+        inputs = base_inputs()
+        # A plan that allows NO sell action — the hard stop must still fire.
+        inputs.daily_plan["allowed_actions"] = ["small_limit_buy"]
+        inputs.positions = {"NVDA": Position(symbol="NVDA", quantity=3, average_cost=average_cost, market_price=price)}
+        ts = datetime.now(tz=PT).isoformat()
+        inputs.quotes["NVDA"] = Quote(symbol="NVDA", price=price, previous_close=average_cost, timestamp=ts)
+        # No technical / watch levels at all.
+        inputs.technical_signals = {}
+        inputs.trader_watch_levels = {"symbols": {}}
+        return inputs
+
+    def test_hard_stop_fires_on_large_loss_without_levels(self):
+        from trading_agent.policy.sell import evaluate_sell
+        inputs = self._inputs_with_position(average_cost=100.0, price=90.0)  # -10% < -8%
+        intent = evaluate_sell(inputs)
+        self.assertIsNotNone(intent)
+        self.assertEqual(intent.side, "sell")
+        self.assertEqual(intent.setup_type, "hard_stop")
+        self.assertIn("catastrophic_stop", intent.reason_codes)
+        self.assertEqual(intent.quantity, 3)  # full exit
+
+    def test_hard_stop_does_not_fire_within_threshold(self):
+        from trading_agent.policy.sell import evaluate_sell
+        inputs = self._inputs_with_position(average_cost=100.0, price=95.0)  # -5% > -8%
+        self.assertIsNone(evaluate_sell(inputs))
+
+    def test_hard_stop_disabled_when_pct_zero(self):
+        import os
+        from unittest import mock
+        from trading_agent.policy.sell import evaluate_sell
+        inputs = self._inputs_with_position(average_cost=100.0, price=80.0)  # -20%
+        with mock.patch.dict(os.environ, {"HARD_STOP_LOSS_PCT": "0"}, clear=False):
+            self.assertIsNone(evaluate_sell(inputs))

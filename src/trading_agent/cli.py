@@ -164,6 +164,7 @@ def _run_doctor(agent_root: Path) -> int:
         f"  PAPER_PARTIAL_FILL_THRESHOLD_BPS = {env.get('PAPER_PARTIAL_FILL_THRESHOLD_BPS', '20')}",
         f"  PAPER_SLIPPAGE_BPS        = {env.get('PAPER_SLIPPAGE_BPS', '10')}",
         f"  LIVE_QUOTES_CAPTURE_BOOK  = {env.get('LIVE_QUOTES_CAPTURE_BOOK', '0')}",
+        f"  HARD_STOP_LOSS_PCT        = {env.get('HARD_STOP_LOSS_PCT', '0.08')}",
         "",
         "  --- Automation ---",
         f"  ENABLE_NIGHTLY_ANALYSIS   = {env.get('ENABLE_NIGHTLY_ANALYSIS', '1')}",

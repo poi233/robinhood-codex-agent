@@ -409,7 +409,7 @@ def _update_trade_counters(usage: dict[str, Any], *, run_date: str, intent: Orde
         by_symbol = usage.setdefault("last_sell_date_by_symbol", {})
         if isinstance(by_symbol, dict):
             by_symbol[intent.symbol] = run_date
-        if {"risk_exit", "full_invalidation_exit"} & set(intent.reason_codes):
+        if {"risk_exit", "full_invalidation_exit", "catastrophic_stop"} & set(intent.reason_codes):
             stop_dates = usage.setdefault("last_stop_date_by_symbol", {})
             if isinstance(stop_dates, dict):
                 stop_dates[intent.symbol] = run_date

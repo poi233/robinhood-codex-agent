@@ -96,7 +96,15 @@ Sell rule:
 - Only sell existing long positions in the Agentic Account.
 - Only if `daily_plan.allowed_actions` includes `partial_take_profit`.
 - If a position is up more than 2.5% from cost basis, consider partial take profit.
-- If a position is down more than 3%, do not sell automatically; log an alert only.
+- Risk exits are automatic in paper, not alert-only:
+  - When technical invalidation levels exist and price breaks the `invalidation_below` level, the
+    position is fully exited (`full_invalidation_exit`).
+  - As a last-line safety net, any position whose loss vs average cost breaches the catastrophic
+    hard stop (`HARD_STOP_LOSS_PCT`, default 8%) is fully exited even when no technical levels exist
+    and even when the plan permits no discretionary sell action (`catastrophic_stop`). Set
+    `HARD_STOP_LOSS_PCT=0` to disable.
+  - These automatic exits run in paper only; review/live order placement remains human-gated
+    (`execution_not_wired`).
 - Never short.
 - Limit price must be at or above the latest verified quote unless explicitly reducing risk after a review-safe take-profit setup.
 
