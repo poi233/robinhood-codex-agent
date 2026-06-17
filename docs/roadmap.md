@@ -112,8 +112,8 @@
 | | H4 | factor/analyzer/setup shadow 策略（ChatGPT Phase 4 增量） | ChatGPT | 🟡 **多权重 re-score 已建（2026-06-17）**：`ENABLE_SHADOW_RESCORE` 下 challenger 可重配多分量权重重打分；analyzer/setup/factor「贵路径」待后续 |
 | | ~~H5~~ | dashboard calibration 子视图扩展（ChatGPT Phase 5 增量） | ChatGPT | ✅ **已完成（2026-06-17）**：Calibration tab 加 fill-quality（E4）+ AI signal study + AI ablation（H3）+ 多 horizon Rank IC/t-stat（H1）子视图；只读、headless 渲染验证 |
 | | H6 | self-growth 用 calibration/factor/AI evidence 生成 proposal（ChatGPT Phase 6） | ChatGPT | 🟡 **evidence gate 已建（2026-06-17）**：`ENABLE_EVIDENCE_PROPOSALS` 下 proposal 必须带 calibration/weight evidence 才生成（只更严不更松）；更多 evidence 类型增量加 |
-| | H7 | fundamental quality 层（ChatGPT Phase 7） | ChatGPT | ⛔ 故意推后（数据更复杂） |
-| | H8 | earnings / analyst revision 事件层（ChatGPT Phase 8） | ChatGPT | ⛔ 故意推后 |
+| | H7 | fundamental quality 层（ChatGPT Phase 7） | ChatGPT | 🟡 **骨架 + normalizer 已建（2026-06-17）**：`analyzers/fundamental.py`（quality flags，只 filter/warning 不作买入信号，write-only advisory）；接入 premarket/scoring 待数据 |
+| | H8 | earnings / analyst revision 事件层（ChatGPT Phase 8） | ChatGPT | 🟡 **骨架 + normalizer 已建（2026-06-17）**：`analyzers/events.py`（earnings/analyst event flags，只增强 catalyst 不独立下单）；接入待数据 |
 | **I 运维与自动化** | ~~I1~~ | 夜间分析/自成长自动化 cron（收盘后自动跑 analytics/calibrate/growth） | 用户新增 | ✅ **已完成（2026-06-17）**：`run_nightly_analysis.sh` best-effort 批处理 + cron/launchd 示例 + `ENABLE_NIGHTLY_ANALYSIS`（doctor 回显） |
 | | ~~I2~~ | 每天一份分析快照（`history/<date>/` + nightly_summary.json） | 用户新增 | ✅ **已完成（2026-06-17）**：`analytics snapshot`，幂等归档 + headline summary |
 | | ~~I3~~ | 拿到趋势的功能（`analytics trend` + `build_trend` 纯函数） | 用户新增 | ✅ **已完成（2026-06-17）**：`analytics trend` + `build_trend` 纯函数，逐日时间序列 |
@@ -657,16 +657,33 @@ violation / 人工最终批准。
 
 ---
 
-## H7 — fundamental quality 层（ChatGPT Phase 7）— ⛔ 故意推后
+## H7 — fundamental quality 层（ChatGPT Phase 7）— 🟡 骨架 + normalizer 已建（2026-06-17）
 
-profitability / margin / FCF quality / debt / asset growth / accruals 等。**不作买入信号**，只做 quality
-filter / sizing modifier / watchlist 优先级 / holding quality / risk overlay warning。数据更复杂，等 H2/H3
-稳定后再做；先接 dashboard，再接 shadow。
+profitability / margin / FCF quality / debt 等。**不作买入信号**，只做 quality filter / sizing modifier /
+watchlist 优先级 / holding quality / risk overlay warning。
 
-## H8 — earnings / analyst revision 事件层（ChatGPT Phase 8）— ⛔ 故意推后
+**已完成（骨架，安全）**：`analyzers/fundamental.py`——`FundamentalSnapshot` schema（profit/operating margin、
+ROE、revenue growth、debt/equity、current ratio，全 optional）+ `normalize_fundamental` +
+`quality_flags`（unprofitable / negative_roe / revenue_declining / high_leverage / weak_liquidity——
+**全是 quality warning，绝非买入信号**）+ best-effort `yfinance_fundamentals` provider（可注入、无网络返回空）
++ `build_and_write_fundamental_layer`（write-only advisory，不进 champion 打分，同 H2 因子层）。纯函数有测试。
 
-earnings surprise / 分析师与 estimate 修正 / guidance / PEAD / news sentiment 一致性。只**增强 catalyst**、
-不独立下单。最后做。
+**剩余（接入，待数据成熟）**：把 `fundamental_snapshot.json` 接进 premarket（advisory 落盘）→ dashboard 子视图
+→ 作为 quality filter / sizing modifier / risk-overlay warning。骨架可扩展（加一个比率 = 加一行 `_FIELD_MAP`
++ 一条 flag 规则），数据源（yfinance.info best-effort，或更丰富的源）接入即用。
+
+## H8 — earnings / analyst revision 事件层（ChatGPT Phase 8）— 🟡 骨架 + normalizer 已建（2026-06-17）
+
+earnings surprise / 分析师与 estimate 修正 / guidance / PEAD 等。只**增强 catalyst**、不独立下单。
+
+**已完成（骨架，安全）**：`analyzers/events.py`——`EventSnapshot` schema（next_earnings_date、days_to_earnings、
+analyst recommendation mean/count、earnings surprise、estimate revision，全 optional）+ `normalize_event` +
+`event_flags`（earnings_imminent / analyst_bullish|bearish / estimate_revised_up|down——**只作 catalyst
+上下文，绝不独立下单**）+ best-effort `yfinance_events` provider（info + calendar，可注入）+
+`build_and_write_event_layer`（write-only advisory）。纯函数有测试。
+
+**剩余（接入，待数据成熟）**：把 `event_snapshot.json` 接进 premarket → 增强 catalyst 层 / earnings 临近时
+风险提示。骨架可扩展（加一类事件 = 加一条 flag 规则）。
 
 ---
 

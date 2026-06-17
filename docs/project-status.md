@@ -362,6 +362,9 @@
 | **E2** 权重建议机器 | `analytics weight-suggestion`：读 calibration component IC 产出 scoring 权重建议（IC 倾斜、合计 1.00、可调 damping）；只产建议绝不自动改，采纳走 B2/G6/G8 | 见 git log |
 | **H6** evidence gate | `growth/evidence.py` + `ENABLE_EVIDENCE_PROPOSALS`：proposal 必须带 calibration（near_miss/component IC）/weight evidence 才生成（只更严不更松）；flag 默认 0、doctor 回显 | 见 git log |
 | **J1** 兜底硬止损 | `policy/sell.py::_evaluate_hard_stop`：任何持仓亏损超 `HARD_STOP_LOSS_PCT`（默认 8%）全平，独立于 allowed_actions/technical levels；strategy.md 改正「只 alert」误述；只改 paper、不接 live | 见 git log |
+| **H4** shadow 多权重 re-score | `ENABLE_SHADOW_RESCORE` 下 challenger 可用 `changes` 列表重配多分量权重重打分（E2 shadow 验证路径）；flag 默认 0、双重隔离 | 见 git log |
+| **D2** batch 拉取 | `fetch_live_rows_batch` 一次 `yf.download` 多 ticker + `_rows_from_download_frame` 分发纯函数（单/多 ticker + 缺 symbol 容错），缓存仍逐 symbol 叠加 | 见 git log |
+| **H7/H8** 基本面/事件骨架 | `analyzers/fundamental.py`（quality flags，只 filter/warning 非买入信号）+ `analyzers/events.py`（earnings/analyst flags，只增强 catalyst 不独立下单）；schema + normalizer + best-effort yfinance provider（可注入）+ write-only advisory builder，纯函数有测试；接入 premarket/scoring 待数据 | 见 git log |
 | **G9** challenger 隔离账本 | `build_experiment_runtime_paths` + broker `paths_override`；shadow runner 跑 challenger 自己的 paper 账本；G7 出真实 fill/drawdown/PnL | 见 git log |
 | **B5** watchlist resolver | `parse_active_watchlist` 从 `active_strategy.watchlist` 解析文件名（+override），切策略真能切 watchlist，回退兼容 | 见 git log |
 | **TODO_FIX** technical 覆盖 | premarket 全天快照 + intraday merge；`run_symbol_research.sh` 单票输出改写到 `manual/<SYMBOL>/`（不再覆盖全局、可找到） | 见 git log |
