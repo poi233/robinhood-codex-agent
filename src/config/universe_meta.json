@@ -1,91 +1,443 @@
 {
-  "_comment": "Symbol-level metadata. 'tier': active=runs Kronos+market_feed+technical; watch=DSA only; passive=excluded from AI layers. Edit active_watchlist.txt to control which symbols are active — this file is reference metadata only.",
-  "SPY":   {"tier": "active", "theme": "broad_beta",       "liquidity": 1},
-  "QQQ":   {"tier": "active", "theme": "broad_beta",       "liquidity": 1},
-  "SMH":   {"tier": "active", "theme": "broad_beta",       "liquidity": 1},
-  "VOO":   {"tier": "watch",  "theme": "broad_beta",       "liquidity": 1},
-  "IWM":   {"tier": "active", "theme": "broad_beta",       "liquidity": 1},
-  "NVDA":  {"tier": "active", "theme": "ai_semiconductor", "liquidity": 1},
-  "AVGO":  {"tier": "active", "theme": "ai_semiconductor", "liquidity": 1},
-  "AMD":   {"tier": "active", "theme": "ai_semiconductor", "liquidity": 1},
-  "TSM":   {"tier": "watch",  "theme": "ai_semiconductor", "liquidity": 1},
-  "MRVL":  {"tier": "active", "theme": "ai_semiconductor", "liquidity": 1},
-  "MU":    {"tier": "active", "theme": "ai_semiconductor", "liquidity": 1},
-  "ALAB":  {"tier": "active", "theme": "ai_semiconductor", "liquidity": 2},
-  "CRDO":  {"tier": "active", "theme": "ai_semiconductor", "liquidity": 2},
-  "RMBS":  {"tier": "watch",  "theme": "ai_semiconductor", "liquidity": 2},
-  "AMKR":  {"tier": "watch",  "theme": "ai_semiconductor", "liquidity": 2},
-  "TTMI":  {"tier": "watch",  "theme": "ai_semiconductor", "liquidity": 2},
-  "SNDK":  {"tier": "watch",  "theme": "ai_semiconductor", "liquidity": 2},
-  "QCOM":  {"tier": "watch",  "theme": "ai_semiconductor", "liquidity": 1},
-  "COHR":  {"tier": "watch",  "theme": "photonics",        "liquidity": 2},
-  "AAOI":  {"tier": "watch",  "theme": "photonics",        "liquidity": 3},
-  "GLW":   {"tier": "watch",  "theme": "photonics",        "liquidity": 2},
-  "VRT":   {"tier": "active", "theme": "ai_infra",         "liquidity": 1},
-  "DELL":  {"tier": "watch",  "theme": "ai_infra",         "liquidity": 1},
-  "ANET":  {"tier": "active", "theme": "ai_infra",         "liquidity": 1},
-  "EQIX":  {"tier": "active", "theme": "ai_infra",         "liquidity": 1},
-  "NBIS":  {"tier": "watch",  "theme": "ai_infra",         "liquidity": 3},
-  "IREN":  {"tier": "watch",  "theme": "ai_infra",         "liquidity": 3},
-  "BE":    {"tier": "watch",  "theme": "ai_infra",         "liquidity": 2},
-  "FLNC":  {"tier": "watch",  "theme": "ai_infra",         "liquidity": 2},
-  "PLTR":  {"tier": "active", "theme": "ai_software",      "liquidity": 1},
-  "NET":   {"tier": "watch",  "theme": "ai_software",      "liquidity": 1},
-  "SNOW":  {"tier": "watch",  "theme": "ai_software",      "liquidity": 1},
-  "CRM":   {"tier": "watch",  "theme": "ai_software",      "liquidity": 1},
-  "AMZN":  {"tier": "active", "theme": "platform",         "liquidity": 1},
-  "GOOGL": {"tier": "active", "theme": "platform",         "liquidity": 1},
-  "META":  {"tier": "active", "theme": "platform",         "liquidity": 1},
-  "MSFT":  {"tier": "watch",  "theme": "platform",         "liquidity": 1},
-  "HOOD":  {"tier": "watch",  "theme": "fintech",          "liquidity": 2},
-  "SOFI":  {"tier": "watch",  "theme": "fintech",          "liquidity": 2},
-  "UBER":  {"tier": "watch",  "theme": "platform",         "liquidity": 1},
-  "NFLX":  {"tier": "active", "theme": "platform",         "liquidity": 1},
-  "TSLA":  {"tier": "active", "theme": "platform",         "liquidity": 1},
-  "ASTS":  {"tier": "active", "theme": "speculative",      "liquidity": 2},
-  "RKLB":  {"tier": "active", "theme": "speculative",      "liquidity": 2},
-  "FLY":   {"tier": "watch",  "theme": "speculative",      "liquidity": 3},
-  "RDW":   {"tier": "watch",  "theme": "speculative",      "liquidity": 3},
-  "IONQ":  {"tier": "active", "theme": "speculative",      "liquidity": 2},
-  "QBTS":  {"tier": "watch",  "theme": "speculative",      "liquidity": 3},
-  "KTOS":  {"tier": "active", "theme": "speculative",      "liquidity": 2},
-  "AVAV":  {"tier": "watch",  "theme": "speculative",      "liquidity": 2},
-  "AXON":  {"tier": "active", "theme": "speculative",      "liquidity": 1},
-  "ONDS":  {"tier": "watch",  "theme": "speculative",      "liquidity": 3},
-  "CBRS":  {"tier": "watch",  "theme": "speculative",      "liquidity": 3},
-  "LEU":   {"tier": "active", "theme": "nuclear",          "liquidity": 2},
-  "UUUU":  {"tier": "active", "theme": "nuclear",          "liquidity": 2},
-  "MP":    {"tier": "watch",  "theme": "nuclear",          "liquidity": 2},
-  "XE":    {"tier": "watch",  "theme": "nuclear",          "liquidity": 3},
-  "TE":    {"tier": "watch",  "theme": "nuclear",          "liquidity": 3},
-  "SOLS":  {"tier": "watch",  "theme": "nuclear",          "liquidity": 3},
-  "ARKK":  {"tier": "active", "theme": "etf",              "liquidity": 1},
-  "ARKW":  {"tier": "watch",  "theme": "etf",              "liquidity": 2},
-  "ARKG":  {"tier": "watch",  "theme": "etf",              "liquidity": 2},
-  "QTUM":  {"tier": "active", "theme": "etf",              "liquidity": 2},
-  "DRAM":  {"tier": "watch",  "theme": "etf",              "liquidity": 3},
-  "FOTO":  {"tier": "watch",  "theme": "etf",              "liquidity": 3},
-  "NASA":  {"tier": "watch",  "theme": "etf",              "liquidity": 3},
-  "AIPO":  {"tier": "watch",  "theme": "etf",              "liquidity": 3},
-  "AAPL":  {"tier": "watch",  "theme": "defensive",        "liquidity": 1},
-  "INTC":  {"tier": "watch",  "theme": "defensive",        "liquidity": 1},
-  "CSCO":  {"tier": "watch",  "theme": "defensive",        "liquidity": 1},
-  "IBM":   {"tier": "watch",  "theme": "defensive",        "liquidity": 1},
-  "GE":    {"tier": "watch",  "theme": "defensive",        "liquidity": 1},
-  "BA":    {"tier": "watch",  "theme": "defensive",        "liquidity": 1},
-  "LMT":   {"tier": "watch",  "theme": "defensive",        "liquidity": 1},
-  "XOM":   {"tier": "watch",  "theme": "defensive",        "liquidity": 1},
-  "JPM":   {"tier": "watch",  "theme": "defensive",        "liquidity": 1},
-  "GS":    {"tier": "watch",  "theme": "defensive",        "liquidity": 1},
-  "AXP":   {"tier": "watch",  "theme": "defensive",        "liquidity": 1},
-  "WM":    {"tier": "watch",  "theme": "defensive",        "liquidity": 1},
-  "UPS":   {"tier": "watch",  "theme": "defensive",        "liquidity": 1},
-  "SBUX":  {"tier": "watch",  "theme": "defensive",        "liquidity": 1},
-  "DIS":   {"tier": "watch",  "theme": "defensive",        "liquidity": 1},
-  "F":     {"tier": "watch",  "theme": "defensive",        "liquidity": 1},
-  "VSH":   {"tier": "watch",  "theme": "defensive",        "liquidity": 2},
-  "NOK":   {"tier": "watch",  "theme": "defensive",        "liquidity": 2},
-  "BABA":  {"tier": "watch",  "theme": "adr",              "liquidity": 1},
-  "BILI":  {"tier": "watch",  "theme": "adr",              "liquidity": 2},
-  "NIO":   {"tier": "watch",  "theme": "adr",              "liquidity": 2}
+  "_comment": "Symbol-level metadata. 'tier': active=runs Kronos+market_feed+technical; watch=DSA only; passive=excluded from AI layers. Edit active_watchlist.txt (or the active strategy's `watchlist` field in strategy_registry.yaml, B5) to control which symbols are active — this file is reference metadata only. Optional extensible fields for finer selection-layer experiments: 'theme', 'layer', 'supply_chain', 'risk_tags' (add per symbol as needed; consumers should treat missing fields as unknown).",
+  "SPY": {
+    "tier": "active",
+    "theme": "broad_beta",
+    "liquidity": 1
+  },
+  "QQQ": {
+    "tier": "active",
+    "theme": "broad_beta",
+    "liquidity": 1
+  },
+  "SMH": {
+    "tier": "active",
+    "theme": "broad_beta",
+    "liquidity": 1
+  },
+  "VOO": {
+    "tier": "watch",
+    "theme": "broad_beta",
+    "liquidity": 1
+  },
+  "IWM": {
+    "tier": "active",
+    "theme": "broad_beta",
+    "liquidity": 1
+  },
+  "NVDA": {
+    "tier": "active",
+    "theme": "ai_semiconductor",
+    "liquidity": 1
+  },
+  "AVGO": {
+    "tier": "active",
+    "theme": "ai_semiconductor",
+    "liquidity": 1
+  },
+  "AMD": {
+    "tier": "active",
+    "theme": "ai_semiconductor",
+    "liquidity": 1
+  },
+  "TSM": {
+    "tier": "watch",
+    "theme": "ai_semiconductor",
+    "liquidity": 1
+  },
+  "MRVL": {
+    "tier": "active",
+    "theme": "ai_semiconductor",
+    "liquidity": 1
+  },
+  "MU": {
+    "tier": "active",
+    "theme": "ai_semiconductor",
+    "liquidity": 1
+  },
+  "ALAB": {
+    "tier": "active",
+    "theme": "ai_semiconductor",
+    "liquidity": 2
+  },
+  "CRDO": {
+    "tier": "active",
+    "theme": "ai_semiconductor",
+    "liquidity": 2
+  },
+  "RMBS": {
+    "tier": "watch",
+    "theme": "ai_semiconductor",
+    "liquidity": 2
+  },
+  "AMKR": {
+    "tier": "watch",
+    "theme": "ai_semiconductor",
+    "liquidity": 2
+  },
+  "TTMI": {
+    "tier": "watch",
+    "theme": "ai_semiconductor",
+    "liquidity": 2
+  },
+  "SNDK": {
+    "tier": "watch",
+    "theme": "ai_semiconductor",
+    "liquidity": 2
+  },
+  "QCOM": {
+    "tier": "watch",
+    "theme": "ai_semiconductor",
+    "liquidity": 1
+  },
+  "COHR": {
+    "tier": "watch",
+    "theme": "photonics",
+    "liquidity": 2
+  },
+  "AAOI": {
+    "tier": "watch",
+    "theme": "photonics",
+    "liquidity": 3
+  },
+  "GLW": {
+    "tier": "watch",
+    "theme": "photonics",
+    "liquidity": 2
+  },
+  "VRT": {
+    "tier": "active",
+    "theme": "ai_infra",
+    "liquidity": 1
+  },
+  "DELL": {
+    "tier": "watch",
+    "theme": "ai_infra",
+    "liquidity": 1
+  },
+  "ANET": {
+    "tier": "active",
+    "theme": "ai_infra",
+    "liquidity": 1
+  },
+  "EQIX": {
+    "tier": "active",
+    "theme": "ai_infra",
+    "liquidity": 1
+  },
+  "NBIS": {
+    "tier": "watch",
+    "theme": "ai_infra",
+    "liquidity": 3
+  },
+  "IREN": {
+    "tier": "watch",
+    "theme": "ai_infra",
+    "liquidity": 3
+  },
+  "BE": {
+    "tier": "watch",
+    "theme": "ai_infra",
+    "liquidity": 2
+  },
+  "FLNC": {
+    "tier": "watch",
+    "theme": "ai_infra",
+    "liquidity": 2
+  },
+  "PLTR": {
+    "tier": "active",
+    "theme": "ai_software",
+    "liquidity": 1
+  },
+  "NET": {
+    "tier": "watch",
+    "theme": "ai_software",
+    "liquidity": 1
+  },
+  "SNOW": {
+    "tier": "watch",
+    "theme": "ai_software",
+    "liquidity": 1
+  },
+  "CRM": {
+    "tier": "watch",
+    "theme": "ai_software",
+    "liquidity": 1
+  },
+  "AMZN": {
+    "tier": "active",
+    "theme": "platform",
+    "liquidity": 1
+  },
+  "GOOGL": {
+    "tier": "active",
+    "theme": "platform",
+    "liquidity": 1
+  },
+  "META": {
+    "tier": "active",
+    "theme": "platform",
+    "liquidity": 1
+  },
+  "MSFT": {
+    "tier": "watch",
+    "theme": "platform",
+    "liquidity": 1
+  },
+  "HOOD": {
+    "tier": "watch",
+    "theme": "fintech",
+    "liquidity": 2
+  },
+  "SOFI": {
+    "tier": "watch",
+    "theme": "fintech",
+    "liquidity": 2
+  },
+  "UBER": {
+    "tier": "watch",
+    "theme": "platform",
+    "liquidity": 1
+  },
+  "NFLX": {
+    "tier": "active",
+    "theme": "platform",
+    "liquidity": 1
+  },
+  "TSLA": {
+    "tier": "active",
+    "theme": "platform",
+    "liquidity": 1
+  },
+  "ASTS": {
+    "tier": "active",
+    "theme": "speculative",
+    "liquidity": 2
+  },
+  "RKLB": {
+    "tier": "active",
+    "theme": "speculative",
+    "liquidity": 2
+  },
+  "FLY": {
+    "tier": "watch",
+    "theme": "speculative",
+    "liquidity": 3
+  },
+  "RDW": {
+    "tier": "watch",
+    "theme": "speculative",
+    "liquidity": 3
+  },
+  "IONQ": {
+    "tier": "active",
+    "theme": "speculative",
+    "liquidity": 2
+  },
+  "QBTS": {
+    "tier": "watch",
+    "theme": "speculative",
+    "liquidity": 3
+  },
+  "KTOS": {
+    "tier": "active",
+    "theme": "speculative",
+    "liquidity": 2
+  },
+  "AVAV": {
+    "tier": "watch",
+    "theme": "speculative",
+    "liquidity": 2
+  },
+  "AXON": {
+    "tier": "active",
+    "theme": "speculative",
+    "liquidity": 1
+  },
+  "ONDS": {
+    "tier": "watch",
+    "theme": "speculative",
+    "liquidity": 3
+  },
+  "CBRS": {
+    "tier": "watch",
+    "theme": "speculative",
+    "liquidity": 3
+  },
+  "LEU": {
+    "tier": "active",
+    "theme": "nuclear",
+    "liquidity": 2
+  },
+  "UUUU": {
+    "tier": "active",
+    "theme": "nuclear",
+    "liquidity": 2
+  },
+  "MP": {
+    "tier": "watch",
+    "theme": "nuclear",
+    "liquidity": 2
+  },
+  "XE": {
+    "tier": "watch",
+    "theme": "nuclear",
+    "liquidity": 3
+  },
+  "TE": {
+    "tier": "watch",
+    "theme": "nuclear",
+    "liquidity": 3
+  },
+  "SOLS": {
+    "tier": "watch",
+    "theme": "nuclear",
+    "liquidity": 3
+  },
+  "ARKK": {
+    "tier": "active",
+    "theme": "etf",
+    "liquidity": 1
+  },
+  "ARKW": {
+    "tier": "watch",
+    "theme": "etf",
+    "liquidity": 2
+  },
+  "ARKG": {
+    "tier": "watch",
+    "theme": "etf",
+    "liquidity": 2
+  },
+  "QTUM": {
+    "tier": "active",
+    "theme": "etf",
+    "liquidity": 2
+  },
+  "DRAM": {
+    "tier": "watch",
+    "theme": "etf",
+    "liquidity": 3
+  },
+  "FOTO": {
+    "tier": "watch",
+    "theme": "etf",
+    "liquidity": 3
+  },
+  "NASA": {
+    "tier": "watch",
+    "theme": "etf",
+    "liquidity": 3
+  },
+  "AIPO": {
+    "tier": "watch",
+    "theme": "etf",
+    "liquidity": 3
+  },
+  "AAPL": {
+    "tier": "watch",
+    "theme": "defensive",
+    "liquidity": 1
+  },
+  "INTC": {
+    "tier": "watch",
+    "theme": "defensive",
+    "liquidity": 1
+  },
+  "CSCO": {
+    "tier": "watch",
+    "theme": "defensive",
+    "liquidity": 1
+  },
+  "IBM": {
+    "tier": "watch",
+    "theme": "defensive",
+    "liquidity": 1
+  },
+  "GE": {
+    "tier": "watch",
+    "theme": "defensive",
+    "liquidity": 1
+  },
+  "BA": {
+    "tier": "watch",
+    "theme": "defensive",
+    "liquidity": 1
+  },
+  "LMT": {
+    "tier": "watch",
+    "theme": "defensive",
+    "liquidity": 1
+  },
+  "XOM": {
+    "tier": "watch",
+    "theme": "defensive",
+    "liquidity": 1
+  },
+  "JPM": {
+    "tier": "watch",
+    "theme": "defensive",
+    "liquidity": 1
+  },
+  "GS": {
+    "tier": "watch",
+    "theme": "defensive",
+    "liquidity": 1
+  },
+  "AXP": {
+    "tier": "watch",
+    "theme": "defensive",
+    "liquidity": 1
+  },
+  "WM": {
+    "tier": "watch",
+    "theme": "defensive",
+    "liquidity": 1
+  },
+  "UPS": {
+    "tier": "watch",
+    "theme": "defensive",
+    "liquidity": 1
+  },
+  "SBUX": {
+    "tier": "watch",
+    "theme": "defensive",
+    "liquidity": 1
+  },
+  "DIS": {
+    "tier": "watch",
+    "theme": "defensive",
+    "liquidity": 1
+  },
+  "F": {
+    "tier": "watch",
+    "theme": "defensive",
+    "liquidity": 1
+  },
+  "VSH": {
+    "tier": "watch",
+    "theme": "defensive",
+    "liquidity": 2
+  },
+  "NOK": {
+    "tier": "watch",
+    "theme": "defensive",
+    "liquidity": 2
+  },
+  "BABA": {
+    "tier": "watch",
+    "theme": "adr",
+    "liquidity": 1
+  },
+  "BILI": {
+    "tier": "watch",
+    "theme": "adr",
+    "liquidity": 2
+  },
+  "NIO": {
+    "tier": "watch",
+    "theme": "adr",
+    "liquidity": 2
+  }
 }
