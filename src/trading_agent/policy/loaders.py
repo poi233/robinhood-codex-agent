@@ -137,12 +137,18 @@ def _parse_quote(payload: dict[str, Any]) -> Quote | None:
     if not symbol or price <= 0:
         return None
     previous_close = payload.get("previous_close") or payload.get("previous_close_price")
+    raw_bid = payload.get("bid")
+    raw_ask = payload.get("ask")
+    bid = _as_float(raw_bid) if raw_bid not in (None, "") else None
+    ask = _as_float(raw_ask) if raw_ask not in (None, "") else None
     return Quote(
         symbol=symbol,
         price=price,
         previous_close=_as_float(previous_close, default=0.0) if previous_close is not None else None,
         timestamp=str(payload.get("timestamp") or payload.get("updated_at") or ""),
         is_fresh=bool(payload.get("is_fresh", True)),
+        bid=bid if bid and bid > 0 else None,
+        ask=ask if ask and ask > 0 else None,
     )
 
 

@@ -14,6 +14,32 @@ class Quote:
     previous_close: float | None = None
     timestamp: str = ""
     is_fresh: bool = True
+    # Top-of-book, when the source provides it (the daily-OHLCV feed does not, so these stay None).
+    # Captured point-in-time so E4 fill-quality replay can later measure spread/slippage instead of
+    # re-deriving it after the fact (capture-now-or-lose-forever).
+    bid: float | None = None
+    ask: float | None = None
+
+    @property
+    def mid(self) -> float:
+        """Mid price when a two-sided quote exists, else the last trade price."""
+        if self.bid is not None and self.ask is not None and self.bid > 0 and self.ask > 0:
+            return (self.bid + self.ask) / 2
+        return self.price
+
+    @property
+    def spread(self) -> float | None:
+        if self.bid is not None and self.ask is not None and self.ask >= self.bid > 0:
+            return self.ask - self.bid
+        return None
+
+    @property
+    def spread_bps(self) -> float | None:
+        spread = self.spread
+        mid = self.mid
+        if spread is None or mid <= 0:
+            return None
+        return round(spread / mid * 10000.0, 4)
 
 
 @dataclass(frozen=True)
@@ -55,6 +81,11 @@ class OrderIntent:
     reward_risk: float | None = None
     reason_codes: list[str] = field(default_factory=list)
     confidence: float = 0.0
+    # Top-of-book at submit, carried through to the paper order record so E4 fill-quality replay can
+    # measure spread/slippage without re-joining the quote snapshot. None when the feed lacks a book.
+    bid: float | None = None
+    ask: float | None = None
+    spread_bps: float | None = None
 
     def to_json_dict(self) -> dict[str, object]:
         return {
@@ -71,6 +102,9 @@ class OrderIntent:
             "target_1": self.target_1,
             "target_2": self.target_2,
             "reward_risk": self.reward_risk,
+            "bid": self.bid,
+            "ask": self.ask,
+            "spread_bps": self.spread_bps,
             "reason_codes": list(self.reason_codes),
             "confidence": self.confidence,
         }

@@ -352,6 +352,8 @@
 | **C3** Dashboard v2 | 侧边栏 + 7 Tab；8 个只读查询（含 `strategy_comparison`=F1 + `champion_vs_challengers`）；`AppTest` headless 渲染验证 | 见 git log |
 | **E1** 策略校准地基 | `replay/forward_returns`（keystone）+ benchmark + component IC attribution + setup outcomes + `calibration_report.{json,md}` + `analytics calibrate` + dashboard 第 8 Tab Calibration；全离线可测 | 见 git log |
 | **E3** near-miss | `replay/near_miss.py`：候选按 score vs trade_threshold 分 cleared/near_miss/below 比后续收益（门槛是否太严），折进 Calibration tab | 见 git log |
+| **H1** 校准补强 | `forward_returns` horizon 扩 (1/5/21/63d) + 逐候选 `excess` vs SPY（桶报 `mean_excess_return`）；`component_ic_summary` 多 horizon pooled IC + 逐 run-date 截面 IC 的 mean/std/t-stat，折进 `calibration_report` 的 `ic_summary` + markdown | 见 git log |
+| **E4** 成交质量 | `Quote`/`OrderIntent`/paper 订单记录捕获 bid/ask/mid/spread_bps/slippage_bps（point-in-time）；`replay/fill_quality.py` + `analytics fill-quality`：逐单 realized slippage + 按 spread/流动性分桶 + 保守成交敏感性（edge 缩水 bps + 美元）；`LIVE_QUOTES_CAPTURE_BOOK` 门控 book 探测 | 见 git log |
 | **G9** challenger 隔离账本 | `build_experiment_runtime_paths` + broker `paths_override`；shadow runner 跑 challenger 自己的 paper 账本；G7 出真实 fill/drawdown/PnL | 见 git log |
 | **B5** watchlist resolver | `parse_active_watchlist` 从 `active_strategy.watchlist` 解析文件名（+override），切策略真能切 watchlist，回退兼容 | 见 git log |
 | **TODO_FIX** technical 覆盖 | premarket 全天快照 + intraday merge；`run_symbol_research.sh` 单票输出改写到 `manual/<SYMBOL>/`（不再覆盖全局、可找到） | 见 git log |
@@ -371,8 +373,10 @@
 - **D 工程优化**：✅ 已完成 D1/D3/D4；D2 的跨日缓存已完成，`yf.download` 多 ticker batch 拉取未做。
   （DSA/Technical token 优化见 P4/D1；market_feed 跨日缓存见 P5-D2；Kronos batch 推理见 P5-D3；
   paper 部分成交见 P5-D4。）
-- **E 数据驱动校准（阻塞 2–3 周 paper）**：forward/benchmark returns + entry-zone 命中率 +
-  component attribution、评分/价格 setup 权重校准、near-miss tracking、bid/ask/spread 成交质量。
+- **E 数据驱动校准（部分阻塞 2–3 周 paper）**：✅ E1 forward/benchmark returns + component attribution、
+  ✅ E3 near-miss tracking、✅ E4 bid/ask/spread 成交质量（含 H1 校准补强：21/63d horizon + 逐候选超额 +
+  多 horizon Rank IC/t-stat）均已建。剩 **E2 评分/价格 setup 权重重标定**——需先攒 15–30 交易日 paper 数据
+  才能用真实 IC 证据调权重（绝不手调）。
 - **F 后期/故意推后**：strategy compare、review/live 真实下单接线、dashboard config editor。
 - **G 自成长平台（paper/shadow only）**：growth_policy 安全边界 + 校验器、growth observations、模块
   diagnosers + dashboard Self-Growth Lab（G0–G2，已有详细实现计划

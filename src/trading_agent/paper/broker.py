@@ -287,7 +287,22 @@ def _resolve_fill_quantity(intent: OrderIntent) -> tuple[float, float]:
     return filled_qty, remaining_qty
 
 
+def _realized_slippage_bps(side: str, reference_price: float | None, fill_price: float | None) -> float | None:
+    """Signed fill cost vs the reference (last) price, in bps, where positive = worse for us:
+    a buy filled above reference or a sell filled below reference. This is the per-order fill-quality
+    metric E4 replay aggregates (no benchmark or future bar needed)."""
+    if reference_price is None or fill_price is None or reference_price <= 0:
+        return None
+    raw = (fill_price - reference_price) / reference_price
+    signed = raw if side == "buy" else -raw
+    return round(signed * 10000.0, 4)
+
+
 def _order_payload(intent: OrderIntent, *, now: str, status: str, unfilled_reason: str = "", fill_price: float | None = None) -> dict[str, Any]:
+    filled = status == "filled"
+    mid_price = None
+    if intent.bid is not None and intent.ask is not None and intent.ask >= intent.bid > 0:
+        mid_price = round((intent.bid + intent.ask) / 2, 4)
     return {
         "order_id": f"paper-{intent.symbol.lower()}-{int(datetime.now(tz=PT).timestamp() * 1000)}",
         "timestamp": now,
@@ -298,8 +313,8 @@ def _order_payload(intent: OrderIntent, *, now: str, status: str, unfilled_reaso
         "current_price_at_submit": intent.reference_price,
         "notional": round(intent.quantity * intent.limit_price, 2),
         "status": status,
-        "filled_at": now if status == "filled" else None,
-        "fill_price": fill_price if status == "filled" else None,
+        "filled_at": now if filled else None,
+        "fill_price": fill_price if filled else None,
         "unfilled_reason": unfilled_reason or None,
         "reason_codes": list(intent.reason_codes),
         "confidence": intent.confidence,
@@ -310,6 +325,13 @@ def _order_payload(intent: OrderIntent, *, now: str, status: str, unfilled_reaso
         "target_1": intent.target_1,
         "target_2": intent.target_2,
         "reward_risk": intent.reward_risk,
+        # E4 fill quality: top-of-book at submit (None on the daily feed) + realized slippage vs the
+        # reference price. spread_bps grounds the conservative-fill counterfactual in replay.
+        "bid": intent.bid,
+        "ask": intent.ask,
+        "mid_price": mid_price,
+        "spread_bps": intent.spread_bps,
+        "slippage_bps": _realized_slippage_bps(intent.side, intent.reference_price, fill_price) if filled else None,
     }
 
 
@@ -498,6 +520,12 @@ def _rebuild_intent_from_order(order: dict[str, Any]) -> OrderIntent | None:
         return None
     if side not in {"buy", "sell"} or quantity <= 0 or limit_price <= 0:
         return None
+    def _opt_float(value: Any) -> float | None:
+        try:
+            return float(value) if value is not None else None
+        except (TypeError, ValueError):
+            return None
+
     return OrderIntent(
         symbol=symbol,
         side=side,
@@ -506,6 +534,9 @@ def _rebuild_intent_from_order(order: dict[str, Any]) -> OrderIntent | None:
         estimated_notional=round(limit_price * quantity, 2),
         quantity=quantity,
         reference_price=float(order.get("current_price_at_submit") or limit_price),
+        bid=_opt_float(order.get("bid")),
+        ask=_opt_float(order.get("ask")),
+        spread_bps=_opt_float(order.get("spread_bps")),
         reason_codes=list(order.get("reason_codes") or []),
         confidence=float(order.get("confidence") or 0.0),
     )
@@ -548,6 +579,9 @@ def reconcile_pending_paper_orders(
             estimated_notional=intent.estimated_notional,
             quantity=intent.quantity,
             reference_price=quote.price,
+            bid=quote.bid,
+            ask=quote.ask,
+            spread_bps=quote.spread_bps,
             reason_codes=list(intent.reason_codes),
             confidence=intent.confidence,
         )
@@ -574,10 +608,15 @@ def reconcile_pending_paper_orders(
             "side": fill_intent.side,
             "quantity": fill_intent.quantity,
             "limit_price": fill_intent.limit_price,
+            "current_price_at_submit": fill_intent.reference_price,
             "fill_price": fill_price,
             "status": "partial_filled" if remaining_qty > 0 else "filled",
             "filled_qty": filled_qty,
             "remaining_qty": remaining_qty,
+            "bid": fill_intent.bid,
+            "ask": fill_intent.ask,
+            "spread_bps": fill_intent.spread_bps,
+            "slippage_bps": _realized_slippage_bps(fill_intent.side, fill_intent.reference_price, fill_price),
             "reason_codes": list(fill_intent.reason_codes),
         }
         _append_order_event(paths.paper_orders_log_path, fill_event)

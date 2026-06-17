@@ -258,6 +258,40 @@ class PaperBrokerTests(unittest.TestCase):
         self.assertEqual(order["limit_price"], 100.0)
         self.assertAlmostEqual(account["cash"], round(200.0 - expected_notional, 2), places=2)
         self.assertAlmostEqual(positions["NVDA"]["average_cost"], expected_avg_cost, places=3)
+        # E4 capture: realized slippage = (fill - reference)/reference for a buy, in bps (positive cost).
+        expected_slip_bps = round((expected_fill - 98.0) / 98.0 * 10000.0, 4)
+        self.assertAlmostEqual(order["slippage_bps"], expected_slip_bps, places=1)
+        self.assertIsNone(order["bid"])  # no book on the daily feed
+        self.assertIsNone(order["spread_bps"])
+
+    def test_order_payload_captures_spread_from_quote_book(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            decision = PolicyDecision(
+                trading_mode="paper",
+                checked_symbols=["NVDA"],
+                decision="would_trade",
+                intent=OrderIntent(
+                    symbol="NVDA",
+                    side="buy",
+                    order_type="limit",
+                    limit_price=100.0,
+                    reference_price=100.0,
+                    estimated_notional=10.0,
+                    quantity=0.1,
+                    bid=99.9,
+                    ask=100.1,
+                    spread_bps=20.0,
+                ),
+            )
+            with unittest.mock.patch.dict(os.environ, {"PAPER_FILL_MODEL": "conservative"}, clear=False):
+                apply_paper_intent(root, run_date="2026-06-14", decision=decision, starting_cash=200.0)
+            order_line = (root / "runtime" / "state" / "runs" / "2026-06-14" / "paper" / "orders.jsonl").read_text(encoding="utf-8").splitlines()[0]
+            order = json.loads(order_line)
+        self.assertEqual(order["bid"], 99.9)
+        self.assertEqual(order["ask"], 100.1)
+        self.assertEqual(order["spread_bps"], 20.0)
+        self.assertEqual(order["mid_price"], 100.0)
 
     def test_day_end_cancels_pending_orders_by_default(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

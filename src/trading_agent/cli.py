@@ -29,6 +29,9 @@ def build_parser() -> argparse.ArgumentParser:
     analytics_calibrate_parser = analytics_subparsers.add_parser("calibrate", help="Write runtime/analytics/calibration_report.{json,md} (E1: forward returns + attribution; needs network for yfinance).")
     analytics_calibrate_parser.add_argument("--since", metavar="YYYY-MM-DD", default=None)
     analytics_calibrate_parser.add_argument("--until", metavar="YYYY-MM-DD", default=None)
+    analytics_fill_quality_parser = analytics_subparsers.add_parser("fill-quality", help="Write runtime/analytics/fill_quality_report.{json,md} (E4: realized slippage + conservative-fill sensitivity; local-only).")
+    analytics_fill_quality_parser.add_argument("--since", metavar="YYYY-MM-DD", default=None)
+    analytics_fill_quality_parser.add_argument("--until", metavar="YYYY-MM-DD", default=None)
 
     subparsers.add_parser("dashboard", help="Launch the read-only Streamlit dashboard at http://localhost:8501.")
 
@@ -142,6 +145,8 @@ def _run_doctor(agent_root: Path) -> int:
         f"  PAPER_PARTIAL_FILL        = {env.get('PAPER_PARTIAL_FILL', '0')}",
         f"  PAPER_PARTIAL_FILL_MIN_RATIO     = {env.get('PAPER_PARTIAL_FILL_MIN_RATIO', '0.3')}",
         f"  PAPER_PARTIAL_FILL_THRESHOLD_BPS = {env.get('PAPER_PARTIAL_FILL_THRESHOLD_BPS', '20')}",
+        f"  PAPER_SLIPPAGE_BPS        = {env.get('PAPER_SLIPPAGE_BPS', '10')}",
+        f"  LIVE_QUOTES_CAPTURE_BOOK  = {env.get('LIVE_QUOTES_CAPTURE_BOOK', '0')}",
         "",
         "  --- Notifications ---",
         f"  ENABLE_TRADE_EMAIL        = {env.get('ENABLE_TRADE_EMAIL_NOTIFICATIONS', '1')}",
@@ -320,6 +325,15 @@ def _run_analytics_calibrate(agent_root: Path, *, since: str | None, until: str 
     return 0
 
 
+def _run_analytics_fill_quality(agent_root: Path, *, since: str | None, until: str | None) -> int:
+    from trading_agent.replay.fill_quality import write_fill_quality_report
+
+    json_path, md_path = write_fill_quality_report(agent_root, since=since, until=until)
+    print(f"Wrote {json_path}")
+    print(f"Wrote {md_path}")
+    return 0
+
+
 def _run_dashboard(agent_root: Path) -> int:
     import subprocess
     import sys
@@ -362,6 +376,8 @@ def main(argv: list[str] | None = None) -> int:
         return _run_analytics_build(Path.cwd(), since=args.since, until=args.until)
     if args.command == "analytics" and args.analytics_command == "calibrate":
         return _run_analytics_calibrate(Path.cwd(), since=args.since, until=args.until)
+    if args.command == "analytics" and args.analytics_command == "fill-quality":
+        return _run_analytics_fill_quality(Path.cwd(), since=args.since, until=args.until)
     if args.command == "dashboard":
         return _run_dashboard(Path.cwd())
     if args.command == "growth" and args.growth_command == "observe":

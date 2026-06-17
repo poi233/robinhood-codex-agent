@@ -89,7 +89,7 @@
 | **E 数据驱动校准** | E1 | replay 校准：forward/benchmark returns + 命中率 + attribution + Calibration tab | 旧 R1 + docx P1 | ✅ **机器已建（2026-06-16）**；统计显著性待 paper 数据积累 |
 | | E2 | 评分 / 价格 setup 权重校准 | 旧 R2 | ⏳ 依赖 E1（P5） |
 | | E3 | near-miss tracking | docx P2 | ✅ **机器已建（2026-06-16，near-threshold 版）**；entry-zone/no-chase 版待 per-candidate 落盘 |
-| | E4 | bid/ask/spread 成交质量 | docx P2 | ⏫ **P1.5（评审上调）**：H2 之后、信任校准 edge 之前——乐观成交会虚高 edge |
+| | ~~E4~~ | bid/ask/spread 成交质量 | docx P2 | ✅ **已完成（2026-06-17）**：book 捕获 + 逐单 slippage + `analytics fill-quality` 保守成交敏感性（无 flag，capture additive + replay 只读） |
 | **新增 · 校准期补强** | G9 | challenger 隔离 paper 账本（shadow orders/equity） | 我的建议 | ✅ **已完成（2026-06-16）** |
 | | B5 | strategy_registry.watchlist → active watchlist resolver | 我的建议 | ✅ **已完成（2026-06-16）** |
 | **F 后期 / 故意推后** | F1 | strategy compare | docx | 依赖 B1+B2+多 strategy version |
@@ -202,14 +202,16 @@
 7. **新方向 · H 阶段（量化因子 + AI 归因）**：评估了用户带来的 ChatGPT 计划，Phase 1（校准地基）/ shadow
    隔离账本 / dashboard calibration tab 之前已做掉一大半。**H2 价量因子层已完成并上线（flag 已开启+清除，
    无条件每天落盘）**。**H1 校准补强已完成（2026-06-17）**（21/63d horizon + 逐候选超额 + 多 horizon Rank
-   IC/t-stat）。**下一个代码任务 = E4 成交质量**；详见文末 **H 阶段** 与 **E4**。
+   IC/t-stat）。**E4 成交质量已完成（2026-06-17）**（book 捕获 + 逐单 slippage + `analytics fill-quality`
+   保守成交敏感性）。详见文末 **H 阶段** 与 **E4**。
 
 8. **外部评审确认（2026-06-16）+ 收敛后的推荐序**：一次外部评审确认了方向（paper-only / 安全边界 / H2 为
    下一步都对），并提出两点收敛——① **E4 成交质量上调到 P1.5**（paper 成交偏乐观会虚高 edge，须在信任校准
    结论前补，见 E4）；② **live 前必修止损/退出逻辑**（doc 说「跌 3% 只 alert」与 code 实际不一致、分级减仓
    事实失效、无兜底硬止损，见 **J1**）。收敛后的推荐序：
-   **稳定 paper 10–30 天（冻结 baseline）→ H2 因子层只落盘 ✅ → H1 校准补强 ✅ → E4 成交质量（下一个）→ 再
-   shadow challenger / 权重调整**。J2 文档旧路径统一已完成。
+   **稳定 paper 10–30 天（冻结 baseline）→ H2 因子层只落盘 ✅ → H1 校准补强 ✅ → E4 成交质量 ✅ → 再
+   shadow challenger / 权重调整**。J2 文档旧路径统一已完成。下一步候选见下方总表（E2 权重重标定需先攒 15–30
+   交易日数据；H3 AI schema 可现在做以攒数据）。
 
 **贯穿纪律**：冻结 baseline → 一次一个实验 → 只用数据 promote（≥10 shadow 日、fill rate / drawdown /
 forward return 不劣于 champion、无 safety violation、人工 approve）；**先建产数据的代码、让积累立刻开始，
@@ -278,7 +280,7 @@ forward return 不劣于 champion、无 safety violation、人工 approve）；*
 
 ---
 
-## E4 — bid/ask/spread 成交质量（docx P2）— ⏫ 评审上调到 P1.5
+## ~~E4 — bid/ask/spread 成交质量（docx P2）~~ — ✅ 已完成（2026-06-17）
 
 **目标**：更真实评估成交质量、滑点、流动性风险。
 
@@ -287,14 +289,27 @@ forward return 不劣于 champion、无 safety violation、人工 approve）；*
 那么用 paper 数据判断策略 edge 会**系统性虚高**。所以 E4 不再是「可选」，而是 **H2 之后、在信任 calibration
 的 edge 结论之前**就该补——否则 H 阶段算出的 IC / bucket 收益可能建立在过于乐观的成交上。
 
-**具体步骤**：在 quote 采集处记录 bid/ask/spread，写入 orders/analytics；paper broker 可选用更保守的成交
-价（买≈ask、卖≈bid + spread 罚分）作为对照；replay 输出按 spread / 流动性分组的滑点与「乐观 vs 保守」成交
-对照，量化 paper 乐观度。
+**已完成（capture 是 additive、replay 是只读，均不改 live 成交行为，故无需 feature flag）**：
+- ✅ **point-in-time 捕获**：`Quote` 增 `bid`/`ask`（+ 派生 `mid`/`spread`/`spread_bps` 属性）；
+  `policy/loaders.py::_parse_quote` 解析 book；`OrderIntent` 携带 `bid`/`ask`/`spread_bps`，buy/sell
+  intent 从 quote 透传；paper 订单记录新增 `bid`/`ask`/`mid_price`/`spread_bps`/`slippage_bps`（实现 fill
+  对 reference 的逐单滑点，正值=对我们更差）。
+- ✅ **数据源探测**：`data/live_quotes.py` best-effort 读 yfinance `fast_info` 的 bid/ask，由
+  `LIVE_QUOTES_CAPTURE_BOOK`（默认 0）门控——日 OHLCV 源无 book 时 bid/ask 留 None，pipeline 照常跑。
+- ✅ **replay 分析**：`replay/fill_quality.py`——逐单 realized slippage（fill vs reference）；按 captured
+  spread（有 book 时）或 realized-slippage 流动性代理分桶；**保守成交敏感性**：对一组假设 spread
+  （5/10/25/50bps）给出每边成交成本、round-trip edge 缩水（≈ 全 spread）、对总成交名义额的美元拖累——直接回答
+  「若按保守成交，校准 edge 会缩水多少」。CLI `analytics fill-quality` → `runtime/analytics/fill_quality_report.{json,md}`。
 
-**涉及文件**：`data/live_quotes.py`、`paper/broker.py`、`analytics/*`、`replay/*`、测试。
+**涉及文件**：`policy/models.py`、`policy/loaders.py`、`policy/{buy,sell}.py`、`paper/broker.py`、
+`data/live_quotes.py`、`replay/fill_quality.py`、`cli.py`、`doctor`；测试 +14。
 
-**验收**：订单记录含 spread；replay 可输出按 spread 分组的滑点；能给出「若按保守成交，校准 edge 会缩水多少」
-的对照。
+**验收**：✅ 订单记录含 `spread_bps`/`slippage_bps`；✅ replay 按 spread/流动性分桶输出滑点；✅ 给出「若按
+保守成交，edge 缩水多少」的多场景对照（bps + 美元）。388 个测试通过。
+
+> **数据现实**：当前数据源是日 OHLCV（无实时 bid/ask），所以 book 字段默认为 None，分桶回退到 realized-slippage
+> 代理、敏感性用假设 spread 场景。基建已就位——接上带 book 的源（设 `LIVE_QUOTES_CAPTURE_BOOK=1`）即自动用真实
+> spread，无需改分析代码。这正是「现在采集、否则永远丢失」：先把 capture 管道铺好。
 
 ---
 
