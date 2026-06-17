@@ -47,7 +47,7 @@
 | | E3 | near-miss tracking | docx P2 | ✅ **机器已建（2026-06-16，near-threshold 版）**；entry-zone/no-chase 版待 per-candidate 落盘 |
 | | E4 | bid/ask/spread 成交质量 | docx P2 | 可选（paper 阶段弱依赖） |
 | **新增 · 校准期补强** | G9 | challenger 隔离 paper 账本（shadow orders/equity） | 我的建议 | ✅ **已完成（2026-06-16）** |
-| | B5 | strategy_registry.watchlist → active watchlist resolver | 我的建议 | ⏳ 待做（P4，多策略选股层） |
+| | B5 | strategy_registry.watchlist → active watchlist resolver | 我的建议 | ✅ **已完成（2026-06-16）** |
 | **F 后期 / 故意推后** | F1 | strategy compare | docx | 依赖 B1+B2+多 strategy version |
 | | F2 | review/live 真实下单接线 | 旧 R7 | ⛔ 故意推后（人工解锁） |
 | | F3 | config editor（dashboard 可编辑参数） | docx | ⛔ 最后做 |
@@ -125,9 +125,9 @@
    现在有自己的 `experiments/<id>/paper/` 账本，G7 报告含其真实 fill rate / drawdown / PnL，fill-rate 与
    drawdown 两个 promotion gate 真能比较了。见 **G9** 实现记录。**下一个代码任务 → P4 的 B5。**
 
-5. **P4 · 策略版本化 + watchlist resolver（B5）** — 等 E1 指出该动哪个杠杆后，再建**单变量** challenger
-   版本（一次只改一个），dashboard 策略对比才有第二行数据。配套把 `strategy_registry.watchlist` 真正
-   接线到 active watchlist（见新增 **B5**）。
+5. **P4 · 策略版本化 + watchlist resolver（B5）** — ✅ **B5 已完成（2026-06-16）**：切换 `active_strategy`
+   现在真能切 watchlist 文件。策略版本化实验本身（建单变量 challenger）等 E1 数据指出该动哪个杠杆后
+   再做。**至此"现在能做"的代码任务都已完成，剩 P5(E2) 是真数据阻塞。**
 
 6. **P5 · E2 权重重校准** — 用 E1 的 IC/attribution 重分配评分权重，登记为**新 strategy version**，先
    shadow 再考虑 promote。**绝不**手动拍脑袋调权重。
@@ -1159,7 +1159,20 @@ fill rate / drawdown / PnL；champion `paper/*` 一字不变（断言）。
 
 ---
 
-## B5 — strategy_registry.watchlist → active watchlist resolver — ⏳ 待做（P4）
+## B5 — strategy_registry.watchlist → active watchlist resolver — ✅ 已完成（2026-06-16）
+
+**实现记录**：`data/universe.py` 的 `parse_active_watchlist(config_dir, *, watchlist_filename=None)`
+现在先用 `_resolve_watchlist_filename` 读 `load_active_strategy().watchlist` 解析实际文件名（从 config_dir
+反推 agent_root），再读那个文件；缺 registry / 字段是默认 / 解析失败时回退 `active_watchlist.txt`，
+文件缺失再回退 `universe.txt`——**完全向后兼容**。新增显式 `watchlist_filename` override 供以后 challenger
+用自己的 watchlist。`universe_meta.json` 的 `_comment` 记录了可选的选股层扩展字段（layer/supply_chain/
+risk_tags），但**没有凭空给 88 个标的编造分类数据**（没有消费者，YAGNI）。测试
+`test_universe_watchlist.py`（5：默认/切换/override/缺文件回退/默认字段向后兼容）。
+
+**未做（有意推后）**：「shadow runner 里 challenger 用其自己的 watchlist」**没接**——当前 shadow 复用
+champion 的 premarket `candidate_scores`（那是按 champion watchlist 算的），换 watchlist 需要按 challenger
+watchlist **重跑 premarket 打分**（G6 的"贵路径"），且 G3 目前根本不生成 watchlist 类实验。等这两者就绪
+再接，避免现在加一个不起作用的接线。
 
 **目标**：让不同 strategy version 能用不同的 watchlist 文件。现在 `strategy_registry.yaml` 的 `watchlist`
 字段只是记录，没有反向接线——切换 `active_strategy` 不会真的切 watchlist（B2 实现记录里已点名这是有意

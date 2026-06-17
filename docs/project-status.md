@@ -349,6 +349,7 @@
 | **E1** 策略校准地基 | `replay/forward_returns`（keystone）+ benchmark + component IC attribution + setup outcomes + `calibration_report.{json,md}` + `analytics calibrate` + dashboard 第 8 Tab Calibration；全离线可测 | 见 git log |
 | **E3** near-miss | `replay/near_miss.py`：候选按 score vs trade_threshold 分 cleared/near_miss/below 比后续收益（门槛是否太严），折进 Calibration tab | 见 git log |
 | **G9** challenger 隔离账本 | `build_experiment_runtime_paths` + broker `paths_override`；shadow runner 跑 challenger 自己的 paper 账本；G7 出真实 fill/drawdown/PnL | 见 git log |
+| **B5** watchlist resolver | `parse_active_watchlist` 从 `active_strategy.watchlist` 解析文件名（+override），切策略真能切 watchlist，回退兼容 | 见 git log |
 | **TODO_FIX** technical 覆盖 | premarket 全天快照 + intraday merge；`run_symbol_research.sh` 单票输出改写到 `manual/<SYMBOL>/`（不再覆盖全局、可找到） | 见 git log |
 
 ---
