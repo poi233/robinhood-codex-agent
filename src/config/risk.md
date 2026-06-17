@@ -3,6 +3,11 @@
 Live trading is allowed only inside the dedicated Robinhood Agentic Account.
 Do not place orders in the user's ordinary Investing account, Roth IRA, Managed account, Spending account, Traditional IRA, crypto account, or any external account.
 
+> Path note: file references below use the runtime-block variable names (e.g. `TODAY_ALLOWLIST_PATH`,
+> `DAILY_PLAN_PATH`) that the premarket runtime block injects. They resolve at run time to the dated
+> run folder `runtime/state/runs/<date>/planner|signals/...` — do not assume the old flat
+> `runtime/state/<file>` paths.
+
 Runtime modes:
 - `paper`: never call `review_equity_order` or `place_equity_order`; write `would_trade` only.
 - `review`: `review_equity_order` is allowed, but `place_equity_order` is forbidden.
@@ -19,14 +24,14 @@ Risk tiers:
 Hard limits:
 - Only trade symbols that are present in all applicable gates:
   - `src/config/universe.txt`;
-  - `runtime/state/today_allowlist.txt`;
-  - `runtime/state/daily_plan.json.today_watchlist`.
+  - `TODAY_ALLOWLIST_PATH`;
+  - `DAILY_PLAN_PATH (today_watchlist field)`.
 - `src/config/allowlist.txt` is only a static emergency fallback and must not be used for normal dynamic trading.
 - Only long equities or ETFs.
 - Never trade options, crypto, futures, margin, short selling, leveraged ETFs, or inverse ETFs.
 - Only use limit orders.
-- Max single order notional is the lower of `src/config/runtime.env`, `RISK_TIER`, and `runtime/state/daily_plan.json`.
-- Max daily notional is the lower of `src/config/runtime.env`, `RISK_TIER`, and `runtime/state/daily_plan.json`.
+- Max single order notional is the lower of `src/config/runtime.env`, `RISK_TIER`, and `DAILY_PLAN_PATH`.
+- Max daily notional is the lower of `src/config/runtime.env`, `RISK_TIER`, and `DAILY_PLAN_PATH`.
 - Max one open order per symbol.
 - Max one buy and one sell per symbol per day.
 - Do not average down automatically if already holding a losing position.
@@ -37,7 +42,7 @@ Hard limits:
 - If review shows any warning, ambiguity, rejection, or unexpected field, do not place the order.
 - If `market_regime` is `risk_off` or `no_trade`, do not place any order.
 - If `KILL_SWITCH` exists, do not place any order.
-- If `runtime/state/today_allowlist.txt` is missing, stale, empty, or not generated today, do not place any order.
+- If `TODAY_ALLOWLIST_PATH` is missing, stale, empty, or not generated today, do not place any order.
 - If local time is outside the configured intraday window, do not place any order.
 - If there is already an open order for a symbol, do not place another order for that symbol.
 - Never cancel orders automatically in v1; log the open order and take no new action.

@@ -42,7 +42,7 @@
     "broad_beta_when_single_name_quality_is_weak"
   ],
   "output_contract": {
-    "file": "runtime/state/dsa_signals.json",
+    "file": "DSA_SIGNALS_PATH",
     "max_selected_candidates": 10,
     "max_strategy_matches_per_symbol": 4,
     "expires_same_day": true

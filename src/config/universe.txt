@@ -1,6 +1,6 @@
 # Maximum candidate universe for daily dynamic allowlist generation.
 # Premarket agent may only select symbols from this file.
-# Intraday agent may only trade symbols selected into runtime/state/today_allowlist.txt.
+# Intraday agent may only trade symbols selected into runtime/state/runs/<date>/planner/today_allowlist.txt.
 #
 # Rules:
 # - Long equities/ETFs only.
