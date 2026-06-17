@@ -149,6 +149,9 @@ class PolicyDecision:
     reason: str = ""
     risk_checks: dict[str, bool | None] = field(default_factory=dict)
     blocked_reasons: list[str] = field(default_factory=list)
+    # Per-candidate block reasons {symbol: [reason, ...]}, captured point-in-time for E3 near-miss
+    # attribution. Empty for global blocks (kill switch / missing plan / regime) that aren't per-symbol.
+    per_candidate_blocks: dict[str, list[str]] = field(default_factory=dict)
 
     def to_json_dict(self, *, timestamp: str) -> dict[str, object]:
         return {
@@ -162,5 +165,6 @@ class PolicyDecision:
             "reason": self.reason,
             "risk_checks": dict(self.risk_checks),
             "blocked_reasons": list(self.blocked_reasons),
+            "per_candidate_blocks": {sym: list(reasons) for sym, reasons in self.per_candidate_blocks.items()},
             "order_id_if_any": None,
         }

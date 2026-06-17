@@ -155,6 +155,12 @@ class PolicyBuySellTests(unittest.TestCase):
         self.assertEqual(decision.decision, "blocked")
         self.assertIn("outside_entry_zone", decision.blocked_reasons)
         self.assertIsNone(decision.intent)
+        # E3 capture: the block reason is attributed to the specific candidate, not only aggregated.
+        self.assertIn("SMH", decision.per_candidate_blocks)
+        self.assertIn("outside_entry_zone", decision.per_candidate_blocks["SMH"])
+        serialized = decision.to_json_dict(timestamp="2026-06-17T09:31:00")
+        self.assertIn("per_candidate_blocks", serialized)
+        self.assertEqual(serialized["per_candidate_blocks"]["SMH"], decision.per_candidate_blocks["SMH"])
 
     def test_missing_quote_blocks_trade(self) -> None:
         inputs = base_inputs()

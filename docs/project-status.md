@@ -351,7 +351,7 @@
 | **G4–G8** 自成长全闭环 | proposal 完整校验（`growth validate`）→ 实验队列（`growth experiments`）→ shadow runner + 隔离账本（`growth shadow`，接入 intraday）→ evaluator（`growth evaluate/recommend`）→ 人工 promote check（`growth promote check`，不改 registry） | 见 git log |
 | **C3** Dashboard v2 | 侧边栏 + 7 Tab；8 个只读查询（含 `strategy_comparison`=F1 + `champion_vs_challengers`）；`AppTest` headless 渲染验证 | 见 git log |
 | **E1** 策略校准地基 | `replay/forward_returns`（keystone）+ benchmark + component IC attribution + setup outcomes + `calibration_report.{json,md}` + `analytics calibrate` + dashboard 第 8 Tab Calibration；全离线可测 | 见 git log |
-| **E3** near-miss | `replay/near_miss.py`：候选按 score vs trade_threshold 分 cleared/near_miss/below 比后续收益（门槛是否太严），折进 Calibration tab | 见 git log |
+| **E3** near-miss | `replay/near_miss.py`：候选按 score vs trade_threshold 分 cleared/near_miss/below 比后续收益（门槛是否太严），折进 Calibration tab；`PolicyDecision.per_candidate_blocks` 逐候选 block 落盘（2026-06-17，为 entry-zone/no-chase 分类分析攒数据） | 见 git log |
 | **H1** 校准补强 | `forward_returns` horizon 扩 (1/5/21/63d) + 逐候选 `excess` vs SPY（桶报 `mean_excess_return`）；`component_ic_summary` 多 horizon pooled IC + 逐 run-date 截面 IC 的 mean/std/t-stat，折进 `calibration_report` 的 `ic_summary` + markdown | 见 git log |
 | **E4** 成交质量 | `Quote`/`OrderIntent`/paper 订单记录捕获 bid/ask/mid/spread_bps/slippage_bps（point-in-time）；`replay/fill_quality.py` + `analytics fill-quality`：逐单 realized slippage + 按 spread/流动性分桶 + 保守成交敏感性（edge 缩水 bps + 美元）；`LIVE_QUOTES_CAPTURE_BOOK` 门控 book 探测 | 见 git log |
 | **G9** challenger 隔离账本 | `build_experiment_runtime_paths` + broker `paths_override`；shadow runner 跑 challenger 自己的 paper 账本；G7 出真实 fill/drawdown/PnL | 见 git log |

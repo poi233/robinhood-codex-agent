@@ -79,10 +79,12 @@ def generate_order_intent(inputs: PolicyInputs) -> PolicyDecision:
 
     intent: OrderIntent | None = evaluate_sell(inputs)
     buy_blocked_reasons: list[str] = []
+    buy_per_candidate_blocks: dict[str, list[str]] = {}
     if intent is None:
         buy_evaluation = evaluate_buy(inputs)
         intent = buy_evaluation.intent
         buy_blocked_reasons = buy_evaluation.blocked_reasons
+        buy_per_candidate_blocks = buy_evaluation.per_candidate_blocks
     if intent is None:
         hard_block_reasons = {
             "missing_quote",
@@ -119,6 +121,7 @@ def generate_order_intent(inputs: PolicyInputs) -> PolicyDecision:
                 reason=", ".join(buy_blocked_reasons),
                 risk_checks={**risk_checks, "execution_wired": None},
                 blocked_reasons=buy_blocked_reasons,
+                per_candidate_blocks=buy_per_candidate_blocks,
             )
         return PolicyDecision(
             trading_mode=inputs.trading_mode,
@@ -126,6 +129,7 @@ def generate_order_intent(inputs: PolicyInputs) -> PolicyDecision:
             decision="no_action",
             reason="no policy candidate passed",
             risk_checks={**risk_checks, "execution_wired": None},
+            per_candidate_blocks=buy_per_candidate_blocks,
         )
 
     if inputs.trading_mode in {"review", "live"}:
