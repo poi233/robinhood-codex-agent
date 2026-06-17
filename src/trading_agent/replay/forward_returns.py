@@ -10,7 +10,7 @@ from trading_agent.core.context import build_runtime_paths
 from trading_agent.core.io import read_json
 from trading_agent.replay.analysis import discover_run_dates
 
-DEFAULT_HORIZONS = (1, 3, 5)
+DEFAULT_HORIZONS = (1, 5, 21, 63)
 
 # A price loader returns daily (date, close) bars for one symbol, sorted ascending,
 # covering at least [start, end]. Injected so tests run without network.
@@ -26,6 +26,10 @@ class ForwardReturnRecord:
     price_setup_score: float | None
     returns: dict[int, float | None]
     components: dict[str, float] = field(default_factory=dict)
+    # Excess return over the primary benchmark (default SPY) at each horizon, computed from the
+    # same entry date. None when either the candidate or the benchmark return is pending. This is
+    # what separates real alpha from a market-beta tailwind in the bucket monotonicity check.
+    excess: dict[int, float | None] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -35,6 +39,7 @@ class ForwardReturnRecord:
             "trade_readiness_score": self.trade_readiness_score,
             "price_setup_score": self.price_setup_score,
             **{f"fwd_{h}": value for h, value in self.returns.items()},
+            **{f"excess_{h}": value for h, value in self.excess.items()},
         }
 
 
@@ -135,6 +140,23 @@ def _entry_index(bars: list[tuple[str, float]], run_date: str) -> int | None:
     return None
 
 
+def _forward_returns_from_bars(
+    bars: list[tuple[str, float]], run_date: str, horizons: tuple[int, ...]
+) -> dict[int, float | None]:
+    """Per-horizon forward return from the close on (or just after) `run_date`. A horizon with too
+    few future bars is None (pending) rather than guessed."""
+    entry_idx = _entry_index(bars, run_date)
+    returns: dict[int, float | None] = {}
+    for horizon in horizons:
+        if entry_idx is None or entry_idx + horizon >= len(bars):
+            returns[horizon] = None
+            continue
+        entry_close = bars[entry_idx][1]
+        future_close = bars[entry_idx + horizon][1]
+        returns[horizon] = round(future_close / entry_close - 1, 6) if entry_close else None
+    return returns
+
+
 def compute_forward_return_records(
     agent_root: Path,
     *,
@@ -142,10 +164,12 @@ def compute_forward_return_records(
     since: str | None = None,
     until: str | None = None,
     price_loader: PriceLoader = default_price_loader,
+    benchmark: str = "SPY",
 ) -> list[ForwardReturnRecord]:
-    """For each historical run date and scored candidate, compute its 1/3/5-trading-day forward
-    return from the close on (or just after) the run date. A horizon with too few future bars is
-    recorded as None (pending) rather than guessed."""
+    """For each historical run date and scored candidate, compute its forward return at each horizon
+    from the close on (or just after) the run date, plus the excess return over `benchmark` (SPY by
+    default) measured from the same entry date. A horizon with too few future bars is recorded as
+    None (pending) rather than guessed."""
     run_dates = discover_run_dates(agent_root, since_date=since, until_date=until)
     if not run_dates:
         return []
@@ -164,19 +188,28 @@ def compute_forward_return_records(
     end = end_date.isoformat()
     series: dict[str, list[tuple[str, float]]] = {sym: price_loader(sym, start, end) for sym in symbols}
 
+    # Benchmark series (loaded once); benchmark forward returns are cached per run date so excess is
+    # the candidate's market-relative move, isolating alpha from a broad-market tailwind.
+    bench_key = benchmark.upper()
+    bench_bars = series.get(bench_key) if bench_key in symbols else price_loader(bench_key, start, end)
+    bench_returns: dict[str, dict[int, float | None]] = {}
+
+    def _benchmark_returns(run_date: str) -> dict[int, float | None]:
+        if run_date not in bench_returns:
+            bench_returns[run_date] = _forward_returns_from_bars(bench_bars or [], run_date, horizons)
+        return bench_returns[run_date]
+
     records: list[ForwardReturnRecord] = []
     for run_date in run_dates:
+        bench = _benchmark_returns(run_date)
         for symbol, score_map in per_run[run_date].items():
             bars = series.get(symbol) or []
-            entry_idx = _entry_index(bars, run_date)
-            returns: dict[int, float | None] = {}
+            returns = _forward_returns_from_bars(bars, run_date, horizons)
+            excess: dict[int, float | None] = {}
             for horizon in horizons:
-                if entry_idx is None or entry_idx + horizon >= len(bars):
-                    returns[horizon] = None
-                    continue
-                entry_close = bars[entry_idx][1]
-                future_close = bars[entry_idx + horizon][1]
-                returns[horizon] = round(future_close / entry_close - 1, 6) if entry_close else None
+                own = returns.get(horizon)
+                mkt = bench.get(horizon)
+                excess[horizon] = round(own - mkt, 6) if own is not None and mkt is not None else None
             records.append(ForwardReturnRecord(
                 run_date=run_date,
                 symbol=symbol,
@@ -185,6 +218,7 @@ def compute_forward_return_records(
                 price_setup_score=score_map.get("price_setup_score"),
                 returns=returns,
                 components=dict(score_map.get("components") or {}),
+                excess=excess,
             ))
     return records
 
@@ -209,11 +243,13 @@ def bucket_returns(
     n_buckets: int = 5,
 ) -> list[dict[str, Any]]:
     """Bucket records into `n_buckets` quantiles by `score_field` and report, per bucket, the
-    sample count, mean forward return, and hit rate (fraction with positive return) at `horizon`.
-    Bucket monotonicity (higher score → higher mean return) is the headline signal-quality check.
-    Records missing the score or the horizon return are skipped."""
+    sample count, mean forward return, mean excess return over the benchmark, and hit rate
+    (fraction with positive return) at `horizon`. Bucket monotonicity (higher score → higher mean
+    return) is the headline signal-quality check; the excess column shows whether that monotonicity
+    survives once the market move is stripped out. Records missing the score or the horizon return
+    are skipped."""
     usable = [
-        (score_value(rec, score_field), rec.returns.get(horizon))
+        (score_value(rec, score_field), rec.returns.get(horizon), rec.excess.get(horizon))
         for rec in records
         if score_value(rec, score_field) is not None and rec.returns.get(horizon) is not None
     ]
@@ -229,14 +265,16 @@ def bucket_returns(
         chunk = usable[lo:hi]
         if not chunk:
             continue
-        scores = [score for score, _ in chunk]
-        rets = [ret for _, ret in chunk]
+        scores = [score for score, _, _ in chunk]
+        rets = [ret for _, ret, _ in chunk]
+        excess = [exc for _, _, exc in chunk if exc is not None]
         buckets.append({
             "bucket": b + 1,
             "count": len(chunk),
             "score_min": round(min(scores), 2),
             "score_max": round(max(scores), 2),
             "mean_return": round(sum(rets) / len(rets), 6),
+            "mean_excess_return": round(sum(excess) / len(excess), 6) if excess else None,
             "hit_rate": round(sum(1 for r in rets if r > 0) / len(rets), 4),
         })
     return buckets

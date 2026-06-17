@@ -7,7 +7,7 @@ from typing import Any
 from trading_agent.core.io import write_json
 from trading_agent.replay.analysis import discover_run_dates
 from trading_agent.replay.benchmark_returns import DEFAULT_BENCHMARKS, compute_benchmark_returns
-from trading_agent.replay.component_attribution import component_attribution
+from trading_agent.replay.component_attribution import component_attribution, component_ic_summary
 from trading_agent.replay.forward_returns import (
     DEFAULT_HORIZONS,
     PriceLoader,
@@ -47,6 +47,7 @@ def build_calibration_report(
         for field in score_fields
     }
     attribution = {str(h): component_attribution(records, horizon=h) for h in horizons}
+    ic_summary = component_ic_summary(records, horizons=horizons)
     benchmark = compute_benchmark_returns(agent_root, horizons=horizons, benchmarks=benchmarks, since=since, until=until, price_loader=price_loader)
     setups = setup_outcomes(agent_root, since=since, until=until, price_loader=price_loader)
     thresholds = load_trade_thresholds(agent_root, run_dates)
@@ -59,6 +60,7 @@ def build_calibration_report(
         "horizons": list(horizons),
         "score_buckets": score_buckets,
         "attribution": {h: [dict(r) for r in rows] for h, rows in attribution.items()},
+        "ic_summary": ic_summary,
         "benchmarks": {sym: {str(h): v for h, v in per.items()} for sym, per in benchmark.items()},
         "setup_outcomes": setups,
         "near_miss": near_miss,
@@ -100,8 +102,11 @@ def format_calibration_markdown(report: dict[str, Any]) -> str:
                 continue
             lines.append(f"**{field} · {horizon}d** (low → high score):")
             for b in buckets:
+                excess = b.get("mean_excess_return")
+                excess_str = f"  excess={_fmt_pct(excess)}" if excess is not None else ""
                 lines.append(f"- bucket {b['bucket']} [{b['score_min']}–{b['score_max']}]  "
-                             f"n={b['count']}  mean={_fmt_pct(b['mean_return'])}  hit={b['hit_rate'] * 100:.0f}%")
+                             f"n={b['count']}  mean={_fmt_pct(b['mean_return'])}{excess_str}  "
+                             f"hit={b['hit_rate'] * 100:.0f}%")
             lines.append("")
 
     lines.append("## Component attribution (Spearman IC, ranked)")
@@ -111,6 +116,27 @@ def format_calibration_markdown(report: dict[str, Any]) -> str:
             f"{r['component']}={r['ic']:.2f}(n{r['n']})" if r["ic"] is not None else f"{r['component']}=NA"
             for r in rows))
     lines.append("")
+
+    if report.get("ic_summary"):
+        lines.append("## Multi-horizon Rank IC (per-date mean ± t-stat)")
+        lines.append("")
+        lines.append("_`mean` is the average of per-run-date cross-sectional ICs; `t` is its t-stat. "
+                     "|t| ≳ 2 over enough dates ⇒ the signal is real, not noise._")
+        horizon_keys = [str(h) for h in report["horizons"]]
+        for row in report["ic_summary"]:
+            parts = []
+            for h in horizon_keys:
+                stats = (row.get("horizons") or {}).get(h) or {}
+                mean_ic = stats.get("mean_ic")
+                t_stat = stats.get("t_stat")
+                if mean_ic is None:
+                    parts.append(f"{h}d NA")
+                elif t_stat is None:
+                    parts.append(f"{h}d {mean_ic:+.2f}(t—,n{stats.get('periods', 0)})")
+                else:
+                    parts.append(f"{h}d {mean_ic:+.2f}(t{t_stat:+.1f},n{stats.get('periods', 0)})")
+            lines.append(f"- **{row['component']}:** " + "  ·  ".join(parts))
+        lines.append("")
 
     lines.append("## Benchmark returns (separate alpha from beta)")
     lines.append("")

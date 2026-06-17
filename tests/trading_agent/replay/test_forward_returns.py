@@ -109,3 +109,55 @@ def test_bucket_returns_works_for_component_fields():
     buckets = bucket_returns(records, score_field="factor_alpha", horizon=1, n_buckets=2)
     assert len(buckets) == 2
     assert buckets[1]["mean_return"] > buckets[0]["mean_return"]  # higher factor -> higher return
+
+
+def test_excess_return_subtracts_benchmark(tmp_path):
+    _seed_run(tmp_path, "2026-06-15", candidate_score=66.0, trade_readiness=72.0, price_setup=70.0)
+    loader = _fake_loader({
+        "NVDA": [("2026-06-15", 100.0), ("2026-06-16", 110.0)],   # +10% at 1d
+        "SPY":  [("2026-06-15", 400.0), ("2026-06-16", 412.0)],   # +3% at 1d
+    })
+    records = compute_forward_return_records(tmp_path, horizons=(1,), price_loader=loader, benchmark="SPY")
+    rec = records[0]
+    assert rec.returns[1] == round(110.0 / 100.0 - 1, 6)
+    assert rec.excess[1] == round((110.0 / 100.0 - 1) - (412.0 / 400.0 - 1), 6)  # 10% - 3% = 7%
+
+
+def test_excess_is_none_when_benchmark_return_pending(tmp_path):
+    _seed_run(tmp_path, "2026-06-15", candidate_score=66.0, trade_readiness=72.0, price_setup=70.0)
+    loader = _fake_loader({
+        "NVDA": [("2026-06-15", 100.0), ("2026-06-16", 110.0)],
+        "SPY":  [("2026-06-15", 400.0)],  # no future bar -> benchmark 1d return is None
+    })
+    records = compute_forward_return_records(tmp_path, horizons=(1,), price_loader=loader, benchmark="SPY")
+    assert records[0].returns[1] is not None
+    assert records[0].excess[1] is None
+
+
+def test_bucket_returns_reports_mean_excess():
+    records = [
+        ForwardReturnRecord("d", f"S{i}", candidate_score=float(i), trade_readiness_score=None,
+                            price_setup_score=None, returns={1: 0.01 * i}, excess={1: 0.005 * i})
+        for i in range(1, 11)
+    ]
+    buckets = bucket_returns(records, score_field="candidate_score", horizon=1, n_buckets=2)
+    assert buckets[1]["mean_excess_return"] > buckets[0]["mean_excess_return"]
+
+
+def test_component_ic_summary_reports_per_horizon_tstat():
+    from trading_agent.replay.component_attribution import component_ic_summary
+    # Two run dates; within each, factor_alpha perfectly ranks the 1d return -> per-date IC = 1.
+    records = []
+    for run_date in ("2026-06-15", "2026-06-16"):
+        for i in range(1, 6):
+            records.append(ForwardReturnRecord(
+                run_date, f"S{i}", candidate_score=None, trade_readiness_score=None,
+                price_setup_score=None, returns={1: 0.01 * i}, components={"factor_alpha": float(i)}))
+    summary = component_ic_summary(records, horizons=(1,))
+    top = next(r for r in summary if r["component"] == "factor_alpha")
+    stats = top["horizons"]["1"]
+    assert stats["periods"] == 2
+    assert stats["mean_ic"] == 1.0
+    assert stats["pooled_ic"] == 1.0
+    # zero variance across dates (both ICs == 1) -> t-stat undefined, reported as None
+    assert stats["t_stat"] is None
