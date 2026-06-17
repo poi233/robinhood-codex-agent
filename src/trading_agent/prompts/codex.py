@@ -54,17 +54,23 @@ def run_codex_prompt(
         return 0
 
     codex_bin = os.environ.get("CODEX_BIN")
-    if not codex_bin:
-        candidates = [
+    candidates = []
+    if codex_bin and codex_bin != "codex":
+        candidates.append(codex_bin)
+    candidates.extend(
+        [
             shutil.which("codex"),
             "/opt/homebrew/bin/codex",
             "/usr/local/bin/codex",
             str(Path.home() / ".local" / "bin" / "codex"),
         ]
-        for candidate in candidates:
-            if candidate and Path(candidate).exists():
-                codex_bin = candidate
-                break
+    )
+    if codex_bin == "codex":
+        codex_bin = None
+    for candidate in candidates:
+        if candidate and Path(candidate).exists():
+            codex_bin = candidate
+            break
     if not codex_bin or not Path(codex_bin).exists():
         raise FileNotFoundError(
             f"missing codex executable: {codex_bin}. Set CODEX_BIN to a valid path or ensure codex is on PATH."
