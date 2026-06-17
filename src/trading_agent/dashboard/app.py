@@ -80,6 +80,15 @@ with compare_tab:
 with calibration_tab:
     st.header("Calibration (E1: which scores / setups actually work)")
     charts.calibration_view(queries.calibration_report(AGENT_ROOT))
+    st.divider()
+    st.subheader("Fill quality (E4: how optimistic are paper fills?)")
+    charts.fill_quality_view(queries.fill_quality_report(AGENT_ROOT))
+    st.divider()
+    st.subheader("AI signal study (H3: confidence calibration + directional accuracy)")
+    charts.ai_signal_study_view(queries.ai_signal_study(AGENT_ROOT))
+    st.divider()
+    st.subheader("AI layer ablation (H3: each layer's marginal IC)")
+    charts.ai_ablation_view(queries.ai_ablation(AGENT_ROOT))
 
 with growth_tab:
     st.header("Self-Growth Lab (read-only)")

@@ -44,9 +44,27 @@ def _seed(root: Path) -> None:
         "score_buckets": {"candidate_score": {"1": [{"bucket": 1, "count": 1, "score_min": 66.0, "score_max": 66.0, "mean_return": 0.01, "hit_rate": 1.0}]},
                           "trade_readiness_score": {"1": []}, "price_setup_score": {"1": []}},
         "attribution": {"1": [{"component": "technical", "n": 1, "ic": None}]},
+        "ic_summary": [{"component": "technical", "horizons": {"1": {"periods": 1, "mean_ic": 0.1, "std_ic": None, "t_stat": None, "pooled_ic": 0.1}}}],
         "benchmarks": {"SPY": {"1": {"count": 1, "mean_return": 0.002}}},
         "setup_outcomes": [{"setup_type": "breakout", "fills": 1, "target_first": 1, "stop_first": 0, "undecided": 0, "win_rate": 1.0}]})
     write_json(run / "planner" / "factor_alpha.json", {"date": rd, "profile": "baseline_price_factors_v1", "symbols": {"NVDA": {"factor_alpha_score": 78.5, "coverage": 1.0, "risk_flags": [], "factor_components": {"momentum_12_1": 80.0}}}})
+    write_json(root / "runtime" / "analytics" / "fill_quality_report.json", {
+        "generated_at": "x", "fill_count": 2, "total_filled_notional": 2000.0,
+        "mean_realized_slippage_bps": 10.0, "mean_realized_slippage_buy_bps": 10.0, "mean_realized_slippage_sell_bps": 10.0,
+        "bucket_basis": "realized_slippage_proxy",
+        "buckets": [{"bucket": "normal (5-15bps)", "count": 2, "mean_slippage_bps": 10.0}],
+        "scenarios": [{"assumed_spread_bps": 10.0, "per_side_cost_bps": 5.0, "extra_vs_realized_per_side_bps": 0.0, "roundtrip_edge_haircut_bps": 10.0, "dollar_drag_on_filled_notional": 2.0}]})
+    write_json(root / "runtime" / "analytics" / "ai_signal_study.json", {
+        "generated_at": "x", "horizons": [1], "primary_horizon": 1, "ai_signal_count": 1, "matched_count": 1,
+        "layers": {"kronos": {"signal_count": 1, "confidence_calibration": {"1": [{"bucket": 1, "count": 1, "confidence_min": 0.8, "confidence_max": 0.8, "mean_return": 0.05, "hit_rate": 1.0}]},
+                              "confidence_ic": {"1": None}, "directional_accuracy": 1.0, "directional_count": 1,
+                              "reason_code_lift": [{"code": "setup:breakout", "count": 1, "mean_return_with": 0.05, "lift_vs_baseline": 0.0}], "warning_code_lift": []},
+                   "dsa": {"signal_count": 0}, "catalyst": {"signal_count": 0}}})
+    write_json(root / "runtime" / "analytics" / "ai_ablation.json", {
+        "generated_at": "x", "primary_horizon": 1, "ai_signal_count": 2, "matched_symbol_runs": 2,
+        "variants": {"full_ai": {"ic": 0.9, "n": 2}, "drop_kronos": {"ic": None, "n": 2, "marginal_ic_of_layer": None},
+                     "drop_dsa": {"ic": 0.9, "n": 2, "marginal_ic_of_layer": 0.0}, "factor_only": {"ic": None, "n": 0},
+                     "ai_plus_factor": {"ic": None, "n": 0}}})
     build_analytics_db(root)
 
 

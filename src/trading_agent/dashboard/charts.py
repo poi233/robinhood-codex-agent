@@ -289,6 +289,21 @@ def calibration_view(report: dict) -> None:
         st.markdown(f"**{horizon}d**")
         st.dataframe(rows, use_container_width=True)
 
+    if report.get("ic_summary"):
+        st.subheader("Multi-horizon Rank IC (per-date mean ± t-stat)")
+        st.caption("mean = average of per-run-date cross-sectional ICs; |t| ≳ 2 over enough dates ⇒ the signal is real, not noise.")
+        horizon_keys = [str(h) for h in (report.get("horizons") or [])]
+        ic_rows = []
+        for row in report["ic_summary"]:
+            flat = {"component": row.get("component")}
+            for h in horizon_keys:
+                stats = (row.get("horizons") or {}).get(h) or {}
+                flat[f"{h}d mean_ic"] = stats.get("mean_ic")
+                flat[f"{h}d t_stat"] = stats.get("t_stat")
+            ic_rows.append(flat)
+        if ic_rows:
+            st.dataframe(ic_rows, use_container_width=True)
+
     st.subheader("Benchmark returns (alpha vs beta)")
     bench_rows = [{"benchmark": sym, **{f"{h}d": v.get("mean_return") for h, v in per.items()}}
                   for sym, per in (report.get("benchmarks") or {}).items()]
@@ -309,3 +324,68 @@ def calibration_view(report: dict) -> None:
                               "mean_return": data.get("mean_return"), "hit_rate": data.get("hit_rate")})
     if near_rows:
         st.dataframe(near_rows, use_container_width=True)
+
+
+def fill_quality_view(report: dict) -> None:
+    """E4: how optimistic paper fills are, and how much edge shrinks under conservative fills."""
+    if not report or not report.get("fill_count"):
+        st.info("No fill-quality data yet. Run: python3 -m trading_agent analytics fill-quality "
+                "(local-only; needs filled paper orders).")
+        return
+    st.caption(f"generated_at: {report.get('generated_at', '?')}  ·  fills: {report.get('fill_count', 0)}  "
+               f"·  total notional: ${report.get('total_filled_notional', 0):,.0f}")
+    st.markdown(f"**Mean realized slippage** — all: {report.get('mean_realized_slippage_bps')}bps  ·  "
+                f"buy: {report.get('mean_realized_slippage_buy_bps')}bps  ·  "
+                f"sell: {report.get('mean_realized_slippage_sell_bps')}bps")
+
+    st.markdown(f"**Slippage by bucket** (basis: {report.get('bucket_basis', '?')})")
+    if report.get("buckets"):
+        st.dataframe(report["buckets"], use_container_width=True)
+
+    st.markdown("**Conservative-fill sensitivity** — round-trip edge haircut ≈ the assumed spread; "
+                "if your per-round-trip edge is smaller than the haircut, the edge is an artifact of optimistic fills.")
+    if report.get("scenarios"):
+        st.dataframe(report["scenarios"], use_container_width=True)
+
+
+def ai_signal_study_view(report: dict) -> None:
+    """H3 step 2: per-AI-layer confidence calibration, directional accuracy, and code lift."""
+    if not report or not report.get("matched_count"):
+        st.info("No AI-signal study data yet. Run: python3 -m trading_agent analytics ai-signal-study "
+                "(needs ai_signals.json across run dates + network for yfinance).")
+        return
+    st.caption(f"generated_at: {report.get('generated_at', '?')}  ·  AI signals: {report.get('ai_signal_count', 0)}  "
+               f"·  matched: {report.get('matched_count', 0)}  ·  primary horizon: {report.get('primary_horizon')}d")
+    primary = str(report.get("primary_horizon"))
+    for layer, data in (report.get("layers") or {}).items():
+        if not data.get("signal_count"):
+            continue
+        acc = data.get("directional_accuracy")
+        ic = (data.get("confidence_ic") or {}).get(primary)
+        st.markdown(f"**{layer}** ({data['signal_count']} signals) — directional accuracy: "
+                    f"{f'{acc * 100:.0f}%' if isinstance(acc, (int, float)) else '—'}  ·  confidence IC: "
+                    f"{f'{ic:+.2f}' if isinstance(ic, (int, float)) else '—'}")
+        buckets = (data.get("confidence_calibration") or {}).get(primary)
+        if buckets:
+            st.dataframe(buckets, use_container_width=True)
+        for label, key in (("reason codes", "reason_code_lift"), ("warning codes", "warning_code_lift")):
+            if data.get(key):
+                st.caption(f"{label} lift vs baseline")
+                st.dataframe(data[key], use_container_width=True)
+
+
+def ai_ablation_view(report: dict) -> None:
+    """H3 step 3: each AI layer's marginal IC (leave-one-out) and AI-vs-factor comparison."""
+    variants = report.get("variants") or {}
+    if not variants or (variants.get("full_ai") or {}).get("n", 0) == 0:
+        st.info("No AI-ablation data yet. Run: python3 -m trading_agent analytics ai-ablation "
+                "(needs ai_signals.json across run dates + network for yfinance).")
+        return
+    st.caption(f"generated_at: {report.get('generated_at', '?')}  ·  "
+               f"matched symbol-runs: {report.get('matched_symbol_runs', 0)}  ·  horizon: {report.get('primary_horizon')}d")
+    st.caption("marginal_ic_of_layer = full_ai IC − leave-one-out IC; positive ⇒ the layer adds predictive value.")
+    rows = []
+    for name, v in variants.items():
+        rows.append({"variant": name, "ic": v.get("ic"), "n": v.get("n"),
+                     "marginal_ic_of_layer": v.get("marginal_ic_of_layer")})
+    st.dataframe(rows, use_container_width=True)

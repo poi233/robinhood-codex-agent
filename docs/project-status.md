@@ -357,6 +357,7 @@
 | **H3 step 1** AI 信号结构化 | `analyzers/ai_signal_schema.py` 统一信封 + `validate_ai_signal` 强校验 + 三层 normalizer（kronos/dsa/catalyst）；`analyzers/ai_signals.py` 归一三件产物落 `signals/ai_signals.json`；premarket advisory 接入（normalizer 路线、write-only、不碰热路径，故无 flag） | 见 git log |
 | **H3 step 2** AI 信号研究 | `replay/ai_signal_study.py` + `analytics ai-signal-study`：把 AI 信封 join 候选 forward returns，按层出 confidence calibration（mean/hit 桶）、directional accuracy、confidence→return IC、reason/warning code lift；只读、可注入 loader 离线测 | 见 git log |
 | **H3 step 3** AI 层 ablation | `replay/ai_ablation.py` + `analytics ai-ablation`：combined AI conviction = Σ(direction×confidence)，leave-one-out 重算 rank IC 得每层 `marginal_ic_of_layer`，外加 factor-only 与 AI+factor 对照；只读、用已落盘 signal 不重跑历史 AI | 见 git log |
+| **H5** dashboard 子视图 | Calibration tab 增 fill-quality（E4）+ AI signal study（H3 step 2）+ AI ablation（H3 step 3）+ 多 horizon Rank IC/t-stat（H1）子视图；3 个新 query + 3 个新 chart view，只读、缺报告显示运行提示、headless `AppTest` 覆盖空态/有数据态（仍 8 tab） | 见 git log |
 | **G9** challenger 隔离账本 | `build_experiment_runtime_paths` + broker `paths_override`；shadow runner 跑 challenger 自己的 paper 账本；G7 出真实 fill/drawdown/PnL | 见 git log |
 | **B5** watchlist resolver | `parse_active_watchlist` 从 `active_strategy.watchlist` 解析文件名（+override），切策略真能切 watchlist，回退兼容 | 见 git log |
 | **TODO_FIX** technical 覆盖 | premarket 全天快照 + intraday merge；`run_symbol_research.sh` 单票输出改写到 `manual/<SYMBOL>/`（不再覆盖全局、可找到） | 见 git log |

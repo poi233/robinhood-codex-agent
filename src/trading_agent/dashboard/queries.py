@@ -377,6 +377,27 @@ def calibration_report(agent_root: Path) -> dict[str, Any]:
     return _read_json_or_empty(default_calibration_report_path(agent_root))
 
 
+def fill_quality_report(agent_root: Path) -> dict[str, Any]:
+    """Read-only: the E4 fill_quality_report.json (empty until `analytics fill-quality` is run)."""
+    from trading_agent.replay.fill_quality import default_fill_quality_report_path
+
+    return _read_json_or_empty(default_fill_quality_report_path(agent_root))
+
+
+def ai_signal_study(agent_root: Path) -> dict[str, Any]:
+    """Read-only: the H3 ai_signal_study.json (empty until `analytics ai-signal-study` is run)."""
+    from trading_agent.replay.ai_signal_study import default_ai_signal_study_path
+
+    return _read_json_or_empty(default_ai_signal_study_path(agent_root))
+
+
+def ai_ablation(agent_root: Path) -> dict[str, Any]:
+    """Read-only: the H3 ai_ablation.json (empty until `analytics ai-ablation` is run)."""
+    from trading_agent.replay.ai_ablation import default_ai_ablation_path
+
+    return _read_json_or_empty(default_ai_ablation_path(agent_root))
+
+
 def factor_alpha(agent_root: Path, run_date: str) -> dict[str, Any]:
     """Read-only: the H2 factor_alpha.json for a run date (empty if premarket hasn't produced it)."""
     return _read_json_or_empty(build_runtime_paths(agent_root, run_date=run_date).factor_alpha_path)

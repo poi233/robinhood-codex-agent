@@ -329,3 +329,30 @@ def test_factor_alpha_query(tmp_path):
     p.parent.mkdir(parents=True, exist_ok=True)
     p.write_text(json.dumps({"profile": "p", "symbols": {"NVDA": {"factor_alpha_score": 80.0}}}), encoding="utf-8")
     assert factor_alpha(tmp_path, "2026-06-15")["symbols"]["NVDA"]["factor_alpha_score"] == 80.0
+
+
+def test_fill_quality_report_query(tmp_path):
+    import json
+    from trading_agent.dashboard.queries import fill_quality_report
+    assert fill_quality_report(tmp_path) == {}
+    out = tmp_path / "runtime" / "analytics"; out.mkdir(parents=True, exist_ok=True)
+    (out / "fill_quality_report.json").write_text(json.dumps({"fill_count": 5}), encoding="utf-8")
+    assert fill_quality_report(tmp_path)["fill_count"] == 5
+
+
+def test_ai_signal_study_query(tmp_path):
+    import json
+    from trading_agent.dashboard.queries import ai_signal_study
+    assert ai_signal_study(tmp_path) == {}
+    out = tmp_path / "runtime" / "analytics"; out.mkdir(parents=True, exist_ok=True)
+    (out / "ai_signal_study.json").write_text(json.dumps({"matched_count": 3}), encoding="utf-8")
+    assert ai_signal_study(tmp_path)["matched_count"] == 3
+
+
+def test_ai_ablation_query(tmp_path):
+    import json
+    from trading_agent.dashboard.queries import ai_ablation
+    assert ai_ablation(tmp_path) == {}
+    out = tmp_path / "runtime" / "analytics"; out.mkdir(parents=True, exist_ok=True)
+    (out / "ai_ablation.json").write_text(json.dumps({"matched_symbol_runs": 4}), encoding="utf-8")
+    assert ai_ablation(tmp_path)["matched_symbol_runs"] == 4
