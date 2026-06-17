@@ -46,7 +46,7 @@
 | | E2 | 评分 / 价格 setup 权重校准 | 旧 R2 | ⏳ 依赖 E1（P5） |
 | | E3 | near-miss tracking | docx P2 | ✅ **机器已建（2026-06-16，near-threshold 版）**；entry-zone/no-chase 版待 per-candidate 落盘 |
 | | E4 | bid/ask/spread 成交质量 | docx P2 | 可选（paper 阶段弱依赖） |
-| **新增 · 校准期补强** | G9 | challenger 隔离 paper 账本（shadow orders/equity） | 我的建议 | ⏳ 待做（P3，G7 真实指标前置） |
+| **新增 · 校准期补强** | G9 | challenger 隔离 paper 账本（shadow orders/equity） | 我的建议 | ✅ **已完成（2026-06-16）** |
 | | B5 | strategy_registry.watchlist → active watchlist resolver | 我的建议 | ⏳ 待做（P4，多策略选股层） |
 | **F 后期 / 故意推后** | F1 | strategy compare | docx | 依赖 B1+B2+多 strategy version |
 | | F2 | review/live 真实下单接线 | 旧 R7 | ⛔ 故意推后（人工解锁） |
@@ -121,9 +121,9 @@
 3. **P2 · E3 near-miss tracking** — 复用 E1 forward returns，回答「错过后发生了什么」（门槛/entry
    zone/no-chase 是否太严）。比单看 PnL 更有价值。
 
-4. **P3 · G9 challenger 隔离 paper 账本（shadow orders/equity）** — 现在 shadow 只产决策流，G7 拿不到
-   challenger 的 fill rate / drawdown / PnL，所以永远不出 promote 推荐。补这块才能真正比较 champion vs
-   challenger。见新增的 **G9**。
+4. **P3 · G9 challenger 隔离 paper 账本（shadow orders/equity）** — ✅ **已完成（2026-06-16）**：challenger
+   现在有自己的 `experiments/<id>/paper/` 账本，G7 报告含其真实 fill rate / drawdown / PnL，fill-rate 与
+   drawdown 两个 promotion gate 真能比较了。见 **G9** 实现记录。**下一个代码任务 → P4 的 B5。**
 
 5. **P4 · 策略版本化 + watchlist resolver（B5）** — 等 E1 指出该动哪个杠杆后，再建**单变量** challenger
    版本（一次只改一个），dashboard 策略对比才有第二行数据。配套把 `strategy_registry.watchlist` 真正
@@ -1118,7 +1118,26 @@ promote** → live 永远不能自动升级。
 
 ---
 
-## G9 — challenger 隔离 paper 账本（shadow orders/equity）— ⏳ 待做（P3，G6 收尾）
+## G9 — challenger 隔离 paper 账本（shadow orders/equity）— ✅ 已完成（2026-06-16）
+
+**实现记录**：
+- `core/context.py` 新增 `build_experiment_runtime_paths`：返回一个 RuntimePaths，**只把 paper_* 和
+  daily_usage 改到 `experiments/<id>/paper/`**，其余路径与 champion 共享（用 `dataclasses.replace`）。
+- `paper/broker.py` 的 5 个公开函数（`record_paper_day_start/end`、`apply_paper_intent`、
+  `reconcile_pending_paper_orders`、`pending_paper_orders`）新增可选 `paths_override`；默认 = 现有 champion
+  行为（既有测试逐字不变），内部 `record_paper_day_start` 调用也转发 override，**champion 账本永不被碰**。
+- `policy/loaders.py` 暴露公开 `hydrate_paper_ledger(inputs, paths)`。
+- `growth/shadow_runner.py`：paper 模式下，challenger 先 seed 自己的 day_start、reconcile 自己的 pending、
+  hydrate 自己的 account/positions/pending（**从自己的账本决策、下单**），would_trade 则 `apply_paper_intent`
+  写到隔离账本。
+- `growth/evaluator.py`：`challenger_ledger_metrics` 从 `experiments/<id>/paper/` 读出 challenger 的**真实**
+  fill rate / max drawdown / realized PnL（champion 也补了 max drawdown），fill-rate 与 drawdown 两个
+  promotion gate 现在真能比较，不再标 `unavailable`。
+- 测试：`test_isolated_ledger.py`（2）、`test_shadow_runner.py`（隔离账本断言）、`test_evaluator.py`
+  （真实 ledger 指标）、intraday 集成测试。**champion paper/* 一字不变**有断言。
+
+**未做**：challenger 的 forward returns 仍待——它依赖把 E1 的 forward-return 计算接到 challenger 的成交上，
+属于 E1×G9 的交叉接线，留作后续。
 
 **目标**：让 shadow challenger 不只产决策流，而是有**完整隔离的 paper 账本**，G7 才能拿到 challenger 的
 真实 fill rate / drawdown / PnL / turnover，从而给出有意义的 promote 推荐。
