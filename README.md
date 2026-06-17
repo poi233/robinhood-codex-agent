@@ -205,6 +205,7 @@ with `execution_not_wired`, so only a human can take it live.
 | `analytics weight-suggestion [--horizon --damping]` | E2 → `weight_suggestion.json`: IC-backed scoring-weight **suggestion**. Never auto-applied (adopt via a new strategy version + shadow run). |
 | `analytics snapshot [--date]` | I2: archive a dated copy of tonight's reports to `runtime/analytics/history/<date>/` + `nightly_summary.json`. Idempotent. |
 | `analytics trend [--since --until --output]` | I3: aggregate `history/*/nightly_summary.json` into per-metric time series → `trend.json`. |
+| `analytics nightly-health` | L4 → `nightly_health.json`: report freshness + the last nightly run's failed steps. Surfaced as a 🟢/🔴 banner on the dashboard Trends tab. |
 | `dashboard` | Read-only Streamlit UI (`localhost:8501`): 9 tabs — Today / Candidates / Decisions / Paper / Strategy Comparison / Calibration / Self-Growth / Themes / Trends. |
 
 ### Nightly batch (read-only / shadow-only)

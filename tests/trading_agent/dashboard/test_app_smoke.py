@@ -71,6 +71,9 @@ def _seed(root: Path) -> None:
         "date": rd, "generated_at": "x", "fill_rate_pct": 100.0, "no_trade_rate_pct": 0.0,
         "calibration_sample_size": 1, "proposal_count": 1, "active_shadow_count": 0,
         "top_component_ic": {"1": {"component": "technical", "ic": 0.1}}, "champion": {"fill_rate_pct": 100.0}, "challengers": []})
+    write_json(root / "runtime" / "analytics" / "nightly_health.json", {
+        "generated_at": "x", "status": "ok", "last_nightly_run_date": rd, "failed_steps": [],
+        "stale_reports": [], "reports": []})
     build_analytics_db(root)
 
 

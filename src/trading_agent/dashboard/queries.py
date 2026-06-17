@@ -419,6 +419,13 @@ def analysis_trend(agent_root: Path, *, since: str | None = None, until: str | N
     return build_trend(agent_root, since=since, until=until)
 
 
+def nightly_health(agent_root: Path) -> dict[str, Any]:
+    """Read-only: the L4 nightly_health.json (report freshness + last run's failed steps)."""
+    from trading_agent.analytics.nightly_health import default_nightly_health_path
+
+    return _read_json_or_empty(default_nightly_health_path(agent_root))
+
+
 def factor_alpha(agent_root: Path, run_date: str) -> dict[str, Any]:
     """Read-only: the H2 factor_alpha.json for a run date (empty if premarket hasn't produced it)."""
     return _read_json_or_empty(build_runtime_paths(agent_root, run_date=run_date).factor_alpha_path)

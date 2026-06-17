@@ -104,6 +104,7 @@ with themes_tab:
 
 with trends_tab:
     st.header("Trends (I: nightly analysis snapshots over time)")
+    charts.nightly_health_banner(queries.nightly_health(AGENT_ROOT))
     _history_dates = queries.analysis_history_dates(AGENT_ROOT)
     _selected_snapshot_date = st.selectbox("Analysis snapshot date", _history_dates) if _history_dates else None
     charts.trends_view(

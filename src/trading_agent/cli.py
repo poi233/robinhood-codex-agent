@@ -49,6 +49,7 @@ def build_parser() -> argparse.ArgumentParser:
     analytics_weights_parser = analytics_subparsers.add_parser("weight-suggestion", help="Write runtime/analytics/weight_suggestion.json (E2: IC-backed scoring-weight SUGGESTION — never auto-applied).")
     analytics_weights_parser.add_argument("--horizon", metavar="DAYS", default=None, help="Horizon (e.g. 1/5/21) to read component IC from; default: first calibrated horizon.")
     analytics_weights_parser.add_argument("--damping", type=float, default=0.5, help="Tilt strength 0..1 (0 = no change, 1 = full IC tilt). Default 0.5.")
+    analytics_subparsers.add_parser("nightly-health", help="Write runtime/analytics/nightly_health.json (L4: report freshness + last nightly run's failed steps).")
 
     subparsers.add_parser("dashboard", help="Launch the read-only Streamlit dashboard at http://localhost:8501.")
 
@@ -399,6 +400,17 @@ def _run_analytics_weight_suggestion(agent_root: Path, *, horizon: str | None, d
     return 0
 
 
+def _run_analytics_nightly_health(agent_root: Path) -> int:
+    from trading_agent.analytics.nightly_health import build_nightly_health, write_nightly_health
+
+    out = write_nightly_health(agent_root)
+    health = build_nightly_health(agent_root)
+    print(f"Wrote {out}  (status: {health['status']}"
+          + (f", stale: {health['stale_reports']}" if health['stale_reports'] else "")
+          + (f", failed: {health['failed_steps']}" if health['failed_steps'] else "") + ")")
+    return 0
+
+
 def _run_dashboard(agent_root: Path) -> int:
     import subprocess
     import sys
@@ -454,6 +466,8 @@ def main(argv: list[str] | None = None) -> int:
         return _run_analytics_trend(agent_root, since=args.since, until=args.until, output=args.output)
     if args.command == "analytics" and args.analytics_command == "weight-suggestion":
         return _run_analytics_weight_suggestion(agent_root, horizon=args.horizon, damping=args.damping)
+    if args.command == "analytics" and args.analytics_command == "nightly-health":
+        return _run_analytics_nightly_health(agent_root)
     if args.command == "dashboard":
         return _run_dashboard(agent_root)
     if args.command == "growth" and args.growth_command == "observe":

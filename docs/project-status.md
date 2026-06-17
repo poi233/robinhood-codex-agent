@@ -374,6 +374,7 @@
 | **D2** batch 拉取 | `fetch_live_rows_batch` 一次 `yf.download` 多 ticker + `_rows_from_download_frame` 分发纯函数（单/多 ticker + 缺 symbol 容错），缓存仍逐 symbol 叠加 | 见 git log |
 | **H7/H8** 基本面/事件骨架 | `analyzers/fundamental.py`（quality flags，只 filter/warning 非买入信号）+ `analyzers/events.py`（earnings/analyst flags，只增强 catalyst 不独立下单）；schema + normalizer + best-effort yfinance provider（可注入）+ write-only advisory builder，纯函数有测试；接入 premarket/scoring 待数据 | 见 git log |
 | **L1/L3** 收口 + factor 覆盖审计 | project-status 漂移收口（顶部 point-in-time 约定 + 状态表更正）；README 按三时段重写（premarket DAG + 决策流程图）；L3：market_feed 永远采 `BENCHMARK_SYMBOLS`（SPY/QQQ/SMH/IWM），factor_panel/alpha 报告 coverage%，dashboard 显示 | 见 git log |
+| **L4/L5** 夜间健康 + advisory 失败测试 | L4：`analytics nightly-health` → `nightly_health.json`（报告新鲜度 + 失败步骤），nightly 脚本记 step_results，dashboard Trends tab 顶部 🟢/🔴 banner；L5：测试锁定 advisory 信号层抛异常时 premarket 仍完成、score/plan 尾段仍跑 | 见 git log |
 | **G9** challenger 隔离账本 | `build_experiment_runtime_paths` + broker `paths_override`；shadow runner 跑 challenger 自己的 paper 账本；G7 出真实 fill/drawdown/PnL | 见 git log |
 | **B5** watchlist resolver | `parse_active_watchlist` 从 `active_strategy.watchlist` 解析文件名（+override），切策略真能切 watchlist，回退兼容 | 见 git log |
 | **TODO_FIX** technical 覆盖 | premarket 全天快照 + intraday merge；`run_symbol_research.sh` 单票输出改写到 `manual/<SYMBOL>/`（不再覆盖全局、可找到） | 见 git log |

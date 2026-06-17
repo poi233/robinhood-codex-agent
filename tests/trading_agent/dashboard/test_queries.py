@@ -371,3 +371,12 @@ def test_analysis_history_and_snapshot_queries(tmp_path):
     assert analysis_history_dates(tmp_path) == ["2026-06-17", "2026-06-16"]  # newest first
     assert analysis_snapshot(tmp_path, "2026-06-17")["fill_rate_pct"] == 100.0
     assert analysis_trend(tmp_path)["status"] == "ok"
+
+
+def test_nightly_health_query(tmp_path):
+    import json
+    from trading_agent.dashboard.queries import nightly_health
+    assert nightly_health(tmp_path) == {}
+    out = tmp_path / "runtime" / "analytics"; out.mkdir(parents=True, exist_ok=True)
+    (out / "nightly_health.json").write_text(json.dumps({"status": "ok", "failed_steps": []}), encoding="utf-8")
+    assert nightly_health(tmp_path)["status"] == "ok"

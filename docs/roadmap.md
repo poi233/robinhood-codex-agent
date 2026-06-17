@@ -126,7 +126,7 @@
 | **L 收口与验证（评审二·P0）** | L1 | 文档权威源收敛 | 评审二 | 🟢 **进行中（2026-06-17）**：project-status 漂移已修（顶部 point-in-time 约定 + 状态表更正）；README 已重写 |
 | | L2 | 完整 smoke checklist → `docs/smoke-test.md` | 评审二 | ⏳ P1：把 doctor→safety→premarket→intraday→postmarket→analytics→growth 一条龙写成可跑清单 |
 | | ~~L3~~ | H2 factor **benchmark coverage 审计** | 评审二 | ✅ **已完成（2026-06-17）**：market_feed 永远采 `BENCHMARK_SYMBOLS`（SPY/QQQ/SMH/IWM）；factor_panel/alpha 报告 coverage%（多少 active_symbol 有 bars + benchmark 是否齐）；dashboard 显示 |
-| | L4 | **nightly health / freshness** | 评审二 | ⏳ P1：`nightly_health.json`（last_success_at/failed_steps/stale）+ dashboard 顶部醒目显示，防 best-effort 静默失败 |
+| | ~~L4~~ | **nightly health / freshness** | 评审二 | ✅ **已完成（2026-06-17）**：`analytics nightly-health` → `nightly_health.json`（报告新鲜度 + 失败步骤）；nightly 脚本记 step_results + 末步调 health；dashboard Trends tab 顶部 🟢/🔴 banner |
 | | ~~L5~~ | premarket factor-failure advisory 测试 | 评审二 | ✅ **已完成（2026-06-17）**：测试锁定 advisory 信号层抛异常时 premarket 仍完成、candidate_scoring/risk_overlay/final_planner 仍跑；该 stage 在 stage-log 记 `failed`、`_run_advisory` 吞异常使 pipeline 继续 |
 | | L6 | **冻结 alpha 接线 + 跑 paper 15–30 天** | 评审二 | ⏳ **纪律项**：H7/H8 保持 skeleton-only 不接 scoring；一次只放一个新信号进 shadow |
 
@@ -1010,12 +1010,19 @@ beta/residual/relative 因子**静默全 None**。
 **验收**：✅ benchmark bars 恒被采；✅ coverage% + benchmark 可用性可见（json + dashboard）；✅ 数据缺失不 crash
 （标低 coverage）。450 测试通过。
 
-## L4 — nightly health / freshness — ⏳ P1
+## L4 — nightly health / freshness — ✅ 已完成（2026-06-17）
 
-I1 夜间批处理是 best-effort（单步失败被吞），有「以为健康、实际某步一直失败」的风险。**具体**：夜间批处理写
-`nightly_health.json`（`last_success_at` / `failed_steps` / `stale_reports`）；dashboard **顶部醒目**显示「最近一次
-夜间分析：<时间> · 失败步骤：…」。I4 的新鲜度条已有雏形，这里补「失败步骤」与醒目度。**评审二另建议**：是否把
-`ENABLE_NIGHTLY_ANALYSIS` 默认改 0（或要求手动装调度）——留作人工决定；health 文件先把静默失败暴露出来。
+I1 夜间批处理是 best-effort（单步失败被吞），有「以为健康、实际某步一直失败」的风险。**已做**：
+- `analytics/nightly_health.py` + CLI `analytics nightly-health`：`build_nightly_health` 检查各预期报告的
+  **新鲜度**（generated_at age > 30h 或缺失 → stale）+ 读最近一次 nightly 的 **step_results.jsonl** 拿失败步骤；
+  `status` 仅在「无 stale + 无失败」时为 `ok`，否则 `attention`。写 `nightly_health.json`。
+- `run_nightly_analysis.sh`：每步 `run_step` 写一行 `step_results.jsonl`（ok/fail + exit_code），末步调
+  `analytics nightly-health` 汇总。
+- dashboard Trends tab **顶部 banner**：🟢 OK / 🔴 ATTENTION（列出失败步骤 + stale/缺失报告），静默失败一眼可见。
+
+**评审二另建议**（留作人工决定）：是否把 `ENABLE_NIGHTLY_ANALYSIS` 默认改 0 / 要求手动装调度——**未改默认**
+（保持 1）；health 文件已先把静默失败暴露出来，默认值是产品取舍，留给人工。**验收**：✅ 报告 stale / 步骤失败
+都进 `status=attention` + dashboard 红 banner；纯只读。457 测试通过。
 
 ## L5 — premarket factor-failure advisory 测试 — ✅ 已完成（2026-06-17）
 

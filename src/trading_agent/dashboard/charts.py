@@ -400,6 +400,23 @@ def ai_ablation_view(report: dict) -> None:
     st.dataframe(rows, use_container_width=True)
 
 
+def nightly_health_banner(health: dict) -> None:
+    """L4: a prominent green/red banner so a silently-failing nightly batch is impossible to miss."""
+    if not health:
+        st.info("No nightly health yet. The nightly batch (or `analytics nightly-health`) writes it.")
+        return
+    last = health.get("last_nightly_run_date") or "?"
+    if health.get("status") == "ok":
+        st.success(f"🟢 Nightly health OK · last run {last} · all expected reports fresh")
+        return
+    parts = [f"🔴 Nightly health: ATTENTION · last run {last}"]
+    if health.get("failed_steps"):
+        parts.append("failed steps: " + ", ".join(health["failed_steps"]))
+    if health.get("stale_reports"):
+        parts.append("stale/missing reports: " + ", ".join(health["stale_reports"]))
+    st.error(" · ".join(parts))
+
+
 def trends_view(history_dates: list, snapshot: dict, trend: dict) -> None:
     """I4: data freshness + per-date snapshot lookback + trend lines over the nightly snapshots."""
     # 1) Freshness bar.
