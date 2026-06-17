@@ -93,3 +93,11 @@ def test_run_shadow_experiment_writes_isolated_ledger_only(tmp_path):
     # Champion's real decision log is never written by the shadow runner.
     champion_decisions = build_runtime_paths(tmp_path, run_date="2026-06-14").decisions_log_path
     assert not champion_decisions.exists()
+
+    # G9: the challenger gets its own isolated paper ledger (seeded on first run).
+    from trading_agent.core.context import build_experiment_runtime_paths
+    exp_runtime = build_experiment_runtime_paths(tmp_path, run_date="2026-06-14", strategy_id="baseline_v1__trade_threshold_40")
+    assert exp_runtime.paper_account_path.exists()
+    assert "experiments/baseline_v1__trade_threshold_40/paper" in str(exp_runtime.paper_account_path)
+    # Champion paper ledger is never created by the shadow runner.
+    assert not build_runtime_paths(tmp_path, run_date="2026-06-14").paper_account_path.exists()

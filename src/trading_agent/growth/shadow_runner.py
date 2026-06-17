@@ -1,16 +1,47 @@
 from __future__ import annotations
 
 import json
+import os
 from dataclasses import replace
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from trading_agent.core.context import build_experiment_paths, build_runtime_paths
+from trading_agent.core.context import build_experiment_paths, build_experiment_runtime_paths, build_runtime_paths
 from trading_agent.planner.risk_overlay import build_risk_overlay
 from trading_agent.planner.scoring_profiles import load_scoring_profile
 from trading_agent.policy.engine import generate_order_intent
 from trading_agent.policy.models import PolicyInputs
+
+
+def _challenger_starting_cash() -> float:
+    try:
+        return float(os.environ.get("PAPER_STARTING_CASH", "400000"))
+    except ValueError:
+        return 400000.0
+
+
+def _simulate_challenger_paper(agent_root: Path, run_date: str, strategy_id: str,
+                               champion_inputs: PolicyInputs, challenger_inputs: PolicyInputs) -> None:
+    """Seed/reconcile the challenger's isolated paper ledger and overlay its own account/positions/
+    pending into challenger_inputs, so the challenger decides and trades from ITS OWN state."""
+    from trading_agent.paper.broker import reconcile_pending_paper_orders, record_paper_day_start
+    from trading_agent.policy.loaders import hydrate_paper_ledger
+
+    exp_runtime = build_experiment_runtime_paths(agent_root, run_date=run_date, strategy_id=strategy_id)
+    starting_cash = _challenger_starting_cash()
+    record_paper_day_start(agent_root, run_date=run_date, starting_cash=starting_cash, paths_override=exp_runtime)
+    reconcile_pending_paper_orders(agent_root, run_date=run_date, quotes=champion_inputs.quotes,
+                                   starting_cash=starting_cash, paths_override=exp_runtime)
+    hydrate_paper_ledger(challenger_inputs, exp_runtime)
+
+
+def _apply_challenger_fill(agent_root: Path, run_date: str, strategy_id: str, decision) -> None:
+    from trading_agent.paper.broker import apply_paper_intent
+
+    exp_runtime = build_experiment_runtime_paths(agent_root, run_date=run_date, strategy_id=strategy_id)
+    apply_paper_intent(agent_root, run_date=run_date, decision=decision,
+                       starting_cash=_challenger_starting_cash(), paths_override=exp_runtime)
 
 
 def _read_json_or_empty(path: Path) -> dict[str, Any]:
@@ -98,9 +129,19 @@ def run_shadow_experiment(
     """
     overlay = build_challenger_risk_overlay(agent_root, run_date, experiment, trading_mode=trading_mode, risk_tier=risk_tier)
     challenger_inputs = build_challenger_inputs(champion_inputs, overlay)
-    decision = generate_order_intent(challenger_inputs)
 
     strategy_id = str(experiment.get("challenger_strategy_id") or experiment.get("experiment_id") or "challenger")
+
+    # G9: give the challenger its own isolated paper ledger under experiments/<id>/paper/, so its
+    # fill rate / drawdown / PnL are real and comparable — and the champion ledger is never touched.
+    if trading_mode == "paper":
+        _simulate_challenger_paper(agent_root, run_date, strategy_id, champion_inputs, challenger_inputs)
+
+    decision = generate_order_intent(challenger_inputs)
+
+    if trading_mode == "paper" and decision.decision == "would_trade":
+        _apply_challenger_fill(agent_root, run_date, strategy_id, decision)
+
     exp_paths = build_experiment_paths(agent_root, run_date=run_date, strategy_id=strategy_id)
     exp_paths.shadow_decisions_log_path.parent.mkdir(parents=True, exist_ok=True)
     intent = decision.intent

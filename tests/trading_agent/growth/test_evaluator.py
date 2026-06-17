@@ -104,3 +104,28 @@ def test_write_experiment_report_emits_json_and_md(tmp_path):
     payload = json.loads(json_path.read_text(encoding="utf-8"))
     assert "challengers" in payload
     assert "Promotion Recommendation" in md_path.read_text(encoding="utf-8")
+
+
+def test_evaluator_reports_real_challenger_ledger_metrics(tmp_path):
+    # G9: challenger has its own paper ledger -> evaluator surfaces real fill rate / drawdown / PnL.
+    _seed_experiment(tmp_path)
+    _seed_shadow_decisions(tmp_path, "baseline_v1__trade_threshold_40", "2026-06-15", [
+        {"decision": "would_trade", "blocked_reasons": []},
+    ])
+    from trading_agent.core.context import build_experiment_runtime_paths
+    exp = build_experiment_runtime_paths(tmp_path, run_date="2026-06-15", strategy_id="baseline_v1__trade_threshold_40")
+    exp.paper_orders_log_path.parent.mkdir(parents=True, exist_ok=True)
+    exp.paper_orders_log_path.write_text(json.dumps(
+        {"order_id": "o1", "symbol": "NVDA", "side": "buy", "status": "filled", "fill_price": 100.0,
+         "quantity": 1, "notional": 100.0, "timestamp": "2026-06-15T09:31:00"}) + "\n", encoding="utf-8")
+    exp.paper_equity_curve_path.write_text(
+        json.dumps({"timestamp": "2026-06-15T06:30:00", "total_equity": 1000.0, "realized_pnl": 0.0}) + "\n" +
+        json.dumps({"timestamp": "2026-06-15T10:00:00", "total_equity": 950.0, "realized_pnl": -5.0}) + "\n" +
+        json.dumps({"timestamp": "2026-06-15T13:00:00", "total_equity": 980.0, "realized_pnl": -2.0}) + "\n",
+        encoding="utf-8")
+
+    report = evaluate_experiments(tmp_path)
+    m = report["challengers"][0]["metrics"]
+    assert m["fill_rate_pct"] == 100.0       # 1 filled / 1 order
+    assert m["realized_pnl"] == -2.0         # last equity-curve realized pnl
+    assert m["max_drawdown"] == 0.05         # 1000 -> 950 = 5% peak-to-trough

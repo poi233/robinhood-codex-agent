@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from trading_agent.core.context import build_experiment_paths
+from trading_agent.core.context import build_experiment_paths, build_runtime_paths
 from trading_agent.core.io import write_json
 from trading_agent.growth.experiment_queue import list_experiments
 from trading_agent.growth.policy import load_growth_policy
@@ -64,10 +64,59 @@ def shadow_metrics(decisions: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
+def _max_drawdown(equity_series: list[float]) -> float | None:
+    """Max peak-to-trough fractional decline of a total-equity series (0.0 = no drawdown)."""
+    series = [v for v in equity_series if isinstance(v, (int, float))]
+    if len(series) < 2:
+        return None
+    peak = series[0]
+    mdd = 0.0
+    for value in series:
+        peak = max(peak, value)
+        if peak > 0:
+            mdd = max(mdd, (peak - value) / peak)
+    return round(mdd, 4)
+
+
+def _equity_metrics_from_curve(rows: list[dict[str, Any]]) -> dict[str, Any]:
+    rows = sorted(rows, key=lambda r: str(r.get("timestamp") or ""))
+    equity = [r.get("total_equity") for r in rows if r.get("total_equity") is not None]
+    realized = [r.get("realized_pnl") for r in rows if r.get("realized_pnl") is not None]
+    return {"max_drawdown": _max_drawdown(equity), "realized_pnl": realized[-1] if realized else None}
+
+
+def challenger_ledger_metrics(agent_root: Path, strategy_id: str, run_dates: list[str]) -> dict[str, Any]:
+    """Real fill rate / drawdown / PnL from the challenger's isolated paper ledger (G9).
+    Empty/None when the challenger hasn't traded yet."""
+    from trading_agent.core.context import build_experiment_runtime_paths
+    from trading_agent.replay.analysis import _resolve_final_orders, fill_rate_summary
+
+    orders: list[dict[str, Any]] = []
+    equity_rows: list[dict[str, Any]] = []
+    for run_date in run_dates:
+        exp = build_experiment_runtime_paths(agent_root, run_date=run_date, strategy_id=strategy_id)
+        for order in _resolve_final_orders(_read_jsonl(exp.paper_orders_log_path)):
+            orders.append(order)
+        equity_rows.extend(_read_jsonl(exp.paper_equity_curve_path))
+    fill = fill_rate_summary(orders)
+    equity = _equity_metrics_from_curve(equity_rows)
+    return {
+        "fill_rate_pct": fill.get("fill_rate_pct") if orders else None,
+        "filled": fill.get("filled", 0),
+        "total_orders": fill.get("total_orders", 0),
+        "max_drawdown": equity["max_drawdown"],
+        "realized_pnl": equity["realized_pnl"],
+    }
+
+
 def _champion_metrics(agent_root: Path, *, since: str | None, until: str | None) -> dict[str, Any]:
     report = build_replay_report(agent_root, since_date=since, until_date=until)
     fill = report.get("fill_rate") or {}
     blocked = report.get("blocked_reasons") or {}
+    run_dates = report.get("run_dates") or []
+    champ_equity: list[dict[str, Any]] = []
+    for run_date in run_dates:
+        champ_equity.extend(_read_jsonl(build_runtime_paths(agent_root, run_date=run_date).paper_equity_curve_path))
     return {
         "run_date_count": report.get("run_date_count", 0),
         "fill_rate_pct": fill.get("fill_rate_pct", 0.0),
@@ -76,6 +125,7 @@ def _champion_metrics(agent_root: Path, *, since: str | None, until: str | None)
         "no_trade_rate_pct": blocked.get("no_trade_rate_pct", 0.0),
         "total_evaluations": blocked.get("total_evaluations", 0),
         "reason_counts": blocked.get("reason_counts", {}),
+        "max_drawdown": _max_drawdown([r.get("total_equity") for r in champ_equity if r.get("total_equity") is not None]),
     }
 
 
@@ -94,13 +144,17 @@ def _recommendation(metrics: dict[str, Any], champion: dict[str, Any], promotion
 
     if promotion_rules.get("fill_rate_not_worse_than_champion"):
         if metrics.get("fill_rate_pct") is None:
-            reasons.append("fill_rate_unavailable: shadow order simulation not implemented yet (G6 is decisions-only)")
+            reasons.append("fill_rate_unavailable: challenger has not traded in shadow yet")
         elif metrics["fill_rate_pct"] < float(champion.get("fill_rate_pct") or 0):
             reasons.append("fill_rate_worse_than_champion")
 
     if promotion_rules.get("max_drawdown_not_worse_than_champion"):
-        if metrics.get("max_drawdown") is None:
-            reasons.append("max_drawdown_unavailable: shadow equity curve not simulated yet")
+        challenger_dd = metrics.get("max_drawdown")
+        champion_dd = champion.get("max_drawdown")
+        if challenger_dd is None:
+            reasons.append("max_drawdown_unavailable: challenger equity curve not built yet")
+        elif champion_dd is not None and challenger_dd > champion_dd:
+            reasons.append("max_drawdown_worse_than_champion")
 
     return {
         "recommend_promote": not reasons,
@@ -122,6 +176,8 @@ def evaluate_experiments(agent_root: Path, *, since: str | None = None, until: s
         strategy_id = str(experiment.get("challenger_strategy_id") or experiment.get("experiment_id"))
         decisions = collect_shadow_decisions(agent_root, strategy_id, run_dates)
         metrics = shadow_metrics(decisions)
+        # G9: overlay the challenger's real fill rate / drawdown / PnL from its isolated ledger.
+        metrics.update(challenger_ledger_metrics(agent_root, strategy_id, run_dates))
         challengers.append({
             "experiment_id": experiment.get("experiment_id"),
             "challenger_strategy_id": strategy_id,
