@@ -30,6 +30,8 @@
 | Token 成本（DSA/Technical 预计算） | ✅ 已加（P4，见 roadmap D1） |
 | 自成长平台（observe→propose→shadow→promote） | ✅ G-pre/G0–G9 全闭环（challenger 有隔离 paper 账本，G7 出真实 fill/drawdown/PnL；paper/shadow only，promote 仅人工，见 roadmap G/G9） |
 | 自成长诊断/提议/shadow/推荐（growth 全命令树） | ✅ observe/propose/validate/experiments/shadow/evaluate/recommend/promote check 全部上线 |
+| 量化价量因子层（非 AI alpha 腿） | ⬜ 规划中（H 阶段 H2，下一个代码任务；ChatGPT Phase 2，见 roadmap H） |
+| AI signal 结构化 + 归因 / ablation | 🟡 component IC 已覆盖 dsa/tech/kronos/catalyst；AI schema 标准化 + ablation 待做（H3） |
 | review/live 真实下单 | ⛔ 故意未接线 |
 
 ---
