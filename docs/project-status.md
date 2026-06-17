@@ -30,7 +30,7 @@
 | Token 成本（DSA/Technical 预计算） | ✅ 已加（P4，见 roadmap D1） |
 | 自成长平台（observe→propose→shadow→promote） | ✅ G-pre/G0–G9 全闭环（challenger 有隔离 paper 账本，G7 出真实 fill/drawdown/PnL；paper/shadow only，promote 仅人工，见 roadmap G/G9） |
 | 自成长诊断/提议/shadow/推荐（growth 全命令树） | ✅ observe/propose/validate/experiments/shadow/evaluate/recommend/promote check 全部上线 |
-| 量化价量因子层（非 AI alpha 腿） | ✅ 代码已完成（H2：registry+factor_alpha+premarket flag 落盘+校准 pickup+dashboard，flag 默认 0；paper 设 ENABLE_PRICE_FACTOR_LAYER=1 攒数据，见 roadmap H2） |
+| 量化价量因子层（非 AI alpha 腿） | ✅ 已完成并上线（H2：registry+factor_alpha+premarket 无条件落盘+校准 pickup+dashboard；flag 已开启并清除，write-only、不进 champion 打分，见 roadmap H2） |
 | AI signal 结构化 + 归因 / ablation | 🟡 component IC 已覆盖 dsa/tech/kronos/catalyst；AI schema 标准化 + ablation 待做（H3） |
 | 调度自动化 | 🟡 交易生命周期已 cron 化（premarket/intraday/postmarket）；**分析/自成长命令仍手动**，夜间自动化批处理待做（roadmap I1） |
 | 止损/退出逻辑 | 🟠 有自动 `full_invalidation_exit`（跌破技术 invalidation 全清），但 `risk_exit` 分级减仓事实失效、无固定兜底硬止损、且 strategy.md 文案与 code 不一致——**live 前必修**（roadmap J1） |

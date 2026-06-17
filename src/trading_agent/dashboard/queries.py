@@ -378,5 +378,5 @@ def calibration_report(agent_root: Path) -> dict[str, Any]:
 
 
 def factor_alpha(agent_root: Path, run_date: str) -> dict[str, Any]:
-    """Read-only: the H2 factor_alpha.json for a run date (empty unless ENABLE_PRICE_FACTOR_LAYER)."""
+    """Read-only: the H2 factor_alpha.json for a run date (empty if premarket hasn't produced it)."""
     return _read_json_or_empty(build_runtime_paths(agent_root, run_date=run_date).factor_alpha_path)

@@ -159,8 +159,8 @@ def candidates_with_rankings_view(rows: list[dict[str, Any]]) -> None:
 def factor_view(payload: dict) -> None:
     symbols = payload.get("symbols") if isinstance(payload, dict) else None
     if not symbols:
-        st.info("No price factors for this run date. Enable ENABLE_PRICE_FACTOR_LAYER=1 (H2) to compute "
-                "factor_alpha (write-only; not in champion scoring).")
+        st.info("No price factors for this run date yet (premarket produces factor_alpha once the "
+                "market_feed OHLCV is available).")
         return
     st.caption(f"profile: {payload.get('profile', '?')}  ·  generated_at: {payload.get('generated_at', '?')}")
     rows = []

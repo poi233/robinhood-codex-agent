@@ -60,7 +60,7 @@ class PremarketPipeline:
     run_risk_overlay: callable
     run_final_planner: callable
     run_archive: callable
-    run_price_factors: callable = lambda: None  # H2: gated by ENABLE_PRICE_FACTOR_LAYER (default no-op)
+    run_price_factors: callable = lambda: None  # H2 price/volume factor layer (advisory; default no-op for callers that omit it)
 
     def run(self) -> None:
         self.run_account_snapshot()
@@ -324,13 +324,10 @@ def run_premarket_pipeline(*, dry_run: bool) -> int:
             write_json(paths.technical_signals_full_path, read_json(paths.technical_signals_path))
 
     def run_price_factors() -> None:
-        # H2 price/volume factor layer. Flag-gated (default OFF): when off this is a no-op and
-        # premarket is byte-for-byte unchanged. Write-only (factor_panel.json + factor_alpha.json);
-        # does NOT feed champion scoring/risk_overlay. Enable ENABLE_PRICE_FACTOR_LAYER=1 in paper to
-        # start accumulating point-in-time factor data for calibration.
-        if os.environ.get("ENABLE_PRICE_FACTOR_LAYER", "0") != "1":
-            append_stage_log(agent_root, run_date, "price_factors", "skipped", "ENABLE_PRICE_FACTOR_LAYER!=1")
-            return
+        # H2 price/volume factor layer. Always runs (advisory): write-only — produces
+        # factor_panel.json + factor_alpha.json for calibration/dashboard, and does NOT feed champion
+        # scoring/risk_overlay/decisions. Wrapped in _run_advisory, so a factor failure never breaks
+        # premarket.
         from trading_agent.features.factor_store import build_and_write_factor_layer
 
         build_and_write_factor_layer(agent_root, run_date, active_symbols=active_symbols)
