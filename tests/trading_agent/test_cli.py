@@ -52,6 +52,21 @@ class PackageCliTests(unittest.TestCase):
         self.assertIn("ENABLE_OHLCV_CACHE", result.stdout)
         self.assertIn("PAPER_PARTIAL_FILL", result.stdout)
 
+    def test_doctor_reports_launchd_scheduling(self) -> None:
+        result = subprocess.run(
+            [sys.executable, "-m", "trading_agent", "doctor"],
+            cwd=REPO_ROOT,
+            capture_output=True,
+            text=True,
+            check=False,
+            env={**__import__("os").environ, "PYTHONPATH": str(REPO_ROOT / "src")},
+        )
+        self.assertEqual(result.returncode, 0, msg=result.stderr)
+        self.assertIn("Scheduling (launchd)", result.stdout)
+        # The labels come from launchd/*.plist.example, so each job should be named.
+        for job in ("premarket", "intraday", "postmarket", "nightly-analysis"):
+            self.assertIn(f"robinhood-codex-agent.{job}", result.stdout)
+
     def test_doctor_respects_env_override(self) -> None:
         import os
         env = {**os.environ, "PYTHONPATH": str(REPO_ROOT / "src"), "TRADING_MODE": "review", "RISK_TIER": "2"}

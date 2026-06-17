@@ -94,6 +94,57 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _launchd_status_lines(agent_root: Path) -> list[str]:
+    """Report whether each launchd job template is currently loaded.
+
+    Reads the <Label> from each launchd/*.plist.example and checks it against
+    `launchctl list`. Best-effort and non-fatal: on non-macOS (no launchctl) or
+    when templates are absent, it just notes that the check was skipped.
+    """
+    import re
+    import shutil
+    import subprocess
+
+    template_dir = agent_root / "launchd"
+    templates = sorted(template_dir.glob("*.plist.example")) if template_dir.is_dir() else []
+    if not templates:
+        return ["  (no launchd/*.plist.example templates found — skipped)"]
+
+    def read_label(path: Path) -> str | None:
+        text = path.read_text(encoding="utf-8")
+        match = re.search(r"<key>Label</key>\s*<string>([^<]+)</string>", text)
+        return match.group(1) if match else None
+
+    labels = [(path, read_label(path)) for path in templates]
+
+    launchctl = shutil.which("launchctl")
+    if not launchctl:
+        lines = ["  launchctl not found (not macOS) — load state unknown:"]
+        for _path, label in labels:
+            lines.append(f"    {label or '?'}")
+        return lines
+
+    try:
+        listed = subprocess.run(
+            [launchctl, "list"], capture_output=True, text=True, timeout=10, check=False
+        ).stdout
+    except (OSError, subprocess.SubprocessError) as exc:  # pragma: no cover - environment dependent
+        return [f"  could not run launchctl list: {exc}"]
+
+    lines = []
+    any_missing = False
+    for _path, label in labels:
+        if not label:
+            continue
+        loaded = label in listed
+        if not loaded:
+            any_missing = True
+        lines.append(f"  {'loaded   ' if loaded else 'NOT LOADED'}  {label}")
+    if any_missing:
+        lines.append("  → install/reload with: src/scripts/launchd/install_launchd_jobs.sh")
+    return lines
+
+
 def _run_doctor(agent_root: Path) -> int:
     from trading_agent.core.config import TierMisconfigurationError, load_runtime_config
     from trading_agent.strategy.registry import load_active_strategy
@@ -177,6 +228,9 @@ def _run_doctor(agent_root: Path) -> int:
         "",
         "  --- Notifications ---",
         f"  ENABLE_TRADE_EMAIL        = {env.get('ENABLE_TRADE_EMAIL_NOTIFICATIONS', '1')}",
+        "",
+        "  --- Scheduling (launchd) ---",
+        *_launchd_status_lines(agent_root),
     ]
 
     print("\n".join(lines))
