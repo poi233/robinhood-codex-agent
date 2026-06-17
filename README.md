@@ -333,4 +333,5 @@ and sets `RISK_TIER`; Codex never does. Postmarket may *recommend* a tier change
 - [`docs/daily-strategy-playbook.md`](docs/daily-strategy-playbook.md) — **what to do each day/week/month to keep improving the strategy** (start here for operations).
 - [`docs/roadmap.md`](docs/roadmap.md) — prioritized work, phase by phase, with status.
 - [`docs/project-status.md`](docs/project-status.md) — block-by-block account of what's built (and what isn't).
+- [`docs/smoke-test.md`](docs/smoke-test.md) — one-command integration smoke (`src/scripts/smoke/run_smoke.sh`): proves the wiring, complements `pytest`.
 - `docs/setup/` — setup notes · `docs/superpowers/` — design specs & plans.
