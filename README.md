@@ -324,6 +324,18 @@ ALLOW_OUTSIDE_MARKET_TEST=1 ./src/scripts/entrypoints/run_all_paper_once.sh   # 
 Scheduled (America/Los_Angeles) via `cron.example` / `launchd/*.plist.example`: `05:30` premarket ·
 `06:45`–`12:45` intraday every 30 min · `13:10` postmarket · `20:00` nightly analysis (weekdays).
 
+On macOS, install the launchd jobs in one command — it derives the repo path from its own
+location (so it works wherever you cloned the repo) and reloads `launchctl`:
+
+```bash
+src/scripts/launchd/install_launchd_jobs.sh            # render + (re)load all jobs
+src/scripts/launchd/install_launchd_jobs.sh uninstall  # unload + remove them
+```
+
+The plists run the entrypoint scripts, which resolve Python and `codex` at runtime, so nothing
+is pinned to a `.venv`, a codex release version, or a user home. If `codex` is not on `PATH` or
+in `~/.local/bin`, set a stable `CODEX_BIN` in `src/config/runtime.env.local`.
+
 Rollout: paper → review → live tier 0, advancing only after clean logs. A human removes `KILL_SWITCH`
 and sets `RISK_TIER`; Codex never does. Postmarket may *recommend* a tier change; a human makes it.
 
