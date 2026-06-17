@@ -54,16 +54,35 @@ def _read_json_or_empty(path: Path) -> dict[str, Any]:
     return payload if isinstance(payload, dict) else {}
 
 
-def _challenger_scoring_profile(agent_root: Path, experiment: dict[str, Any]) -> dict[str, Any]:
-    """Champion scoring profile with the experiment's scoring mutation applied.
+def _shadow_rescore_enabled() -> bool:
+    """H4: when on, a challenger may carry a multi-change `changes` list (re-weight several scoring
+    components at once), not just the single scoring threshold G3 moves. Default off keeps the shadow
+    runner's behavior byte-for-byte. The whole shadow path is already double-isolated (writes only
+    experiments/<id>/, never the champion), so this only widens what a challenger can express."""
+    return str(os.environ.get("ENABLE_SHADOW_RESCORE", "0") or "0") == "1"
 
-    Uses G-pre's profile-by-name resolution; falls back to the env/default profile.
-    Only scoring-module numeric overrides are applied here (the lever G3 currently moves).
+
+def _challenger_scoring_profile(agent_root: Path, experiment: dict[str, Any]) -> dict[str, Any]:
+    """Champion scoring profile with the experiment's scoring mutation(s) applied.
+
+    Uses G-pre's profile-by-name resolution; falls back to the env/default profile. The single
+    `field`/`proposed` mutation (the lever G3 moves) is always applied. With ENABLE_SHADOW_RESCORE,
+    a `changes` list of additional scoring-module overrides is also applied — so a challenger can
+    re-weight several components at once (e.g. validate an E2 weight suggestion in shadow).
     """
     config_dir = build_runtime_paths(agent_root).config_dir
     base = dict(load_scoring_profile(config_dir, profile_name=experiment.get("scoring_profile") or None))
     if experiment.get("module") == "scoring" and experiment.get("field") and experiment.get("proposed") is not None:
         base[str(experiment["field"])] = float(experiment["proposed"])
+    if _shadow_rescore_enabled():
+        for change in experiment.get("changes") or []:
+            if not isinstance(change, dict):
+                continue
+            if change.get("module") == "scoring" and change.get("field") and change.get("proposed") is not None:
+                try:
+                    base[str(change["field"])] = float(change["proposed"])
+                except (TypeError, ValueError):
+                    continue
     return base
 
 
