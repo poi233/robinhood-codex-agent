@@ -114,6 +114,7 @@
 | | H6 | self-growth 用 calibration/factor/AI evidence 生成 proposal（ChatGPT Phase 6） | ChatGPT | ⏳ 依赖 H1–H3 产出 evidence |
 | | H7 | fundamental quality 层（ChatGPT Phase 7） | ChatGPT | ⛔ 故意推后（数据更复杂） |
 | | H8 | earnings / analyst revision 事件层（ChatGPT Phase 8） | ChatGPT | ⛔ 故意推后 |
+| **I 运维与自动化** | I1 | 夜间分析/自成长自动化 cron（每天收盘后跑 analytics/calibrate/growth，刷新 dashboard） | 用户新增 | ⏳ 可现在做（小、加法式、只读/shadow-only） |
 
 > **新旧编号对照**：R1→E1（增 benchmark returns）、R2→E2、R3→A3、R4→D2、R5→D3、R6→D4、R7→F2；
 > token 优化设计→D1；docx 的 run_manifest→B1、registry→B2、analytics.db→B3、changelog→B4、
@@ -1469,3 +1470,55 @@ earnings surprise / 分析师与 estimate 修正 / guidance / PEAD / news sentim
 5. **H4 factor/analyzer/setup shadow 策略**（需 premarket re-score 路径）——有了因子 + 校准证据后。
 6. **H6 self-growth 用 evidence 提 proposal** + **H5 dashboard 子视图**——随证据落地增量。
 7. **H7/H8 fundamental / events**——最后，数据更复杂。
+
+---
+
+# I 阶段 · 运维与自动化
+
+## I1 — 夜间分析/自成长自动化 cron + dashboard 新鲜度 — ⏳ 可现在做（小，加法式）
+
+**背景（现状）**：cron/launchd 只调度了**交易生命周期**（premarket 05:30 / intraday 06:45–12:45 每 30 分 /
+postmarket 13:10，工作日）。**分析与自成长命令全是手动的**——`analytics build`、`analytics calibrate`、
+`growth observe/propose/shadow/evaluate`、`replay` 都没进 cron。所以 dashboard 读的 `analytics.db` /
+`calibration_report.json` / `growth_observations.json` / `experiment_report.json` 只在手动跑命令后才更新，
+不跑就一直是旧数据。
+
+**目标**：每天收盘后自动把这套**只读 / shadow-only** 的分析批处理跑一遍，让 dashboard 永远是新鲜的，
+并把"改进优化"的提议/评估也每天产出——**但严守人工闸**：只 observe/propose/validate/shadow（跑已被人工
+approve 的 active_shadow）/evaluate/promote-check（只出草稿），**绝不 approve、绝不 promote、绝不下单、
+绝不碰 champion 账本**。
+
+**具体步骤**：
+1. 新增 entrypoint `src/scripts/entrypoints/run_nightly_analysis.sh`，**按序、best-effort**（单步失败不阻断
+   后续、各步包 try/log）跑：
+   - `python3 -m trading_agent analytics build`（用当天 run 重建 analytics.db）
+   - `python3 -m trading_agent analytics calibrate`（forward returns + IC + setup outcomes；需联网 yfinance）
+   - `python3 -m trading_agent growth observe`（诊断）
+   - `python3 -m trading_agent growth propose` + `growth validate`（只写 proposal 文件，不启用）
+   - `python3 -m trading_agent growth shadow`（跑 active_shadow challenger；无则 no-op）
+   - `python3 -m trading_agent growth evaluate`（champion vs challenger 报告 + promotion_recommendation）
+   - 把整段输出写 `runtime/logs/runs/<date>/nightly/analysis.log`（沿用现有日志根）。
+2. `cron.example` / `launchd/*.plist.example` 加一条**工作日夜间**调度（建议 ~20:00 PT——晚于收盘，确保
+   yfinance 当日日线已结算，forward returns 能含当天）：
+   `0 20 * * 1-5 __REPO_ROOT__/src/scripts/entrypoints/run_nightly_analysis.sh`。
+3. **dashboard 新鲜度**：①（最小）现有产物都带 `generated_at`，dashboard 顶部 / 各 tab 已显示；②（建议）
+   加一个小"数据新鲜度"条：读各 artifact 的 `generated_at` + 当天有没有跑过 nightly，显示"最近一次夜间
+   分析：<时间>"，让你一眼看出 dashboard 是不是当晚刷新的。
+
+**安全（守红线）**：
+- 整批**只读历史 + 写新分析产物 + shadow-only**：不调用 `place_equity_order`、不动 `TRADING_MODE`/
+  `RISK_TIER`/`KILL_SWITCH`、不写 champion `paper/`、不改 `strategy_registry.yaml`。
+- **不 approve、不 promote**：`growth shadow` 只跑**人工已 approve** 的 active_shadow 实验；proposal 只写
+  文件；promote 永远人工。所以"自动跑改进命令"≠"自动改策略"。
+- 一个开关 `ENABLE_NIGHTLY_ANALYSIS`（默认 1，可在 `runtime.env.local` 关）控制整段；KILL_SWITCH 存在时
+  分析照常跑（它只读历史，不下单），但可选地跳过 shadow 以保守。
+
+**涉及文件**：新增 `src/scripts/entrypoints/run_nightly_analysis.sh`、改 `cron.example`、`launchd/` 加一个
+plist 例子、`cli.py`（可选 doctor 回显 `ENABLE_NIGHTLY_ANALYSIS`）、（可选）`dashboard/queries.py` +
+`app.py` 的新鲜度条、对应测试（脚本 `bash -n` + 新鲜度 query 单测）。
+
+**验收**：cron 装上后每晚自动重建 analytics.db + 刷新 calibration/growth 产物，dashboard 次日显示当晚数据；
+单步失败不阻断其余；全程不下单、不改 champion、不 approve/promote；`ENABLE_NIGHTLY_ANALYSIS=0` 可整段关。
+
+> **与 H 阶段的关系**：H2/H3 落地后，夜间批处理自然把新因子/AI 校准也每天刷出来（命令不变，产物更丰富），
+> 无需改 cron。所以 I1 现在就能先把"夜间自动刷新"骨架搭好，H 阶段的数据一上线就自动进 dashboard。

@@ -32,6 +32,7 @@
 | 自成长诊断/提议/shadow/推荐（growth 全命令树） | ✅ observe/propose/validate/experiments/shadow/evaluate/recommend/promote check 全部上线 |
 | 量化价量因子层（非 AI alpha 腿） | ⬜ 规划中（H 阶段 H2，下一个代码任务；ChatGPT Phase 2，见 roadmap H） |
 | AI signal 结构化 + 归因 / ablation | 🟡 component IC 已覆盖 dsa/tech/kronos/catalyst；AI schema 标准化 + ablation 待做（H3） |
+| 调度自动化 | 🟡 交易生命周期已 cron 化（premarket/intraday/postmarket）；**分析/自成长命令仍手动**，夜间自动化批处理待做（roadmap I1） |
 | review/live 真实下单 | ⛔ 故意未接线 |
 
 ---
