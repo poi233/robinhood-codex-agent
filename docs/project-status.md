@@ -1,13 +1,18 @@
 # 项目状态总表 — 做了什么 / 没做什么
 
-> 最后更新：2026-06-15
-> 范围：`src/trading_agent/`（约 6500 行 Python）+ 配置 + 编排 + 入口 + 测试（288 passed）
+> 最后更新：2026-06-17
+> 范围：`src/trading_agent/` + 配置 + 编排 + 入口 + 测试（447 passed）
 > 用途：**单一权威的"现状"文档**，按子系统逐块说明已实现与未实现。未来要做的事另见
 > [`roadmap.md`](./roadmap.md)。
 >
-> 全局思路：**先在 paper 跑出「可信、可复现、可校准」的结果，再考虑 live。** universe 才 88 个，
-> 系统能跑；卡「可信度」的是配置漂移、脏数据、缺校准数据。优先级因此是
-> 「正确性 → 校准能力/分层 → 策略质量 → 成本速度」。
+> **⚠️ 权威源约定（2026-06-17 文档收口）**：本文 **第二节状态表** 与 **第三节完成清单** 是「当前事实」的
+> 唯一权威源。第三节以下的「P5 实现记录 / 没做·注意」段是 **point-in-time 历史记录**——其中的「未做 /
+> 未建 / 待补」反映的是**记录当时**的状态，**不代表现状**（很多已在后续完成，如 E1 校准、B5 watchlist、
+> G9 隔离账本、J1 兜底硬止损、I1–I4 夜间自动化、dashboard 9 Tab）。读现状请只看第二/三节；历史段仅供溯源。
+>
+> 全局思路：**先在 paper 跑出「可信、可复现、可校准」的结果，再考虑 live。** 当前阶段重点是
+> **收口 + 跑数据**：模块已足够丰富，缺的是 15–30 个交易日的真实 paper 样本来证明哪些信号真赚钱。
+> 优先级：「正确性 → 校准能力/分层 → 策略质量 → 成本速度」。
 
 ---
 
@@ -26,14 +31,17 @@
 | 回看分析（fill rate / blocked 分布） | ✅ 本地部分已加 |
 | 回看校准（score 桶 vs 未来收益 / 权重校准） | 🟢 E1 机器已建（forward/benchmark returns + IC attribution + setup outcomes + Calibration tab，见 roadmap E1）；统计显著性待数据积累 |
 | 数据可追溯（run_manifest / analytics.db） | ✅ 已加（B1–B4，见 roadmap B） |
-| 只读可视化（Strategy Lab dashboard） | ✅ C1–C3 已加；侧边栏 + 8 Tab（策略对比含 F1 + Calibration），headless 渲染验证，像素级视觉仍待人工目测，见 roadmap C3 |
+| 只读可视化（Strategy Lab dashboard） | ✅ C1–C3 + H5 + I4；侧边栏 + **9 Tab**（Today/Candidates/Decisions/Paper/Strategy Comparison/Calibration/Self-Growth/Themes/Trends；Calibration tab 含 fill-quality/AI study/ablation/多 horizon IC），headless 渲染验证，像素级视觉仍待人工目测 |
 | Token 成本（DSA/Technical 预计算） | ✅ 已加（P4，见 roadmap D1） |
 | 自成长平台（observe→propose→shadow→promote） | ✅ G-pre/G0–G9 全闭环（challenger 有隔离 paper 账本，G7 出真实 fill/drawdown/PnL；paper/shadow only，promote 仅人工，见 roadmap G/G9） |
 | 自成长诊断/提议/shadow/推荐（growth 全命令树） | ✅ observe/propose/validate/experiments/shadow/evaluate/recommend/promote check 全部上线 |
 | 量化价量因子层（非 AI alpha 腿） | ✅ 已完成并上线（H2：registry+factor_alpha+premarket 无条件落盘+校准 pickup+dashboard；flag 已开启并清除，write-only、不进 champion 打分，见 roadmap H2） |
 | AI signal 结构化 + 归因 / ablation | ✅ H3 全完成（2026-06-17）：AI schema 标准化（step 1）+ AI 信号研究 confidence calibration/方向准确率/code lift（step 2）+ 层 ablation marginal IC（step 3）；统计显著性待 paper 数据积累 |
-| 调度自动化 | 🟡 交易生命周期已 cron 化（premarket/intraday/postmarket）；**分析/自成长命令仍手动**，夜间自动化批处理待做（roadmap I1） |
-| 止损/退出逻辑 | 🟠 有自动 `full_invalidation_exit`（跌破技术 invalidation 全清），但 `risk_exit` 分级减仓事实失效、无固定兜底硬止损、且 strategy.md 文案与 code 不一致——**live 前必修**（roadmap J1） |
+| 量化校准 / 评估命令族（E1/E2/E4 + H3 + I2/I3） | ✅ `analytics calibrate`（E1 桶/IC/excess）·`fill-quality`（E4 滑点/保守成交）·`ai-signal-study`/`ai-ablation`（H3）·`weight-suggestion`（E2 只建议不应用）·`snapshot`/`trend`（I2/I3）全部上线；统计意义待 15–30 交易日 |
+| 基本面 / 事件层 | 🟡 H7/H8 **仅骨架**（schema+normalizer+quality/event flags+best-effort provider）；**有意不接 scoring/premarket 热路径**，作为后续 advisory，待 H2/H3 数据稳定再定接法 |
+| 组合管理 / 市场 regime 引擎 / thesis 归因 | 🔴 **缺口**（外部评审点名）：无 portfolio 层（cash/theme/sector/单仓上限目标）；regime 当前是 LLM 在 daily_plan 里定，非确定性量化引擎 + 仓位乘子；交易未绑 thesis 标签做主题级胜率归因。见 roadmap **K 阶段** |
+| 调度自动化 | ✅ 交易生命周期已 cron 化（premarket/intraday/postmarket）+ **夜间分析批处理已上线**（I1：`run_nightly_analysis.sh`，只读/shadow-only，`ENABLE_NIGHTLY_ANALYSIS` 默认 1；I2 快照 + I3 趋势 + I4 Trends tab） |
+| 止损/退出逻辑 | ✅ `full_invalidation_exit`（跌破技术 invalidation 全清）+ **兜底硬止损已上线**（J1：`HARD_STOP_LOSS_PCT` 默认 8%，独立于 levels/actions，paper-only）；strategy.md 已与 code 一致。剩 `risk_exit` 分级减仓仍未启用（策略选择，待人工） |
 | review/live 真实下单 | ⛔ 故意未接线 |
 
 ---
