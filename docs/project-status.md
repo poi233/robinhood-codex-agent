@@ -35,7 +35,7 @@
 | Token 成本（DSA/Technical 预计算） | ✅ 已加（P4，见 roadmap D1） |
 | 自成长平台（observe→propose→shadow→promote） | ✅ G-pre/G0–G9 全闭环（challenger 有隔离 paper 账本，G7 出真实 fill/drawdown/PnL；paper/shadow only，promote 仅人工，见 roadmap G/G9） |
 | 自成长诊断/提议/shadow/推荐（growth 全命令树） | ✅ observe/propose/validate/experiments/shadow/evaluate/recommend/promote check 全部上线 |
-| 量化价量因子层（非 AI alpha 腿） | ✅ 已完成并上线（H2：registry+factor_alpha+premarket 无条件落盘+校准 pickup+dashboard；flag 已开启并清除，write-only、不进 champion 打分，见 roadmap H2） |
+| 量化价量因子层（非 AI alpha 腿） | ✅ 已完成并上线（H2：registry+factor_alpha+premarket 无条件落盘+校准 pickup+dashboard；flag 已开启并清除，write-only、不进 champion 打分）；**L3 已保证 benchmark coverage**（market_feed 永远采 SPY/QQQ/SMH/IWM + coverage% 报告） |
 | AI signal 结构化 + 归因 / ablation | ✅ H3 全完成（2026-06-17）：AI schema 标准化（step 1）+ AI 信号研究 confidence calibration/方向准确率/code lift（step 2）+ 层 ablation marginal IC（step 3）；统计显著性待 paper 数据积累 |
 | 量化校准 / 评估命令族（E1/E2/E4 + H3 + I2/I3） | ✅ `analytics calibrate`（E1 桶/IC/excess）·`fill-quality`（E4 滑点/保守成交）·`ai-signal-study`/`ai-ablation`（H3）·`weight-suggestion`（E2 只建议不应用）·`snapshot`/`trend`（I2/I3）全部上线；统计意义待 15–30 交易日 |
 | 基本面 / 事件层 | 🟡 H7/H8 **仅骨架**（schema+normalizer+quality/event flags+best-effort provider）；**有意不接 scoring/premarket 热路径**，作为后续 advisory，待 H2/H3 数据稳定再定接法 |
@@ -373,6 +373,7 @@
 | **H4** shadow 多权重 re-score | `ENABLE_SHADOW_RESCORE` 下 challenger 可用 `changes` 列表重配多分量权重重打分（E2 shadow 验证路径）；flag 默认 0、双重隔离 | 见 git log |
 | **D2** batch 拉取 | `fetch_live_rows_batch` 一次 `yf.download` 多 ticker + `_rows_from_download_frame` 分发纯函数（单/多 ticker + 缺 symbol 容错），缓存仍逐 symbol 叠加 | 见 git log |
 | **H7/H8** 基本面/事件骨架 | `analyzers/fundamental.py`（quality flags，只 filter/warning 非买入信号）+ `analyzers/events.py`（earnings/analyst flags，只增强 catalyst 不独立下单）；schema + normalizer + best-effort yfinance provider（可注入）+ write-only advisory builder，纯函数有测试；接入 premarket/scoring 待数据 | 见 git log |
+| **L1/L3** 收口 + factor 覆盖审计 | project-status 漂移收口（顶部 point-in-time 约定 + 状态表更正）；README 按三时段重写（premarket DAG + 决策流程图）；L3：market_feed 永远采 `BENCHMARK_SYMBOLS`（SPY/QQQ/SMH/IWM），factor_panel/alpha 报告 coverage%，dashboard 显示 | 见 git log |
 | **G9** challenger 隔离账本 | `build_experiment_runtime_paths` + broker `paths_override`；shadow runner 跑 challenger 自己的 paper 账本；G7 出真实 fill/drawdown/PnL | 见 git log |
 | **B5** watchlist resolver | `parse_active_watchlist` 从 `active_strategy.watchlist` 解析文件名（+override），切策略真能切 watchlist，回退兼容 | 见 git log |
 | **TODO_FIX** technical 覆盖 | premarket 全天快照 + intraday merge；`run_symbol_research.sh` 单票输出改写到 `manual/<SYMBOL>/`（不再覆盖全局、可找到） | 见 git log |

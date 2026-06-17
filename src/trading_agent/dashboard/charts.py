@@ -163,6 +163,15 @@ def factor_view(payload: dict) -> None:
                 "market_feed OHLCV is available).")
         return
     st.caption(f"profile: {payload.get('profile', '?')}  ·  generated_at: {payload.get('generated_at', '?')}")
+    cov = payload.get("coverage") or {}
+    if cov:
+        bench_ok = "✅" if cov.get("benchmark_available") else "⚠️ missing/short"
+        st.markdown(f"**Data coverage (L3)** — symbols with daily bars: "
+                    f"{cov.get('with_daily_bars', 0)}/{cov.get('active_symbols', 0)} "
+                    f"({cov.get('coverage_pct', 0)}%)  ·  benchmark {cov.get('benchmark', '?')} "
+                    f"bars: {cov.get('benchmark_bar_count', 0)} {bench_ok}")
+        if cov.get("missing_symbols"):
+            st.caption("missing daily bars: " + ", ".join(cov["missing_symbols"][:20]))
     rows = []
     for symbol, data in symbols.items():
         rows.append({

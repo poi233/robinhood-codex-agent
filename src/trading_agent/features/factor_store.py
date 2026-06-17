@@ -7,6 +7,15 @@ from typing import Any
 from trading_agent.core.io import read_json, write_json
 from trading_agent.features.factors_price import FACTORS, FactorContext, compute_factors
 
+# Benchmark symbols the factor layer needs daily bars for. SPY is the active benchmark used by
+# beta/residual/relative factors; the rest are reserved for future relative-strength / regime work.
+# market_feed collection MUST include these (L3) — otherwise, when a strategy's active_watchlist
+# happens not to contain SPY, the benchmark bars are missing and every benchmark-relative factor
+# silently degrades to None. Do not rely on the watchlist accidentally containing SPY.
+BENCHMARK_SYMBOLS = ("SPY", "QQQ", "SMH", "IWM")
+# Minimum benchmark bars for beta/residual to be meaningful (factors themselves require ≥60 returns).
+_MIN_BENCHMARK_BARS = 60
+
 
 def _series(bars: list[dict[str, Any]], key: str) -> list[float]:
     out: list[float] = []
@@ -48,21 +57,52 @@ def build_factor_panel(symbol_bars: dict[str, list[dict[str, Any]]], benchmark_b
     return panel
 
 
-def build_factor_panel_payload(panel: dict[str, dict[str, Any]], *, run_date: str, benchmark: str) -> dict[str, Any]:
+def compute_coverage(
+    active_symbols: list[str],
+    symbol_bars: dict[str, list[dict[str, Any]]],
+    benchmark_bars: list[dict[str, Any]],
+    *,
+    benchmark: str,
+) -> dict[str, Any]:
+    """L3 factor data-coverage audit. Reports how many active symbols actually have daily bars and
+    whether the benchmark bars are present and long enough — so a low-coverage / missing-benchmark
+    run is visible instead of silently producing all-None benchmark-relative factors."""
+    requested = [s.upper() for s in active_symbols]
+    present = {s for s, bars in symbol_bars.items() if bars}
+    missing = [s for s in requested if s not in present]
+    bench_n = len(benchmark_bars)
+    return {
+        "active_symbols": len(requested),
+        "with_daily_bars": len(present),
+        "coverage_pct": round(len(present) / len(requested) * 100, 1) if requested else 0.0,
+        "missing_symbols": missing,
+        "benchmark": benchmark.upper(),
+        "benchmark_bar_count": bench_n,
+        "benchmark_available": bench_n >= _MIN_BENCHMARK_BARS,
+    }
+
+
+def build_factor_panel_payload(
+    panel: dict[str, dict[str, Any]], *, run_date: str, benchmark: str, coverage: dict[str, Any] | None = None
+) -> dict[str, Any]:
     return {
         "date": run_date,
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "benchmark": benchmark,
         "factors": sorted(FACTORS.keys()),
+        "coverage": coverage or {},
         "symbols": panel,
     }
 
 
-def build_factor_alpha_payload(alpha: dict[str, dict[str, Any]], *, run_date: str, profile_name: str) -> dict[str, Any]:
+def build_factor_alpha_payload(
+    alpha: dict[str, dict[str, Any]], *, run_date: str, profile_name: str, coverage: dict[str, Any] | None = None
+) -> dict[str, Any]:
     return {
         "date": run_date,
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "profile": profile_name,
+        "coverage": coverage or {},
         "symbols": alpha,
     }
 
@@ -95,11 +135,12 @@ def build_and_write_factor_layer(
     symbol_bars = {sym: load_daily_bars(market_feed_dir, sym) for sym in active_symbols}
     symbol_bars = {sym: bars for sym, bars in symbol_bars.items() if bars}
     benchmark_bars = load_daily_bars(market_feed_dir, benchmark)
+    coverage = compute_coverage(active_symbols, symbol_bars, benchmark_bars, benchmark=benchmark)
 
     panel = build_factor_panel(symbol_bars, benchmark_bars)
     profile = load_factor_profile(agent_root, profile_name=profile_name)
     alpha = compute_factor_alpha(panel, profile)
 
-    write_json(paths.factor_panel_path, build_factor_panel_payload(panel, run_date=run_date, benchmark=benchmark))
-    write_json(paths.factor_alpha_path, build_factor_alpha_payload(alpha, run_date=run_date, profile_name=str(profile.get("name"))))
+    write_json(paths.factor_panel_path, build_factor_panel_payload(panel, run_date=run_date, benchmark=benchmark, coverage=coverage))
+    write_json(paths.factor_alpha_path, build_factor_alpha_payload(alpha, run_date=run_date, profile_name=str(profile.get("name")), coverage=coverage))
     return paths.factor_panel_path, paths.factor_alpha_path

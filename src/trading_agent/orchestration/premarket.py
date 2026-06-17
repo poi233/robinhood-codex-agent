@@ -240,9 +240,15 @@ def run_premarket_pipeline(*, dry_run: bool) -> int:
         if os.environ.get("ENABLE_MARKET_FEED_LAYER", "1") != "1":
             append_stage_log(agent_root, run_date, "market_context", "skipped", "market feed layer disabled")
             return
+        # L3: always include the benchmark set in the feed so factor beta/residual/relative never
+        # silently degrade when a strategy's active_watchlist happens not to contain SPY. Benchmarks
+        # are fetched for their bars only; they are not added to the scored/technical symbol set.
+        from trading_agent.features.factor_store import BENCHMARK_SYMBOLS
+
+        feed_symbols = sorted({s.upper() for s in active_symbols} | set(BENCHMARK_SYMBOLS))
         collect_market_context(
             universe_file=paths.config_dir / "universe.txt",
-            symbols=active_symbols,
+            symbols=feed_symbols,
             output_dir=market_feed_dir,
             run_date=run_date,
             timeframes=timeframes,
