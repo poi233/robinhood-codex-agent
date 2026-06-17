@@ -12,6 +12,19 @@
     <string>/bin/bash</string>
     <string>__REPO_ROOT__/src/scripts/entrypoints/run_nightly_analysis.sh</string>
   </array>
+  <key>WorkingDirectory</key>
+  <string>__REPO_ROOT__</string>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <!-- Optional (the script also derives it), but makes the run explicit. -->
+    <key>AGENT_ROOT</key>
+    <string>__REPO_ROOT__</string>
+    <!-- Portable PATH only. Do NOT hardcode a versioned codex release dir or a user home:
+         codex auto-updates and those paths disappear, silently breaking runs. The script
+         resolves a working Python via resolve_runtime_python_bin regardless of this PATH. -->
+    <key>PATH</key>
+    <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+  </dict>
   <!-- 20:00 PT on weekdays (after the close, so the day's daily bar has settled). -->
   <key>StartCalendarInterval</key>
   <array>
