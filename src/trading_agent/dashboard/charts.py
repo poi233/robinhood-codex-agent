@@ -400,6 +400,37 @@ def ai_ablation_view(report: dict) -> None:
     st.dataframe(rows, use_container_width=True)
 
 
+def portfolio_target_view(payload: dict) -> None:
+    """K1: current portfolio composition vs target caps + concentration breaches."""
+    if not payload or payload.get("total_equity") is None:
+        st.info("No portfolio target for this run date yet (premarket writes portfolio_target.json "
+                "from the paper ledger).")
+        return
+    t = payload.get("targets") or {}
+    st.caption(f"total equity: ${payload.get('total_equity', 0):,.0f}  ·  cash: "
+               f"{payload.get('cash_weight', 0) * 100:.0f}% (target ≥ {t.get('cash_target', 0) * 100:.0f}%)  ·  "
+               f"caps: single ≤ {t.get('max_position_size', 0) * 100:.0f}% · theme ≤ {t.get('theme_cap', 0) * 100:.0f}%")
+    breaches = payload.get("breaches") or {}
+    msgs = []
+    if breaches.get("below_cash_target"):
+        msgs.append("cash below target")
+    if breaches.get("oversize_positions"):
+        msgs.append("oversize: " + ", ".join(breaches["oversize_positions"]))
+    if breaches.get("overexposed_themes"):
+        msgs.append("over-concentrated themes: " + ", ".join(breaches["overexposed_themes"]))
+    if msgs:
+        st.warning("⚠️ " + "  ·  ".join(msgs) + "  (advisory only — never adds a buy; can only tighten)")
+    else:
+        st.success("🟢 within all concentration / cash targets")
+    if payload.get("theme_exposure"):
+        st.caption("Theme exposure")
+        st.bar_chart({k: v for k, v in payload["theme_exposure"].items()})
+    if payload.get("position_weights"):
+        st.caption("Position weights")
+        st.dataframe([{"symbol": s, "weight": w} for s, w in payload["position_weights"].items()],
+                     use_container_width=True)
+
+
 def nightly_health_banner(health: dict) -> None:
     """L4: a prominent green/red banner so a silently-failing nightly batch is impossible to miss."""
     if not health:

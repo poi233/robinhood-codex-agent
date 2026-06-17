@@ -39,7 +39,7 @@
 | AI signal 结构化 + 归因 / ablation | ✅ H3 全完成（2026-06-17）：AI schema 标准化（step 1）+ AI 信号研究 confidence calibration/方向准确率/code lift（step 2）+ 层 ablation marginal IC（step 3）；统计显著性待 paper 数据积累 |
 | 量化校准 / 评估命令族（E1/E2/E4 + H3 + I2/I3） | ✅ `analytics calibrate`（E1 桶/IC/excess）·`fill-quality`（E4 滑点/保守成交）·`ai-signal-study`/`ai-ablation`（H3）·`weight-suggestion`（E2 只建议不应用）·`snapshot`/`trend`（I2/I3）全部上线；统计意义待 15–30 交易日 |
 | 基本面 / 事件层 | 🟡 H7/H8 **仅骨架**（schema+normalizer+quality/event flags+best-effort provider）；**有意不接 scoring/premarket 热路径**，作为后续 advisory，待 H2/H3 数据稳定再定接法 |
-| 组合管理 / 市场 regime 引擎 / thesis 归因 | 🔴 **缺口**（外部评审点名）：无 portfolio 层（cash/theme/sector/单仓上限目标）；regime 当前是 LLM 在 daily_plan 里定，非确定性量化引擎 + 仓位乘子；交易未绑 thesis 标签做主题级胜率归因。见 roadmap **K 阶段** |
+| 组合管理 / 市场 regime 引擎 / thesis 归因 | 🟡 **K1 第一版已建（2026-06-17）**：`portfolio/target.py` 算 cash/单仓/主题敞口 vs 上限 + 超限 flag，premarket advisory 落 `portfolio_target.json`，dashboard 显示（write-only、只能收紧、绝不加买入）。**剩 K2 量化 regime 引擎 + K3 thesis 归因**，见 roadmap **K 阶段** |
 | 调度自动化 | ✅ 交易生命周期已 cron 化（premarket/intraday/postmarket）+ **夜间分析批处理已上线**（I1：`run_nightly_analysis.sh`，只读/shadow-only，`ENABLE_NIGHTLY_ANALYSIS` 默认 1；I2 快照 + I3 趋势 + I4 Trends tab） |
 | 止损/退出逻辑 | ✅ `full_invalidation_exit`（跌破技术 invalidation 全清）+ **兜底硬止损已上线**（J1：`HARD_STOP_LOSS_PCT` 默认 8%，独立于 levels/actions，paper-only）；strategy.md 已与 code 一致。剩 `risk_exit` 分级减仓仍未启用（策略选择，待人工） |
 | review/live 真实下单 | ⛔ 故意未接线 |

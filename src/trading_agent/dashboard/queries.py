@@ -426,6 +426,13 @@ def nightly_health(agent_root: Path) -> dict[str, Any]:
     return _read_json_or_empty(default_nightly_health_path(agent_root))
 
 
+def portfolio_target(agent_root: Path, run_date: str) -> dict[str, Any]:
+    """Read-only: the K1 portfolio_target.json for a run date (current concentration vs target caps)."""
+    from trading_agent.portfolio.target import default_portfolio_target_path
+
+    return _read_json_or_empty(default_portfolio_target_path(agent_root, run_date))
+
+
 def factor_alpha(agent_root: Path, run_date: str) -> dict[str, Any]:
     """Read-only: the H2 factor_alpha.json for a run date (empty if premarket hasn't produced it)."""
     return _read_json_or_empty(build_runtime_paths(agent_root, run_date=run_date).factor_alpha_path)

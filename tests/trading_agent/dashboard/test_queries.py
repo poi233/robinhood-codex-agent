@@ -380,3 +380,14 @@ def test_nightly_health_query(tmp_path):
     out = tmp_path / "runtime" / "analytics"; out.mkdir(parents=True, exist_ok=True)
     (out / "nightly_health.json").write_text(json.dumps({"status": "ok", "failed_steps": []}), encoding="utf-8")
     assert nightly_health(tmp_path)["status"] == "ok"
+
+
+def test_portfolio_target_query(tmp_path):
+    import json
+    from trading_agent.core.context import build_runtime_paths
+    from trading_agent.dashboard.queries import portfolio_target
+    assert portfolio_target(tmp_path, "2026-06-17") == {}
+    p = build_runtime_paths(tmp_path, run_date="2026-06-17").planner_dir / "portfolio_target.json"
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text(json.dumps({"total_equity": 100000.0, "cash_weight": 0.2, "breaches": {}}), encoding="utf-8")
+    assert portfolio_target(tmp_path, "2026-06-17")["total_equity"] == 100000.0

@@ -74,6 +74,12 @@ def _seed(root: Path) -> None:
     write_json(root / "runtime" / "analytics" / "nightly_health.json", {
         "generated_at": "x", "status": "ok", "last_nightly_run_date": rd, "failed_steps": [],
         "stale_reports": [], "reports": []})
+    write_json(run / "planner" / "portfolio_target.json", {
+        "date": rd, "total_equity": 100000.0, "cash": 20000.0, "cash_weight": 0.2,
+        "targets": {"cash_target": 0.2, "max_position_size": 0.08, "theme_cap": 0.35},
+        "position_weights": {"NVDA": 0.4}, "theme_exposure": {"ai_semiconductor": 0.4},
+        "breaches": {"below_cash_target": False, "oversize_positions": ["NVDA"], "overexposed_themes": ["ai_semiconductor"]},
+        "notes": "Advisory only."})
     build_analytics_db(root)
 
 

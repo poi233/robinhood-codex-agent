@@ -101,6 +101,9 @@ with growth_tab:
 with themes_tab:
     st.header("Themes & Exposure")
     charts.theme_diagnostics_view(queries.theme_diagnostics(AGENT_ROOT, selected_run_date))
+    st.divider()
+    st.subheader("Portfolio target (K1: concentration vs caps — advisory)")
+    charts.portfolio_target_view(queries.portfolio_target(AGENT_ROOT, selected_run_date))
 
 with trends_tab:
     st.header("Trends (I: nightly analysis snapshots over time)")
