@@ -539,3 +539,153 @@ def build_candidate_scores_from_paths(agent_root: Path, run_date: str) -> dict[s
     }
     write_json(paths.candidate_scores_path, payload)
     return payload
+
+
+# --- H4: challenger re-scoring (expensive-path shadow strategies) -----------------------------
+# Re-aggregate a candidate's score under a challenger config WITHOUT re-running the analyzers,
+# by reusing each component's already-persisted point-in-time raw score + confidence. Three levers:
+#   1. disabled_components  — zero a component's weight (e.g. no_kronos_shadow: drop kronos)
+#   2. component_weights    — override base weights (e.g. validate an E2 weight suggestion)
+#   3. factor_alpha + factor_alpha_weight — fold the H2 factor_alpha layer in as an extra component
+#      (baseline_v1_plus_price_factors_shadow), letting a challenger score WITH factors while the
+#      champion stays write-only. All read-only over persisted artifacts → point-in-time safe.
+
+
+def rescore_candidate(
+    scored: dict[str, Any],
+    *,
+    component_weights: dict[str, float] | None = None,
+    disabled_components: set[str] | None = None,
+    factor_alpha_score: float | None = None,
+    factor_alpha_weight: float = 0.0,
+    min_effective_coverage: float = MIN_EFFECTIVE_COVERAGE,
+) -> dict[str, Any]:
+    """Pure: recompute one candidate's aggregate score under a challenger config.
+
+    Reuses the persisted per-component `score`/`confidence`/`available` from the champion's
+    diagnostics — equivalent in scoring effect to re-running with the component enabled/disabled
+    or reweighted, but cheap and point-in-time safe. Returns a new scored dict (champion untouched).
+    """
+    weights_override = component_weights or {}
+    disabled = {str(name) for name in (disabled_components or set())}
+    diagnostics = dict(scored.get("diagnostics") or {})
+
+    new_diagnostics: dict[str, Any] = {}
+    components: dict[str, float] = {}
+    base_weight_total = 0.0
+    for name, payload in diagnostics.items():
+        if not isinstance(payload, dict):
+            continue
+        raw_score = float(payload.get("score", 50.0) or 50.0)
+        confidence = float(payload.get("confidence", 0.0) or 0.0)
+        available = bool(payload.get("available"))
+        if name in disabled:
+            base_weight = 0.0
+        else:
+            base_weight = float(weights_override.get(name, WEIGHTS.get(name, 0.0)))
+        base_weight_total += base_weight
+        effective_weight = round(base_weight * confidence, 4) if available else 0.0
+        contribution = round(raw_score * effective_weight, 2)
+        updated = dict(payload)
+        updated.update({
+            "weight": base_weight,
+            "component_weight": base_weight,
+            "effective_weight": effective_weight,
+            "contribution": contribution,
+            "weighted_contribution": contribution,
+        })
+        new_diagnostics[name] = updated
+        components[name] = round(raw_score, 2)
+
+    # H4: fold in the H2 factor_alpha layer as an extra component if the challenger asks for it.
+    if factor_alpha_score is not None and factor_alpha_weight > 0:
+        fa_score = float(factor_alpha_score)
+        effective_weight = round(factor_alpha_weight, 4)
+        contribution = round(fa_score * effective_weight, 2)
+        base_weight_total += factor_alpha_weight
+        new_diagnostics["factor_alpha"] = {
+            "score": round(fa_score, 2),
+            "available": True,
+            "confidence": 1.0,
+            "blocked": False,
+            "reason": "factor_alpha_layer",
+            "weight": factor_alpha_weight,
+            "component_weight": factor_alpha_weight,
+            "effective_weight": effective_weight,
+            "contribution": contribution,
+            "weighted_contribution": contribution,
+        }
+        components["factor_alpha"] = round(fa_score, 2)
+
+    effective_weight_total = round(
+        sum(float(p.get("effective_weight", 0.0) or 0.0) for p in new_diagnostics.values()), 4
+    )
+    weighted_total = sum(float(p.get("contribution", 0.0) or 0.0) for p in new_diagnostics.values())
+    score = round(weighted_total / effective_weight_total, 2) if effective_weight_total > 0 else 50.0
+    coverage = round(effective_weight_total / base_weight_total, 4) if base_weight_total > 0 else 0.0
+
+    # block reasons carry over from the champion scoring (DSA promote/demote etc.), minus disabled comps
+    block_reasons = [
+        reason for reason in (scored.get("block_reasons") or [])
+        if not any(reason.startswith(f"{d}:") for d in disabled)
+    ]
+    component_block_reasons = [
+        f"{name}:{p.get('reason')}" for name, p in new_diagnostics.items() if p.get("blocked")
+    ]
+    for reason in component_block_reasons:
+        if reason not in block_reasons:
+            block_reasons.append(reason)
+    blocked = bool(block_reasons)
+    score_status = "blocked" if blocked else "insufficient_data" if coverage < min_effective_coverage else "scored"
+
+    result = dict(scored)
+    result.update({
+        "score": score,
+        "total_score": score,
+        "score_status": score_status,
+        "coverage": coverage,
+        "components": components,
+        "diagnostics": new_diagnostics,
+        "blocked": blocked,
+        "block_reasons": list(dict.fromkeys(block_reasons)),
+    })
+    return result
+
+
+def rescore_candidate_scores(
+    champion_scores: dict[str, Any],
+    *,
+    component_weights: dict[str, float] | None = None,
+    disabled_components: set[str] | None = None,
+    factor_alpha: dict[str, Any] | None = None,
+    factor_alpha_weight: float = 0.0,
+    min_effective_coverage: float = MIN_EFFECTIVE_COVERAGE,
+) -> dict[str, Any]:
+    """Pure: re-aggregate every candidate's score under a challenger config (H4 expensive path).
+
+    `factor_alpha` is the persisted factor_alpha.json payload ({symbols: {SYM: {factor_alpha_score}}});
+    its per-symbol score is folded in when factor_alpha_weight > 0. Returns a candidate_scores-shaped
+    dict the challenger risk overlay can consume directly. Champion scores are never mutated.
+    """
+    fa_symbols = (factor_alpha or {}).get("symbols") or {}
+    champ_symbols = champion_scores.get("symbols") or {}
+    rescored: dict[str, Any] = {}
+    for symbol, scored in champ_symbols.items():
+        if not isinstance(scored, dict):
+            continue
+        fa_payload = fa_symbols.get(symbol) or fa_symbols.get(str(symbol).upper()) or {}
+        fa_score = fa_payload.get("factor_alpha_score") if isinstance(fa_payload, dict) else None
+        rescored[symbol] = rescore_candidate(
+            scored,
+            component_weights=component_weights,
+            disabled_components=disabled_components,
+            factor_alpha_score=fa_score,
+            factor_alpha_weight=factor_alpha_weight,
+            min_effective_coverage=min_effective_coverage,
+        )
+    ranked = sorted(rescored, key=lambda item: (rescored[item]["blocked"], -float(rescored[item]["score"]), item))
+    result = dict(champion_scores)
+    result["symbols"] = rescored
+    result["ranked_symbols"] = ranked
+    result["rescored"] = True
+    return result

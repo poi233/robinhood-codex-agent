@@ -1,7 +1,7 @@
 # 项目状态总表 — 做了什么 / 没做什么
 
 > 最后更新：2026-06-18
-> 范围：`src/trading_agent/` + 配置 + 编排 + 入口 + 测试（566 passed）
+> 范围：`src/trading_agent/` + 配置 + 编排 + 入口 + 测试（579 passed）
 > 用途：**单一权威的"现状"文档**，按子系统逐块说明已实现与未实现。未来要做的事另见
 > [`roadmap.md`](./roadmap.md)。
 >
@@ -370,7 +370,7 @@
 | **E2** 权重建议机器 | `analytics weight-suggestion`：读 calibration component IC 产出 scoring 权重建议（IC 倾斜、合计 1.00、可调 damping）；只产建议绝不自动改，采纳走 B2/G6/G8 | 见 git log |
 | **H6** evidence gate | `growth/evidence.py` + `ENABLE_EVIDENCE_PROPOSALS`：proposal 必须带 calibration（near_miss/component IC）/weight evidence 才生成（只更严不更松）；flag 默认 0、doctor 回显 | 见 git log |
 | **J1** 兜底硬止损 | `policy/sell.py::_evaluate_hard_stop`：任何持仓亏损超 `HARD_STOP_LOSS_PCT`（默认 8%）全平，独立于 allowed_actions/technical levels；strategy.md 改正「只 alert」误述；只改 paper、不接 live | 见 git log |
-| **H4** shadow 多权重 re-score | `ENABLE_SHADOW_RESCORE` 下 challenger 可用 `changes` 列表重配多分量权重重打分（E2 shadow 验证路径）；flag 默认 0、双重隔离 | 见 git log |
+| **H4** shadow 重打分（贵路径） | `ENABLE_SHADOW_RESCORE` 下 challenger 可重配多分量权重 + 贵路径：`analyzer.<name>.enabled=false`（no_kronos）/ `<comp>_weight` / `factor.factor_alpha_weight`（H2 因子纳入打分）；`rescore_candidate_scores` 复用 champion 已落盘 per-component 诊断重聚合，point-in-time 安全、不重跑 analyzer、不碰 champion；flag 默认 0、双重隔离 | 见 git log |
 | **D2** batch 拉取 | `fetch_live_rows_batch` 一次 `yf.download` 多 ticker + `_rows_from_download_frame` 分发纯函数（单/多 ticker + 缺 symbol 容错），缓存仍逐 symbol 叠加 | 见 git log |
 | **H7/H8** 基本面/事件骨架 | `analyzers/fundamental.py`（quality flags，只 filter/warning 非买入信号）+ `analyzers/events.py`（earnings/analyst flags，只增强 catalyst 不独立下单）；schema + normalizer + best-effort yfinance provider（可注入）+ write-only advisory builder，纯函数有测试；接入 premarket/scoring 待数据 | 见 git log |
 | **L1/L3** 收口 + factor 覆盖审计 | project-status 漂移收口（顶部 point-in-time 约定 + 状态表更正）；README 按三时段重写（premarket DAG + 决策流程图）；L3：market_feed 永远采 `BENCHMARK_SYMBOLS`（SPY/QQQ/SMH/IWM），factor_panel/alpha 报告 coverage%，dashboard 显示 | 见 git log |

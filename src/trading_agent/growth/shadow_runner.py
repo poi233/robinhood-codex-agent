@@ -86,6 +86,74 @@ def _challenger_scoring_profile(agent_root: Path, experiment: dict[str, Any]) ->
     return base
 
 
+def _challenger_rescore_config(experiment: dict[str, Any]) -> dict[str, Any] | None:
+    """H4 expensive path: extract analyzer/factor re-scoring levers from the experiment's changes.
+
+    Only active under ENABLE_SHADOW_RESCORE. Recognizes:
+      - {module: "analyzer", field: "<name>.enabled", proposed: false} → disable component <name>
+      - {module: "scoring", field: "<name>_weight", proposed: <float>} → override component weight
+      - {module: "factor", field: "factor_alpha_weight", proposed: <float>} → fold factor_alpha in
+    Returns None when the challenger needs no re-scoring (pure threshold/weight-profile challenger),
+    so the cheap path (champion candidate_scores reuse) is kept byte-for-byte.
+    """
+    if not _shadow_rescore_enabled():
+        return None
+    disabled: set[str] = set()
+    component_weights: dict[str, float] = {}
+    factor_alpha_weight = 0.0
+    for change in experiment.get("changes") or []:
+        if not isinstance(change, dict):
+            continue
+        module = str(change.get("module") or "")
+        field = str(change.get("field") or "")
+        proposed = change.get("proposed")
+        if module == "analyzer" and field.endswith(".enabled"):
+            name = field[: -len(".enabled")]
+            if proposed in (False, 0, "false", "0"):
+                disabled.add(name)
+        elif module == "scoring" and field.endswith("_weight"):
+            try:
+                component_weights[field[: -len("_weight")]] = float(proposed)
+            except (TypeError, ValueError):
+                continue
+        elif module == "factor" and field == "factor_alpha_weight":
+            try:
+                factor_alpha_weight = float(proposed)
+            except (TypeError, ValueError):
+                continue
+    if not disabled and not component_weights and factor_alpha_weight <= 0:
+        return None
+    return {
+        "disabled_components": disabled,
+        "component_weights": component_weights,
+        "factor_alpha_weight": factor_alpha_weight,
+    }
+
+
+def _challenger_candidate_scores(agent_root: Path, run_date: str, experiment: dict[str, Any]) -> dict[str, Any]:
+    """The candidate_scores the challenger overlay should consume.
+
+    Cheap path (default / threshold challenger): the champion's persisted candidate_scores.
+    Expensive path (H4, ENABLE_SHADOW_RESCORE + analyzer/factor changes): re-aggregate every
+    candidate under the challenger config, folding in the persisted factor_alpha layer if asked.
+    """
+    paths = build_runtime_paths(agent_root, run_date=run_date)
+    champion_scores = _read_json_or_empty(paths.candidate_scores_path)
+    config = _challenger_rescore_config(experiment)
+    if config is None:
+        return champion_scores
+    from trading_agent.planner.scoring import rescore_candidate_scores
+
+    factor_alpha = _read_json_or_empty(paths.factor_alpha_path) if config["factor_alpha_weight"] > 0 else None
+    return rescore_candidate_scores(
+        champion_scores,
+        component_weights=config["component_weights"],
+        disabled_components=config["disabled_components"],
+        factor_alpha=factor_alpha,
+        factor_alpha_weight=config["factor_alpha_weight"],
+    )
+
+
 def build_challenger_risk_overlay(
     agent_root: Path,
     run_date: str,
@@ -96,6 +164,9 @@ def build_challenger_risk_overlay(
 ) -> dict[str, Any]:
     """Re-run the pure risk overlay with the challenger's scoring profile, reusing the
     champion's already-persisted premarket artifacts. Never writes the champion overlay.
+
+    With ENABLE_SHADOW_RESCORE and analyzer/factor changes, the candidate scores themselves are
+    re-aggregated under the challenger config (H4 expensive path) before the overlay runs.
     """
     paths = build_runtime_paths(agent_root, run_date=run_date)
     risk_config = _read_json_or_empty(paths.config_dir / "risk_tiers.json")
@@ -108,7 +179,7 @@ def build_challenger_risk_overlay(
         market_calendar=_read_json_or_empty(paths.market_calendar_path),
         capital_snapshot=_read_json_or_empty(paths.capital_snapshot_path),
         account_snapshot=_read_json_or_empty(paths.account_snapshot_path),
-        candidate_scores=_read_json_or_empty(paths.candidate_scores_path),
+        candidate_scores=_challenger_candidate_scores(agent_root, run_date, experiment),
         data_status_summary=_read_json_or_empty(paths.data_status_summary_path),
         scoring_profile=_challenger_scoring_profile(agent_root, experiment),
     )
