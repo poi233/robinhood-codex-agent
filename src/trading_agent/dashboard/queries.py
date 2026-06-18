@@ -503,6 +503,90 @@ def advisory_overlay_summary(agent_root: Path, run_date: str) -> list[dict[str, 
     return rows
 
 
+def overview_with_delta(agent_root: Path, run_date: str) -> dict[str, Any]:
+    """Current run-date overview + the previous run-date overview, for day-over-day deltas.
+
+    Read-only (reuses ``overview``). Returns {"curr", "prev", "prev_run_date"}; ``prev`` is an
+    empty dict when there is no earlier run date.
+    """
+    dates = list_run_dates(agent_root)  # most-recent-first
+    curr = overview(agent_root, run_date)
+    prev_run_date: str | None = None
+    if run_date in dates:
+        idx = dates.index(run_date)
+        if idx + 1 < len(dates):
+            prev_run_date = dates[idx + 1]
+    prev = overview(agent_root, prev_run_date) if prev_run_date else {}
+    return {"curr": curr, "prev": prev, "prev_run_date": prev_run_date}
+
+
+def equity_with_benchmark(agent_root: Path, *, benchmark: str = "SPY") -> dict[str, Any]:
+    """Paper equity curve with a SPY benchmark normalized to the same starting equity.
+
+    Read-only and fully local: SPY daily closes come from the latest run's market_feed
+    ``ohlcv/<benchmark>/daily.json`` (a ~1y history), aligned to each equity point's run_date.
+    Returns {"series": [{timestamp, run_date, total_equity, benchmark_equity}], "benchmark",
+    "strategy_return_pct", "benchmark_return_pct"}. ``benchmark_equity`` is None where no SPY
+    close is available for that date (e.g. market_feed pruned).
+    """
+    series = equity_timeseries(agent_root)
+    out: dict[str, Any] = {
+        "series": [],
+        "benchmark": benchmark,
+        "strategy_return_pct": None,
+        "benchmark_return_pct": None,
+    }
+    points = [row for row in series if row.get("total_equity") is not None and row.get("run_date")]
+    if not points:
+        return out
+
+    latest = list_run_dates(agent_root)
+    spy_close_by_date: dict[str, float] = {}
+    if latest:
+        feed_dir = build_runtime_paths(agent_root, run_date=latest[0]).market_feed_dir
+        spy_rows = feed_dir / "ohlcv" / benchmark / "daily.json"
+        if spy_rows.exists():
+            try:
+                rows = read_json(spy_rows)
+            except Exception:
+                rows = None
+            if isinstance(rows, list):
+                for row in rows:
+                    ts = str(row.get("timestamp") or "")[:10]
+                    close = row.get("close")
+                    if ts and close is not None:
+                        try:
+                            spy_close_by_date[ts] = float(close)
+                        except (TypeError, ValueError):
+                            continue
+
+    start_equity = float(points[0]["total_equity"])
+    start_spy = spy_close_by_date.get(str(points[0]["run_date"]))
+    enriched: list[dict[str, Any]] = []
+    for row in points:
+        spy_close = spy_close_by_date.get(str(row["run_date"]))
+        bench_equity = (
+            round(start_equity * (spy_close / start_spy), 2)
+            if start_spy and spy_close is not None
+            else None
+        )
+        enriched.append({
+            "timestamp": row.get("timestamp"),
+            "run_date": row.get("run_date"),
+            "total_equity": row.get("total_equity"),
+            "benchmark_equity": bench_equity,
+        })
+    out["series"] = enriched
+
+    end_equity = float(points[-1]["total_equity"])
+    if start_equity:
+        out["strategy_return_pct"] = round((end_equity / start_equity - 1) * 100, 2)
+    end_spy = spy_close_by_date.get(str(points[-1]["run_date"]))
+    if start_spy and end_spy:
+        out["benchmark_return_pct"] = round((end_spy / start_spy - 1) * 100, 2)
+    return out
+
+
 def thesis_attribution(agent_root: Path) -> dict[str, Any]:
     """Read-only: K3 thesis_attribution.json (per-thesis win rate / mean return)."""
     from trading_agent.replay.thesis import default_thesis_path
