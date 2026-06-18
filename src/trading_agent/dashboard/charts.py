@@ -437,9 +437,11 @@ def portfolio_target_view(payload: dict) -> None:
                 "from the paper ledger).")
         return
     t = payload.get("targets") or {}
+    sector_cap = t.get("sector_cap")
+    sector_cap_str = f" · sector ≤ {sector_cap * 100:.0f}%" if sector_cap else ""
     st.caption(f"total equity: ${payload.get('total_equity', 0):,.0f}  ·  cash: "
                f"{payload.get('cash_weight', 0) * 100:.0f}% (target ≥ {t.get('cash_target', 0) * 100:.0f}%)  ·  "
-               f"caps: single ≤ {t.get('max_position_size', 0) * 100:.0f}% · theme ≤ {t.get('theme_cap', 0) * 100:.0f}%")
+               f"caps: single ≤ {t.get('max_position_size', 0) * 100:.0f}% · theme ≤ {t.get('theme_cap', 0) * 100:.0f}%{sector_cap_str}")
     breaches = payload.get("breaches") or {}
     msgs = []
     if breaches.get("below_cash_target"):
@@ -448,6 +450,8 @@ def portfolio_target_view(payload: dict) -> None:
         msgs.append("oversize: " + ", ".join(breaches["oversize_positions"]))
     if breaches.get("overexposed_themes"):
         msgs.append("over-concentrated themes: " + ", ".join(breaches["overexposed_themes"]))
+    if breaches.get("overexposed_sectors"):
+        msgs.append("over-concentrated sectors: " + ", ".join(breaches["overexposed_sectors"]))
     if msgs:
         st.warning("⚠️ " + "  ·  ".join(msgs) + "  (advisory only — never adds a buy; can only tighten)")
     else:
@@ -455,6 +459,10 @@ def portfolio_target_view(payload: dict) -> None:
     if payload.get("theme_exposure"):
         st.caption("Theme exposure")
         st.bar_chart({k: v for k, v in payload["theme_exposure"].items()})
+    sector_exposure = {k: v for k, v in (payload.get("sector_exposure") or {}).items() if k != "unknown"}
+    if sector_exposure:
+        st.caption("Sector exposure")
+        st.bar_chart(sector_exposure)
     if payload.get("position_weights"):
         st.caption("Position weights")
         st.dataframe([{"symbol": s, "weight": w} for s, w in payload["position_weights"].items()],

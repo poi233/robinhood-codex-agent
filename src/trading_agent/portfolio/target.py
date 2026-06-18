@@ -17,10 +17,12 @@ from trading_agent.core.io import read_json, write_json
 DEFAULT_CASH_TARGET = 0.20        # target minimum cash fraction
 DEFAULT_MAX_POSITION_SIZE = 0.08  # cap on a single name's portfolio weight
 DEFAULT_THEME_CAP = 0.35          # cap on a single theme's portfolio weight
+DEFAULT_SECTOR_CAP = 0.40         # cap on a single sector's portfolio weight (broader than theme)
 
 
-def load_theme_map(config_dir: Path) -> dict[str, str]:
-    """symbol -> theme from universe_meta.json (missing => 'unknown')."""
+def _load_field_map(config_dir: Path, field: str) -> dict[str, str]:
+    """symbol -> <field> from universe_meta.json (symbols missing the field are simply omitted,
+    so callers treat them as 'unknown' per the universe_meta convention)."""
     path = config_dir / "universe_meta.json"
     if not path.exists():
         return {}
@@ -29,9 +31,20 @@ def load_theme_map(config_dir: Path) -> dict[str, str]:
         return {}
     out: dict[str, str] = {}
     for symbol, data in meta.items():
-        if isinstance(data, dict) and data.get("theme"):
-            out[symbol.upper()] = str(data["theme"])
+        if isinstance(data, dict) and data.get(field):
+            out[symbol.upper()] = str(data[field])
     return out
+
+
+def load_theme_map(config_dir: Path) -> dict[str, str]:
+    """symbol -> theme from universe_meta.json (missing => 'unknown')."""
+    return _load_field_map(config_dir, "theme")
+
+
+def load_sector_map(config_dir: Path) -> dict[str, str]:
+    """symbol -> sector from universe_meta.json (missing => 'unknown'). Sector is broader than theme
+    (e.g. many AI themes roll up to 'technology'); the field is optional and filled incrementally."""
+    return _load_field_map(config_dir, "sector")
 
 
 def _position_market_value(position: dict[str, Any]) -> float:
@@ -51,9 +64,13 @@ def build_portfolio_target(
     cash_target: float = DEFAULT_CASH_TARGET,
     max_position_size: float = DEFAULT_MAX_POSITION_SIZE,
     theme_cap: float = DEFAULT_THEME_CAP,
+    sector_map: dict[str, str] | None = None,
+    sector_cap: float = DEFAULT_SECTOR_CAP,
 ) -> dict[str, Any]:
     """Compute current composition + target caps + breaches. Pure. Weights are fractions of total
-    equity (cash + position market value)."""
+    equity (cash + position market value). sector_map is optional: when supplied, sector exposure is
+    computed and capped (broader than theme); symbols without a sector roll up to 'unknown'."""
+    sector_map = sector_map or {}
     pos_values = {sym.upper(): _position_market_value(p) for sym, p in positions.items() if isinstance(p, dict)}
     pos_values = {sym: v for sym, v in pos_values.items() if v > 0}
     positions_mv = sum(pos_values.values())
@@ -61,16 +78,21 @@ def build_portfolio_target(
 
     position_weights: dict[str, float] = {}
     theme_exposure: dict[str, float] = {}
+    sector_exposure: dict[str, float] = {}
     if total_equity > 0:
         for sym, mv in pos_values.items():
             w = mv / total_equity
             position_weights[sym] = round(w, 4)
             theme = theme_map.get(sym, "unknown")
             theme_exposure[theme] = round(theme_exposure.get(theme, 0.0) + w, 4)
+            sector = sector_map.get(sym, "unknown")
+            sector_exposure[sector] = round(sector_exposure.get(sector, 0.0) + w, 4)
 
     cash_weight = round(cash / total_equity, 4) if total_equity > 0 else 1.0
     oversize = sorted([s for s, w in position_weights.items() if w > max_position_size])
     overexposed = sorted([t for t, w in theme_exposure.items() if w > theme_cap])
+    # Only flag a sector breach when we actually know the sector (don't penalize 'unknown').
+    oversector = sorted([s for s, w in sector_exposure.items() if s != "unknown" and w > sector_cap])
 
     return {
         "total_equity": total_equity,
@@ -80,13 +102,16 @@ def build_portfolio_target(
             "cash_target": cash_target,
             "max_position_size": max_position_size,
             "theme_cap": theme_cap,
+            "sector_cap": sector_cap,
         },
         "position_weights": dict(sorted(position_weights.items(), key=lambda kv: -kv[1])),
         "theme_exposure": dict(sorted(theme_exposure.items(), key=lambda kv: -kv[1])),
+        "sector_exposure": dict(sorted(sector_exposure.items(), key=lambda kv: -kv[1])),
         "breaches": {
             "below_cash_target": cash_weight < cash_target,
             "oversize_positions": oversize,
             "overexposed_themes": overexposed,
+            "overexposed_sectors": oversector,
         },
         "notes": "Advisory only (K1): describes current concentration vs target caps. Never a buy "
                  "signal; once wired into sizing it can only tighten (cap/hold cash), never enlarge.",
@@ -111,12 +136,13 @@ def build_and_write_portfolio_target(agent_root: Path, run_date: str) -> Path:
     account = read_json(paths.paper_account_path) if paths.paper_account_path.exists() else {}
     cash = float(account.get("cash", 0) or 0) if isinstance(account, dict) else 0.0
     theme_map = load_theme_map(paths.config_dir)
+    sector_map = load_sector_map(paths.config_dir)
 
     payload = {
         "date": run_date,
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "schema_version": 1,
-        **build_portfolio_target(positions, cash, theme_map),
+        **build_portfolio_target(positions, cash, theme_map, sector_map=sector_map),
     }
     out = default_portfolio_target_path(agent_root, run_date)
     write_json(out, payload)

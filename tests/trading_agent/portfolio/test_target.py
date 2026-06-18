@@ -66,3 +66,45 @@ def test_build_and_write_reads_paper_ledger(tmp_path):
     assert payload["schema_version"] == 1
     assert payload["theme_exposure"]["ai_semiconductor"] == 1.0  # 100% one theme
     assert "ai_semiconductor" in payload["breaches"]["overexposed_themes"]
+
+
+# --- K1 second version: sector exposure ---
+
+def test_sector_exposure_computed_and_capped():
+    positions = {s: _pos(1, 25000.0) for s in ("NVDA", "AVGO", "ANET")}  # 75k of 100k book
+    sector_map = {"NVDA": "technology", "AVGO": "technology", "ANET": "technology"}
+    target = build_portfolio_target(positions, cash=25000.0, theme_map={}, sector_map=sector_map)
+    assert target["sector_exposure"]["technology"] == 0.75
+    assert "technology" in target["breaches"]["overexposed_sectors"]  # 75% > 40% cap
+    assert target["targets"]["sector_cap"] == 0.40
+
+
+def test_sector_unknown_not_flagged_as_breach():
+    # No sector_map → all positions roll up to 'unknown'; unknown is never a breach.
+    positions = {s: _pos(1, 50000.0) for s in ("NVDA", "AVGO")}
+    target = build_portfolio_target(positions, cash=0.0, theme_map={})
+    assert target["sector_exposure"].get("unknown") == 1.0
+    assert target["breaches"]["overexposed_sectors"] == []
+
+
+def test_sector_within_cap_no_breach():
+    positions = {"NVDA": _pos(1, 10000.0), "JPM": _pos(1, 10000.0)}
+    sector_map = {"NVDA": "technology", "JPM": "financials"}
+    target = build_portfolio_target(positions, cash=80000.0, theme_map={}, sector_map=sector_map)
+    assert target["breaches"]["overexposed_sectors"] == []
+
+
+def test_build_and_write_includes_sector_when_present(tmp_path):
+    paths = build_runtime_paths(tmp_path, run_date="2026-06-17")
+    write_json(paths.paper_positions_path, {"NVDA": _pos(1, 60000.0), "AVGO": _pos(1, 40000.0)})
+    write_json(paths.paper_account_path, {"cash": 0.0})
+    (tmp_path / "src" / "config").mkdir(parents=True, exist_ok=True)
+    write_json(tmp_path / "src" / "config" / "universe_meta.json", {
+        "NVDA": {"theme": "ai_semiconductor", "sector": "technology"},
+        "AVGO": {"theme": "ai_semiconductor", "sector": "technology"},
+    })
+
+    out = build_and_write_portfolio_target(tmp_path, "2026-06-17")
+    payload = json.loads(out.read_text(encoding="utf-8"))
+    assert payload["sector_exposure"]["technology"] == 1.0
+    assert "technology" in payload["breaches"]["overexposed_sectors"]

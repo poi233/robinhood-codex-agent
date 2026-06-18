@@ -1,7 +1,7 @@
 # 项目状态总表 — 做了什么 / 没做什么
 
 > 最后更新：2026-06-18
-> 范围：`src/trading_agent/` + 配置 + 编排 + 入口 + 测试（586 passed）
+> 范围：`src/trading_agent/` + 配置 + 编排 + 入口 + 测试（590 passed）
 > 用途：**单一权威的"现状"文档**，按子系统逐块说明已实现与未实现。未来要做的事另见
 > [`roadmap.md`](./roadmap.md)。
 >
@@ -383,6 +383,7 @@
 | **H7/H8** premarket 接入 | `run_fundamental_layer` / `run_event_layer` 作为 advisory stage 接进 premarket pipeline，_run_advisory 包裹；write-only → `fundamental_snapshot.json` / `event_snapshot.json` | 见 git log |
 | **H4** shadow 贵路径 | `rescore_candidate_scores` 重聚合 challenger 打分（disable 分量 / 重配权重 / 纳入 factor_alpha）；shadow runner 从 `changes` 抽 `analyzer.*.enabled` / `<comp>_weight` / `factor.factor_alpha_weight`；复用 champion 落盘诊断、point-in-time 安全 | 见 git log |
 | **K2** VIX 自动接入 | `fetch_vix_level()` best-effort 拉 `^VIX`（可注入、失败 None），`indicators_from_market_feed` vix 未传时自动拉；`ENABLE_REGIME_VIX_FETCH`（默认 1，doctor 回显） | 见 git log |
+| **K1** sector exposure | `load_sector_map` 从 universe_meta `sector` 字段读取（缺则 unknown），`build_portfolio_target` 算 sector_exposure + `sector_cap`（默认 0.40）+ `overexposed_sectors` breach（unknown 不计）；dashboard 显示 sector 条形图；advisory write-only，sector 数据可增量填 | 见 git log |
 | **G9** challenger 隔离账本 | `build_experiment_runtime_paths` + broker `paths_override`；shadow runner 跑 challenger 自己的 paper 账本；G7 出真实 fill/drawdown/PnL | 见 git log |
 | **B5** watchlist resolver | `parse_active_watchlist` 从 `active_strategy.watchlist` 解析文件名（+override），切策略真能切 watchlist，回退兼容 | 见 git log |
 | **TODO_FIX** technical 覆盖 | premarket 全天快照 + intraday merge；`run_symbol_research.sh` 单票输出改写到 `manual/<SYMBOL>/`（不再覆盖全局、可找到） | 见 git log |
