@@ -230,6 +230,43 @@ growth observe/propose/validate/shadow/evaluate → snapshot → trend). It neve
 promotes. Gated by `ENABLE_NIGHTLY_ANALYSIS` (default 1). The shell wrapper
 `src/scripts/entrypoints/run_nightly_analysis.sh` remains available for manual/cron use.
 
+### Analytics database (`runtime/analytics/analytics.db`)
+
+A local **SQLite** database that the dashboard and ad-hoc SQL queries read. It is a **derived view**,
+not a source of truth: the authoritative data is the per-day JSON/JSONL under
+`runtime/state/runs/<date>/` and `runtime/logs/runs/<date>/audit/`. The DB is rebuilt from those files.
+
+**Setup / build** — no separate install (SQLite ships with Python). Just build it from run data:
+
+```bash
+python3 -m trading_agent analytics build                 # (re)build from all run dates
+python3 -m trading_agent analytics build --since 2026-06-01 --until 2026-06-30   # a window
+```
+
+`build` is **idempotent**: it drops and recreates every table each time, so re-running never
+duplicates rows and always reflects the latest files on disk. Empty data → empty tables (0 rows), no
+error. The nightly batch rebuilds it automatically; run it manually whenever you want fresh tables.
+
+**Tables** (one DB, 10 tables): `runs` (per-day manifest: strategy_id / git_commit / config_hash),
+`candidates` (per run×symbol scores + watchlist/tradable flags), `decisions` (one row per intraday
+decision; includes `blocked_reasons` / `per_candidate_blocks` / `advisory_overlay` / `thesis_tags` as
+JSON), `orders` (paper orders incl. E4 `spread_bps`/`slippage_bps` + setup levels), `paper_equity`
+(equity-curve checkpoints), `blocked_reasons` (per run×reason counts), `intraday_rankings`
+(per-run ranked candidates incl. `base_trade_readiness_score`/`advisory_rank_delta`), and the K-stage
+advisory tables `factor_alpha` (H2), `regime_state` (K2), `portfolio_target` (K1). Common
+filter/sort columns are indexed.
+
+**Querying** — it is plain SQLite, so use anything: the `dashboard` (easiest, read-only UI), the
+`sqlite3` CLI, or Python. Example:
+
+```bash
+sqlite3 runtime/analytics/analytics.db \
+  "SELECT run_date, symbol, candidate_score FROM candidates ORDER BY candidate_score DESC LIMIT 10;"
+```
+
+> Schema changes need **no migration** — just re-run `analytics build` (the DB is recreated from the
+> JSON). The DB lives under git-ignored `runtime/`, so it is per-machine and safe to delete/rebuild.
+
 ### Self-growth (paper/shadow only — proposes, never auto-applies)
 Diagnoses the system, proposes **bounded** experiments, runs challenger strategies in **shadow
 paper**, and recommends promotions — but it **never** edits the champion strategy or auto-promotes to
