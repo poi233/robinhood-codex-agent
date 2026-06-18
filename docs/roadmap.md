@@ -85,6 +85,7 @@
 | | C2 | theme exposure / speculative cap 诊断 | docx | ✅ **已完成**（2026-06-15） |
 | | C3 | Dashboard v2（可读性重构 + 策略对比，含 F1） | 用户新增 | ✅ **已完成**（2026-06-16，首次 headless 渲染验证；像素级视觉仍待人工目测） |
 | | C4 | Dashboard v3（高级化重设计：中文化 + 深色主题/卡片 + 11→5 主区 + 四种指引） | 用户新增（2026-06-18） | ✅ **已完成（2026-06-18）**：只读不变；中文为主、深色高级主题、KPI 卡片、11 标签合并为 5 主区、每类数据带「好坏判定 / 基准对比 / 同比变化 / 行动建议」；headless AppTest 渲染 5 主区全绿（33 dashboard 测试通过） |
+| | C5 | Dashboard K线复盘（每只股票的日K + 各策略买卖点 + 均线/量/MACD） | 用户新增（2026-06-18） | ✅ **已完成（2026-06-18）**：新增第 6 主区「📉 K线复盘」——Plotly 日K + SMA20/50 + 成交量 + MACD，叠加 champion（paper 账本）与各挑战者（experiments/<id> 隔离账本）在每只票上的 ▲买/▼卖点（按策略着色），下方按策略列均买价 + 浮动盈亏；plotly 进 [dashboard] extra；只读 |
 | **D 工程优化 · 不阻塞** | D1 | DSA/Technical token 优化 | design doc | ✅ **已完成**（2026-06-15，见下方实现记录） |
 | | D2 | market_feed 跨日缓存 / batch | 旧 R4 | 🟡 缓存（2026-06-15）+ batch 拉取能力（2026-06-17：`fetch_live_rows_batch` 一次 `yf.download` 多 ticker + 分发纯函数 + 测试）已建；采集主流程逐步采用 |
 | | D3 | Kronos batch 推理 | 旧 R5 | ✅ **已完成**（2026-06-16） |
@@ -255,6 +256,34 @@ Altair 深色主题，兼容 altair≥5.5 的新 `alt.theme` API）+ `.streamlit
 `dashboard` CLI 现尊重 `AGENT_ROOT`（cwd 仍忽略）。smoke test 改断言 5 主区 + 中文 header 并设 `AGENT_ROOT`
 真正喂入 seed 数据。**33 个 dashboard 测试通过、全套 606 通过**（仅 2 个 kronos setup-script 测试因需联网
 pip 安装假包而失败，与本改动无关）。README「11 tabs」段落 + nightly-health/overlay 指向已同步更新。
+
+---
+
+# C5 阶段 · Dashboard K线复盘（只读 · ✅ 已完成 2026-06-18）
+
+> **背景**：用户希望「能显示 K 线，告诉我每只股票我是怎么买的、不同 Strategy 会怎样」（参考一张
+> TradingView/QuantView 风格的截图）。本仓库已具备所需全部只读数据：`market_feed/ohlcv/<symbol>/daily.json`
+> 提供日 OHLCV；champion 成交在 `<run>/paper/orders.jsonl`；每个挑战者的隔离 G9 账本在
+> `<run>/experiments/<strategy_id>/paper/orders.jsonl`。
+
+**实现（2026-06-18，全部完成）**：
+- `dashboard/kline.py`：纯 Python 算 SMA/EMA/MACD + Plotly 图（`make_subplots` 三行：日K+均线+买卖点 /
+  成交量 / MACD）；上涨绿、下跌红；▲=买入、▼=卖出，**按策略着色**（champion 蓝、挑战者各色），hover 显示
+  策略/方向/价/量/理由；深色主题、关闭 rangeslider、category 轴跳过周末。
+- `queries.py`（只读）：`available_kline_symbols` / `ohlcv_daily`（取最新运行日 market_feed）+
+  `trades_for_symbol`（跨运行日聚合 champion + 各挑战者的 filled 成交）。
+- `charts.kline_view`：渲染图 + 「各策略成交明细 / 对比」——每策略给均买价、现价、浮动盈亏（好坏色）。
+- `app.py`：新增第 6 主区「📉 K线复盘」，标的下拉 + 策略多选（默认全部叠加）；顶部 guidance。
+- `pyproject.toml`：`plotly>=5.18` 进 `[dashboard]` extra；`charts.kline_view` 守护 import，缺 plotly 时给安装提示。
+- smoke test：seed 补 NVDA/SPY 日线 + 一个挑战者隔离账本（不同买点），断言 6 主区含「K线复盘」。
+
+**红线（不变）**：纯只读；plotly 仅 dashboard 用、可选 extra；不碰任何交易路径。
+
+**验收**：✅ AppTest 渲染 6 主区无异常（33 dashboard 测试通过、全套 606 通过）；✅ 图含 K线/SMA20/SMA50/
+champion 买点/challenger 买点/成交量/MACD（DIF/DEA/柱）共 9 条 trace；✅ 缺数据降级为 info 不报错。
+
+> **后续可增量**：卖出/平仓配对的逐笔盈亏连线、按某挑战者重放「如果用它会怎样」的权益对比、intraday 分钟级
+> K 线（需分钟 OHLCV 采集）、画 entry/stop/target 水平线（technical levels 已有）。
 
 ---
 

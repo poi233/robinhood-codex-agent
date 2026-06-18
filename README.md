@@ -225,7 +225,7 @@ actually improved outcomes before any further promotion.
 | `analytics validate [--since --until]` | N3 → `validate_report.{json,md}`: read-only scan of run JSONL for malformed lines + rows missing key fields (per source + per run). Modifies nothing; `status=ok` when clean. |
 | `analytics retention [--keep-days N] [--apply]` | N4 → `retention_report.{json,md}`: prune big premarket input snapshots (`market_feed/`) from runs older than `--keep-days` (default 60), keeping all analysis inputs. **Dry-run unless `--apply`.** |
 | `analytics thesis [--since --until]` | K3 → `thesis_attribution.{json,md}`: per-thesis (theme/DSA tags) win rate + mean forward return — "which theses actually make money". |
-| `dashboard` | Read-only Streamlit UI (`localhost:8501`, 中文 / 深色主题): **5 主区** — 📊 今日驾驶舱 / 🎯 选股与决策 / 💰 业绩与对比 / 🔬 校准与归因 / 🌱 成长与趋势. 每主区带「这是什么 / 怎么看 / 建议」引导，关键指标带好坏色标、同比 delta 与 SPY 基准对比。Honors `AGENT_ROOT`. |
+| `dashboard` | Read-only Streamlit UI (`localhost:8501`, 中文 / 深色主题): **6 主区** — 📊 今日驾驶舱 / 🎯 选股与决策 / 💰 业绩与对比 / 📉 K线复盘 / 🔬 校准与归因 / 🌱 成长与趋势. 每主区带「这是什么 / 怎么看 / 建议」引导，关键指标带好坏色标、同比 delta 与 SPY 基准对比；K线复盘用 Plotly 画日K + 均线 + 成交量 + MACD，叠加 champion / 各挑战者在每只股票上的买卖点（不同策略不同颜色）。Honors `AGENT_ROOT`. |
 
 ### Nightly batch (read-only / shadow-only)
 `python3 -m trading_agent nightly-analysis` runs the analytics + self-growth commands best-effort
