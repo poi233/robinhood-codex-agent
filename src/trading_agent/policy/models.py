@@ -86,6 +86,7 @@ class OrderIntent:
     bid: float | None = None
     ask: float | None = None
     spread_bps: float | None = None
+    advisory_overlay: dict[str, Any] = field(default_factory=dict)
 
     def to_json_dict(self) -> dict[str, object]:
         return {
@@ -105,6 +106,7 @@ class OrderIntent:
             "bid": self.bid,
             "ask": self.ask,
             "spread_bps": self.spread_bps,
+            "advisory_overlay": dict(self.advisory_overlay),
             "reason_codes": list(self.reason_codes),
             "confidence": self.confidence,
         }
@@ -153,6 +155,7 @@ class PolicyDecision:
     # Per-candidate block reasons {symbol: [reason, ...]}, captured point-in-time for E3 near-miss
     # attribution. Empty for global blocks (kill switch / missing plan / regime) that aren't per-symbol.
     per_candidate_blocks: dict[str, list[str]] = field(default_factory=dict)
+    advisory_overlay: dict[str, Any] = field(default_factory=dict)
 
     def to_json_dict(self, *, timestamp: str) -> dict[str, object]:
         return {
@@ -167,5 +170,6 @@ class PolicyDecision:
             "risk_checks": dict(self.risk_checks),
             "blocked_reasons": list(self.blocked_reasons),
             "per_candidate_blocks": {sym: list(reasons) for sym, reasons in self.per_candidate_blocks.items()},
+            "advisory_overlay": dict(self.advisory_overlay),
             "order_id_if_any": None,
         }

@@ -10,6 +10,7 @@ from trading_agent.core.config import TierMisconfigurationError
 from trading_agent.core.time import PT
 from trading_agent.orchestration import intraday as intraday_module
 from trading_agent.paper.broker import apply_paper_intent
+from trading_agent.policy.advisory_overlay import AdvisoryOverlay, SymbolOverlay
 from trading_agent.policy.models import OrderIntent, PolicyDecision, PolicyInputs, Quote
 
 
@@ -96,6 +97,29 @@ def policy_ready_inputs(*, trading_mode: str = "paper") -> PolicyInputs:
             }
         },
     )
+
+
+def policy_ready_inputs_with_overlay() -> PolicyInputs:
+    inputs = policy_ready_inputs()
+    inputs.advisory_overlay = AdvisoryOverlay(
+        run_date="2026-06-14",
+        symbols={
+            "NVDA": SymbolOverlay(
+                symbol="NVDA",
+                rank_delta=0.0,
+                size_multiplier=1.0,
+                block_buy=False,
+                reason_codes=["factor_alpha", "ai", "regime", "portfolio"],
+                components={
+                    "factor_alpha": {"score": 84.0},
+                    "ai": {"kronos": {"direction": "long", "confidence": 0.8}},
+                    "regime": {"regime": "neutral", "applied_multiplier": 1.0},
+                    "portfolio": {"position_weight": 0.04},
+                },
+            )
+        },
+    )
+    return inputs
 
 
 def read_decisions(root: Path) -> list[dict[str, object]]:
@@ -255,6 +279,36 @@ class IntradayPolicyIntegrationTests(unittest.TestCase):
         self.assertIn("trade_readiness_score", rankings[0])
         self.assertIn("price_setup_score", rankings[0])
         self.assertGreater(rankings[0]["price_setup_score"], 0)
+
+    def test_intraday_persists_advisory_overlay_audit_without_changing_scores(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            _prepare_repo_root(root)
+            original_cwd = os.getcwd()
+            os.chdir(root)
+            try:
+                with mock.patch.object(intraday_module, "_is_weekday_pt", return_value=True), \
+                    mock.patch.object(intraday_module, "_is_intraday_window_pt", return_value=True), \
+                    mock.patch.object(intraday_module, "pt_date_string", return_value="2026-06-14"), \
+                    mock.patch.object(intraday_module, "load_runtime_config") as load_runtime_config, \
+                    mock.patch.object(intraday_module, "load_policy_inputs", return_value=policy_ready_inputs_with_overlay()), \
+                    mock.patch.object(intraday_module, "send_trade_email_notification"):
+                    load_runtime_config.return_value = mock.Mock(trading_mode="paper", risk_tier=0, paper_risk_tier=0, effective_risk_tier=0)
+
+                    status = intraday_module.run_intraday_pipeline(dry_run=False)
+                    rankings_path = root / "runtime" / "logs" / "runs" / "2026-06-14" / "audit" / "intraday_rankings.jsonl"
+                    rankings = [json.loads(line) for line in rankings_path.read_text(encoding="utf-8").splitlines()]
+                    decisions = read_decisions(root)
+            finally:
+                os.chdir(original_cwd)
+
+        self.assertEqual(status, 0)
+        self.assertEqual(rankings[0]["trade_readiness_score"], 81.75)
+        self.assertEqual(rankings[0]["advisory_overlay"]["rank_delta"], 0.0)
+        self.assertEqual(rankings[0]["advisory_overlay"]["components"]["factor_alpha"]["score"], 84.0)
+        proposed_order = decisions[0]["proposed_order"]
+        self.assertEqual(proposed_order["advisory_overlay"]["size_multiplier"], 1.0)
+        self.assertEqual(proposed_order["advisory_overlay"]["components"]["ai"]["kronos"]["direction"], "long")
 
     def test_intraday_runs_active_shadow_experiment_in_isolated_ledger(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

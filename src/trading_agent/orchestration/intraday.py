@@ -46,6 +46,7 @@ def _append_intraday_rankings(agent_root: Path, inputs, *, run_date: str | None 
     match the decision's view of the world. Read-only w.r.t. trading behavior.
     """
     from trading_agent.policy.candidate_selector import rank_candidates
+    from trading_agent.policy.advisory_overlay import overlay_for_symbol, symbol_overlay_to_dict
 
     ranked, _blocked = rank_candidates(inputs)
     if not ranked:
@@ -68,6 +69,9 @@ def _append_intraday_rankings(agent_root: Path, inputs, *, run_date: str | None 
                         "research_score": candidate.research_score,
                         "catalyst_score": candidate.catalyst_score,
                         "liquidity_score": candidate.liquidity_score,
+                        "advisory_overlay": symbol_overlay_to_dict(
+                            overlay_for_symbol(inputs.advisory_overlay, candidate.symbol)
+                        ),
                     }
                 )
                 + "\n"

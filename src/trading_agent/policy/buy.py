@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from trading_agent.policy.candidate_selector import rank_candidates
+from trading_agent.policy.advisory_overlay import overlay_for_symbol, symbol_overlay_to_dict
 from trading_agent.policy.models import OrderIntent, PolicyInputs
 from trading_agent.policy.price_policy import decide_buy_price
 from trading_agent.policy.sizing_policy import decide_size
@@ -72,6 +73,7 @@ def evaluate_buy(inputs: PolicyInputs) -> BuyEvaluation:
                 bid=inputs.quotes[candidate.symbol].bid,
                 ask=inputs.quotes[candidate.symbol].ask,
                 spread_bps=inputs.quotes[candidate.symbol].spread_bps,
+                advisory_overlay=symbol_overlay_to_dict(overlay_for_symbol(inputs.advisory_overlay, candidate.symbol)),
                 setup_type=price.setup_type,
                 limit_price=price.limit_price,
                 estimated_notional=size.estimated_notional,

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -183,3 +183,9 @@ def overlay_for_symbol(overlay: AdvisoryOverlay | None, symbol: str) -> SymbolOv
     if overlay is None:
         return SymbolOverlay(symbol=normalized)
     return overlay.symbols.get(normalized, SymbolOverlay(symbol=normalized))
+
+
+def symbol_overlay_to_dict(overlay: SymbolOverlay | None) -> dict[str, Any]:
+    if overlay is None:
+        return {}
+    return asdict(overlay)
