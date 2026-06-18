@@ -508,3 +508,29 @@ def thesis_attribution(agent_root: Path) -> dict[str, Any]:
     from trading_agent.replay.thesis import default_thesis_path
 
     return _read_json_or_empty(default_thesis_path(agent_root))
+
+
+def thesis_trend(agent_root: Path) -> dict[str, Any]:
+    """Read-only: per-thesis win-rate time series from archived history/<date>/thesis_attribution.json.
+
+    Returns {thesis: [{date, win_rate, mean_return, count}, ...]} sorted by date ascending, so the
+    dashboard can plot how each thesis's win rate evolves as paper samples accumulate. Empty when
+    no nightly snapshots have archived a thesis report yet.
+    """
+    root = agent_root / "runtime" / "analytics" / "history"
+    if not root.exists():
+        return {}
+    series: dict[str, list[dict[str, Any]]] = {}
+    for date_dir in sorted(d for d in root.iterdir() if d.is_dir()):
+        report = _read_json_or_empty(date_dir / "thesis_attribution.json")
+        for row in report.get("theses") or []:
+            thesis = row.get("thesis")
+            if not thesis:
+                continue
+            series.setdefault(str(thesis), []).append({
+                "date": date_dir.name,
+                "win_rate": row.get("win_rate"),
+                "mean_return": row.get("mean_return"),
+                "count": row.get("count"),
+            })
+    return series

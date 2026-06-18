@@ -550,3 +550,30 @@ def thesis_attribution_view(report: dict[str, Any]) -> None:
         }).set_index("Thesis")
         st.caption("Win rate by thesis")
         st.bar_chart(chart_data, use_container_width=True)
+
+
+def thesis_trend_view(series: dict[str, Any]) -> None:
+    """K3: per-thesis win-rate over time from archived nightly thesis reports."""
+    if not series:
+        st.info(
+            "No thesis history yet. Nightly snapshots archive thesis_attribution.json into "
+            "runtime/analytics/history/<date>/; the trend appears once a few nights accumulate."
+        )
+        return
+    # Build a wide date-indexed frame of win-rate % per thesis.
+    frames = []
+    for thesis, points in series.items():
+        if not points:
+            continue
+        df = pd.DataFrame([
+            {"date": p["date"], thesis: round((p["win_rate"] or 0) * 100, 1)}
+            for p in points if p.get("win_rate") is not None
+        ])
+        if not df.empty:
+            frames.append(df.set_index("date"))
+    if not frames:
+        st.info("No win-rate points to plot yet.")
+        return
+    combined = pd.concat(frames, axis=1)
+    st.caption("Win rate % by thesis over time (each line = one thesis tag)")
+    st.line_chart(combined, use_container_width=True)

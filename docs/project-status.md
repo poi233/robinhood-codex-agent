@@ -1,7 +1,7 @@
 # 项目状态总表 — 做了什么 / 没做什么
 
 > 最后更新：2026-06-18
-> 范围：`src/trading_agent/` + 配置 + 编排 + 入口 + 测试（584 passed）
+> 范围：`src/trading_agent/` + 配置 + 编排 + 入口 + 测试（586 passed）
 > 用途：**单一权威的"现状"文档**，按子系统逐块说明已实现与未实现。未来要做的事另见
 > [`roadmap.md`](./roadmap.md)。
 >
@@ -378,7 +378,7 @@
 | **M1–M5** Advisory Overlay 接线 | `ENABLE_INTRADAY_ADVISORY_OVERLAY` 门控；M1 loader+归一化（policy/advisory_overlay.py）；M2 H2/H3 rank_delta 排序；M3 K1/K2 风控/仓位收紧；M4 email+dashboard Decision Overlay tab；M5 forward returns 自动折入 overlay components、growth evidence 读 overlay IC、`growth_policy` overlay mutation 白名单 + evidence-based proposal rules（factor/ai 正 IC → 自动建议 bump overlay.factor_weight/ai_weight） | 见 git log |
 | **K3** thesis tags 落盘 | `OrderIntent.thesis_tags` 买入时点落盘（universe_meta theme + DSA primary_theme/strategy_matches），`PolicyInputs.theme_map` 由 loader 从 `universe_meta.json` 读取；逐单归因无需事后重建 DSA 归档 | 见 git log |
 | **D2** batch OHLCV 接入 | `_prefetch_ohlcv_batch` 在无 per-symbol cache 时用一次 `yf.download` 拉全部 symbols，通过 `prefetched_rows` 传入 `_process_one_symbol`；`ENABLE_BATCH_OHLCV_FETCH`（默认 1）；失败静默降级到 per-symbol；不影响 cache 路径 | 见 git log |
-| **K3 dashboard** | dashboard 新增第 11 个 ⑪ Thesis tab：`thesis_attribution_view` 显示每个 thesis 胜率/均值收益/n；缺数据时显示运行提示 | 见 git log |
+| **K3 dashboard** | dashboard 第 11 个 ⑪ Thesis tab：`thesis_attribution_view`（胜率/均值收益/n）+ `thesis_trend_view`（每个 thesis 胜率随夜间快照的折线，`thesis_trend` 扫 history/<date>/thesis_attribution.json）；缺数据时显示运行提示 | 见 git log |
 | **H6** 扩展 evidence 类型 | `gather_evidence` 新增 `factor_positive_ic` / `ai_calibration` / `setup_outcomes`；`evidence_for_proposal` 扩展支持 `scoring.component_weights` / `setups` / `policy.price_setup_weight` | 见 git log |
 | **H7/H8** premarket 接入 | `run_fundamental_layer` / `run_event_layer` 作为 advisory stage 接进 premarket pipeline，_run_advisory 包裹；write-only → `fundamental_snapshot.json` / `event_snapshot.json` | 见 git log |
 | **H4** shadow 贵路径 | `rescore_candidate_scores` 重聚合 challenger 打分（disable 分量 / 重配权重 / 纳入 factor_alpha）；shadow runner 从 `changes` 抽 `analyzer.*.enabled` / `<comp>_weight` / `factor.factor_alpha_weight`；复用 champion 落盘诊断、point-in-time 安全 | 见 git log |

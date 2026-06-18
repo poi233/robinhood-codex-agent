@@ -484,3 +484,32 @@ def test_thesis_attribution_missing_returns_empty(tmp_path):
     result = thesis_attribution(tmp_path)
 
     assert result == {}
+
+
+def test_thesis_trend_builds_per_thesis_series(tmp_path):
+    import json
+    from trading_agent.dashboard.queries import thesis_trend
+
+    hist = tmp_path / "runtime" / "analytics" / "history"
+    for date, ai_win in (("2026-06-16", 0.60), ("2026-06-17", 0.65), ("2026-06-18", 0.70)):
+        d = hist / date
+        d.mkdir(parents=True)
+        (d / "thesis_attribution.json").write_text(json.dumps({
+            "theses": [
+                {"thesis": "AI_INFRA", "win_rate": ai_win, "mean_return": 0.01, "count": 10},
+            ]
+        }), encoding="utf-8")
+
+    series = thesis_trend(tmp_path)
+
+    assert "AI_INFRA" in series
+    assert len(series["AI_INFRA"]) == 3
+    # ascending by date
+    assert [p["date"] for p in series["AI_INFRA"]] == ["2026-06-16", "2026-06-17", "2026-06-18"]
+    assert series["AI_INFRA"][-1]["win_rate"] == 0.70
+
+
+def test_thesis_trend_empty_when_no_history(tmp_path):
+    from trading_agent.dashboard.queries import thesis_trend
+
+    assert thesis_trend(tmp_path) == {}

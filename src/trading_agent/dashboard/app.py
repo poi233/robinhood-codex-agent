@@ -127,3 +127,6 @@ with thesis_tab:
     st.caption("Tags derived at trade time from universe_meta theme + DSA primary_theme/strategy_matches. "
                "Read-only — run `analytics thesis` to refresh.")
     charts.thesis_attribution_view(queries.thesis_attribution(AGENT_ROOT))
+    st.divider()
+    st.subheader("Win rate trend (per thesis, over nightly snapshots)")
+    charts.thesis_trend_view(queries.thesis_trend(AGENT_ROOT))
