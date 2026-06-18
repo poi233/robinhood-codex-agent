@@ -32,7 +32,7 @@ def test_load_advisory_artifacts_reads_only_fresh_payloads(tmp_path: Path) -> No
     assert artifacts["portfolio_target"]["breaches"] == {}
 
 
-def test_build_advisory_overlay_normalizes_symbols_without_trading_effect() -> None:
+def test_build_advisory_overlay_combines_rank_delta_with_risk_tightening() -> None:
     inputs = PolicyInputs(
         run_date="2026-06-18",
         trading_mode="paper",
@@ -76,15 +76,39 @@ def test_build_advisory_overlay_normalizes_symbols_without_trading_effect() -> N
 
     assert isinstance(overlay, AdvisoryOverlay)
     assert isinstance(nvda, SymbolOverlay)
-    assert nvda.block_buy is False
+    assert nvda.block_buy is True
     assert nvda.rank_delta == 5.0
-    assert nvda.size_multiplier == 1.0
+    assert nvda.size_multiplier == 0.0
+    assert "regime_blocks_new_buy" in nvda.blocked_reasons
+    assert "portfolio_oversize_position" in nvda.blocked_reasons
     assert nvda.components["factor_alpha"]["score"] == 88.0
     assert nvda.components["ai"]["kronos"]["direction"] == "long"
     assert nvda.components["regime"]["regime"] == "risk_off"
     assert nvda.components["portfolio"]["position_weight"] == 0.09
     assert pltr.components["regime"]["regime"] == "risk_off"
     assert pltr.components["factor_alpha"] == {}
+
+
+def test_build_advisory_overlay_applies_regime_size_multiplier_without_increase() -> None:
+    inputs = PolicyInputs(
+        run_date="2026-06-18",
+        trading_mode="paper",
+        risk_tier=4,
+        today_allowlist=["NVDA"],
+    )
+    artifacts = {
+        "factor_alpha": {},
+        "ai_signals": {},
+        "regime_state": {"regime": "neutral", "applied_multiplier": 0.5},
+        "portfolio_target": {},
+    }
+
+    overlay = build_advisory_overlay(inputs, artifacts)
+    nvda = overlay_for_symbol(overlay, "NVDA")
+
+    assert nvda.block_buy is False
+    assert nvda.size_multiplier == 0.5
+    assert nvda.components["regime"]["applied_multiplier"] == 0.5
 
 
 def test_build_advisory_overlay_penalizes_weak_factor_and_negative_ai_without_blocking() -> None:

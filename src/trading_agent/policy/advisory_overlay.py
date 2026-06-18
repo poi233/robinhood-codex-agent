@@ -179,6 +179,39 @@ def _ai_rank_delta(component: dict[str, Any]) -> tuple[float, list[str]]:
     return delta, reasons
 
 
+def _risk_tightening(components: dict[str, Any]) -> tuple[bool, float, list[str], list[str]]:
+    block_buy = False
+    size_multiplier = 1.0
+    blocked_reasons: list[str] = []
+    reason_codes: list[str] = []
+
+    regime = components.get("regime") or {}
+    regime_name = str(regime.get("regime") or "").lower()
+    applied_multiplier = regime.get("applied_multiplier")
+    if regime_name in {"risk_off", "panic"}:
+        block_buy = True
+        blocked_reasons.append("regime_blocks_new_buy")
+        reason_codes.append("regime_blocks_new_buy")
+        size_multiplier = 0.0
+    elif isinstance(applied_multiplier, (int, float)):
+        clamped = max(0.0, min(1.0, float(applied_multiplier)))
+        if clamped < size_multiplier:
+            size_multiplier = clamped
+            reason_codes.append("regime_size_multiplier")
+
+    portfolio = components.get("portfolio") or {}
+    if portfolio.get("oversize_position"):
+        block_buy = True
+        blocked_reasons.append("portfolio_oversize_position")
+        reason_codes.append("portfolio_oversize_position")
+    if portfolio.get("overexposed_theme"):
+        block_buy = True
+        blocked_reasons.append("portfolio_overexposed_theme")
+        reason_codes.append("portfolio_overexposed_theme")
+
+    return block_buy, size_multiplier, blocked_reasons, reason_codes
+
+
 def build_advisory_overlay(inputs: Any, artifacts: dict[str, dict[str, Any]]) -> AdvisoryOverlay:
     run_date = str(getattr(inputs, "run_date", ""))
     symbols = _symbols_from_inputs(inputs) | _symbols_from_artifacts(artifacts)
@@ -193,6 +226,7 @@ def build_advisory_overlay(inputs: Any, artifacts: dict[str, dict[str, Any]]) ->
         }
         factor_delta, factor_reasons = _factor_rank_delta(components["factor_alpha"])
         ai_delta, ai_reasons = _ai_rank_delta(components["ai"])
+        block_buy, size_multiplier, blocked_reasons, risk_reasons = _risk_tightening(components)
         reason_codes = [
             source
             for source, value in components.items()
@@ -200,9 +234,13 @@ def build_advisory_overlay(inputs: Any, artifacts: dict[str, dict[str, Any]]) ->
         ]
         reason_codes.extend(factor_reasons)
         reason_codes.extend(ai_reasons)
+        reason_codes.extend(risk_reasons)
         overlay_symbols[symbol] = SymbolOverlay(
             symbol=symbol,
             rank_delta=max(-5.0, min(5.0, factor_delta + ai_delta)),
+            size_multiplier=size_multiplier,
+            block_buy=block_buy,
+            blocked_reasons=blocked_reasons,
             reason_codes=reason_codes,
             components=components,
         )

@@ -332,6 +332,49 @@ class PriceSetupScoreTests(unittest.TestCase):
         self.assertEqual(ranked[1].advisory_rank_delta, -4.0)
         self.assertIn("advisory_overlay_rank_delta", ranked[0].reason_codes)
 
+    def test_advisory_overlay_block_buy_is_a_hard_block(self) -> None:
+        inputs = base_inputs()
+        inputs.technical_signals = {"symbols": {"NVDA": {"setup": "pullback"}}}
+        inputs.advisory_overlay = AdvisoryOverlay(
+            run_date="2026-06-14",
+            symbols={
+                "NVDA": SymbolOverlay(
+                    symbol="NVDA",
+                    block_buy=True,
+                    blocked_reasons=["regime_blocks_new_buy"],
+                )
+            },
+        )
+
+        ranked, blocked = rank_candidates(inputs)
+
+        self.assertEqual(ranked, [])
+        self.assertEqual(blocked["NVDA"], ["regime_blocks_new_buy"])
+
+    def test_advisory_overlay_size_multiplier_only_reduces_notional(self) -> None:
+        no_overlay = base_inputs()
+        with_overlay = base_inputs()
+        with_overlay.advisory_overlay = AdvisoryOverlay(
+            run_date="2026-06-14",
+            symbols={
+                "NVDA": SymbolOverlay(
+                    symbol="NVDA",
+                    size_multiplier=0.5,
+                    reason_codes=["regime_size_multiplier"],
+                )
+            },
+        )
+        candidate = RankedCandidate("NVDA", 93, 93, 93, 80, 70, 80)
+        price = decide_buy_price(no_overlay, candidate)
+
+        baseline = decide_size(no_overlay, candidate, price)
+        reduced = decide_size(with_overlay, candidate, price)
+
+        self.assertGreater(baseline.estimated_notional, reduced.estimated_notional)
+        self.assertEqual(reduced.estimated_notional, round(baseline.estimated_notional * 0.5, 2))
+        self.assertEqual(reduced.applied_multipliers["advisory_overlay"], 0.5)
+        self.assertIn("advisory_overlay_size_multiplier", reduced.reason_codes)
+
 
 if __name__ == "__main__":
     unittest.main()

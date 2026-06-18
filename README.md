@@ -188,7 +188,8 @@ a normalized `advisory_overlay` object for later ranking/risk/audit use. M1 only
 normalizes these artifacts; M4 audit skeleton now also writes the per-symbol overlay into intraday
 rankings and proposed orders. M2 applies H2/H3-derived `rank_delta` to the intraday
 `trade_readiness_score` only when the flag is enabled; it does not add hard blocks, change sizing, or
-wire real order placement.
+wire real order placement. M3 lets K1/K2 tighten only: `risk_off`/`panic` regime or portfolio
+breaches can block new buys, and regime/portfolio multipliers can only reduce order size.
 
 ---
 

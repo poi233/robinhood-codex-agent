@@ -4,6 +4,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from trading_agent.policy.candidate_selector import RankedCandidate
+from trading_agent.policy.advisory_overlay import overlay_for_symbol
 from trading_agent.policy.models import PolicyInputs
 from trading_agent.policy.price_policy import BuyPriceDecision
 from trading_agent.policy.risk import buying_power_remaining, daily_notional_remaining
@@ -132,6 +133,9 @@ def decide_size(inputs: PolicyInputs, candidate: RankedCandidate, price: BuyPric
         remaining_theme_cap,
     )
     final_notional *= profile_multiplier
+    overlay = overlay_for_symbol(inputs.advisory_overlay, candidate.symbol)
+    advisory_multiplier = max(0.0, min(1.0, float(overlay.size_multiplier or 0.0)))
+    final_notional *= advisory_multiplier
     final_notional = round(final_notional, 2)
     if final_notional < float(profile.get("minimum_trade_notional", 10.0)):
         return SizeDecision(0.0, final_notional, risk_budget, None, blocked_reason="minimum_trade_notional_blocked")
@@ -149,9 +153,15 @@ def decide_size(inputs: PolicyInputs, candidate: RankedCandidate, price: BuyPric
             "score": score_multiplier,
             "market": market_multiplier,
             "research": research_multiplier,
+            "advisory_overlay": advisory_multiplier,
         },
         reason_codes=[
             "risk_sizing_ok",
+            *(
+                ["advisory_overlay_size_multiplier"]
+                if advisory_multiplier < 1.0
+                else []
+            ),
             "cash_buffer_ok",
             "symbol_weight_ok",
             "theme_weight_ok",

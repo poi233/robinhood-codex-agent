@@ -48,6 +48,9 @@ def _candidate_components(inputs: PolicyInputs, symbol: str) -> tuple[float, flo
 
 def hard_block_reasons(inputs: PolicyInputs, symbol: str) -> list[str]:
     reasons: list[str] = []
+    overlay = overlay_for_symbol(inputs.advisory_overlay, symbol)
+    if overlay.block_buy:
+        reasons.extend(overlay.blocked_reasons or ["advisory_overlay_blocks_buy"])
     if inputs.kill_switch_present and inputs.trading_mode != "paper":
         reasons.append("kill_switch_present")
     if not inputs.daily_plan:
