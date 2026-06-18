@@ -55,6 +55,31 @@ interval_dict() {
   printf '    <dict><key>Hour</key><integer>%s</integer><key>Minute</key><integer>%s</integer></dict>\n' "$hour" "$minute"
 }
 
+weekday_interval_dict() {
+  local weekday="$1" hour="$2" minute="$3"
+  printf '    <dict><key>Weekday</key><integer>%s</integer><key>Hour</key><integer>%s</integer><key>Minute</key><integer>%s</integer></dict>\n' "$weekday" "$hour" "$minute"
+}
+
+postmarket_start_minutes() {
+  local template hour minute
+  template="$(template_for postmarket)"
+  hour="$(sed -n '/<key>Hour<\/key>/{n;s/.*<integer>\([0-9][0-9]*\)<\/integer>.*/\1/p;}' "$template" | head -n1)"
+  minute="$(sed -n '/<key>Minute<\/key>/{n;s/.*<integer>\([0-9][0-9]*\)<\/integer>.*/\1/p;}' "$template" | head -n1)"
+  [[ -n "$hour" && -n "$minute" ]] || die "could not read postmarket StartCalendarInterval from $template"
+  printf '%s\n' $((10#$hour * 60 + 10#$minute))
+}
+
+nightly_analysis_schedule_xml() {
+  local start total hour minute weekday
+  start="$(postmarket_start_minutes)"
+  total=$(((start + 30) % 1440))
+  hour=$((total / 60))
+  minute=$((total % 60))
+  for weekday in 1 2 3 4 5; do
+    weekday_interval_dict "$weekday" "$hour" "$minute"
+  done
+}
+
 intraday_schedule_xml() {
   local strategy
   strategy="$(active_strategy)"
@@ -103,13 +128,17 @@ render_one() {
   # Escape & and | so they survive sed replacement of an arbitrary path.
   local escaped_root
   escaped_root="$(printf '%s' "$REPO_ROOT" | sed -e 's/[&|]/\\&/g')"
-  if [[ "$job" == "intraday" ]]; then
+  if [[ "$job" == "intraday" || "$job" == "nightly-analysis" ]]; then
     local schedule_file
     schedule_file="$(mktemp)"
-    intraday_schedule_xml > "$schedule_file"
+    if [[ "$job" == "intraday" ]]; then
+      intraday_schedule_xml > "$schedule_file"
+    else
+      nightly_analysis_schedule_xml > "$schedule_file"
+    fi
     sed "s|__REPO_ROOT__|$escaped_root|g" "$template" \
       | awk -v schedule_file="$schedule_file" '
-          /__INTRADAY_SCHEDULE__/ {
+          /__INTRADAY_SCHEDULE__/ || /__NIGHTLY_SCHEDULE__/ {
             while ((getline line < schedule_file) > 0) print line
             close(schedule_file)
             next
@@ -149,6 +178,7 @@ do_install() {
   echo "Done. Verify with:  launchctl list | grep robinhood-codex-agent"
   echo "Logs:  $REPO_ROOT/runtime/logs/launchd.<job>.{out,err}"
   echo "Intraday schedule source: src/config/strategy_registry.yaml active_strategy=$(active_strategy)"
+  echo "Nightly analysis schedule: postmarket + 30 minutes"
 }
 
 do_uninstall() {

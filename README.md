@@ -401,7 +401,9 @@ ALLOW_OUTSIDE_MARKET_TEST=1 ./src/scripts/entrypoints/run_all_paper_once.sh   # 
 
 Scheduled (America/Los_Angeles) via `cron.example` / `launchd/*.plist.example`: `05:30` premarket ·
 `06:45`–`12:55` intraday (cadence per active [frequency preset](#frequency-presets)) · `13:10`
-postmarket · `20:00` nightly analysis (weekdays).
+postmarket · `13:40` nightly analysis (postmarket + 30 minutes, weekdays). For launchd, the
+installer derives the nightly time from the postmarket plist; if you change postmarket, re-run
+`src/scripts/launchd/install_launchd_jobs.sh install` so nightly follows it.
 
 ### Frequency presets
 

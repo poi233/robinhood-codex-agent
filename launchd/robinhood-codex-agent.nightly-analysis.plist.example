@@ -27,14 +27,10 @@
     <key>PATH</key>
     <string>__REPO_ROOT__/.venv/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
   </dict>
-  <!-- 20:00 PT on weekdays (after the close, so the day's daily bar has settled). -->
+  <!-- Rendered by src/scripts/launchd/install_launchd_jobs.sh as postmarket + 30 minutes on weekdays. -->
   <key>StartCalendarInterval</key>
   <array>
-    <dict><key>Weekday</key><integer>1</integer><key>Hour</key><integer>20</integer><key>Minute</key><integer>0</integer></dict>
-    <dict><key>Weekday</key><integer>2</integer><key>Hour</key><integer>20</integer><key>Minute</key><integer>0</integer></dict>
-    <dict><key>Weekday</key><integer>3</integer><key>Hour</key><integer>20</integer><key>Minute</key><integer>0</integer></dict>
-    <dict><key>Weekday</key><integer>4</integer><key>Hour</key><integer>20</integer><key>Minute</key><integer>0</integer></dict>
-    <dict><key>Weekday</key><integer>5</integer><key>Hour</key><integer>20</integer><key>Minute</key><integer>0</integer></dict>
+    <!-- __NIGHTLY_SCHEDULE__ -->
   </array>
   <key>StandardOutPath</key>
   <string>__REPO_ROOT__/runtime/logs/launchd.nightly-analysis.out</string>
