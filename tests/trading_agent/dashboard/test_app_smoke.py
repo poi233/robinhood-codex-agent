@@ -88,23 +88,26 @@ def _seed(root: Path) -> None:
 
 def test_dashboard_renders_all_tabs_without_error(tmp_path, monkeypatch):
     _seed(tmp_path)
+    monkeypatch.setenv("AGENT_ROOT", str(tmp_path))
     monkeypatch.chdir(tmp_path)
     app = AppTest.from_file(str(APP_PATH), default_timeout=60)
     app.run()
     assert not app.exception, app.exception
-    assert len(app.tabs) == 11
+    assert len(app.tabs) == 5
     headers = [h.value for h in app.header]
-    assert any("Strategy Comparison" in h for h in headers)
-    assert any("Calibration" in h for h in headers)
-    assert any("Today" in h for h in headers)
-    assert any("Decision Overlay" in h for h in headers)
+    assert any("今日驾驶舱" in h for h in headers)
+    assert any("选股与决策" in h for h in headers)
+    assert any("业绩与对比" in h for h in headers)
+    assert any("校准与归因" in h for h in headers)
+    assert any("成长与趋势" in h for h in headers)
 
 
 def test_dashboard_ignores_current_working_directory(tmp_path, monkeypatch):
     _seed(tmp_path)
     (tmp_path / "src").mkdir()
+    monkeypatch.setenv("AGENT_ROOT", str(tmp_path))
     monkeypatch.chdir(tmp_path / "src")
     app = AppTest.from_file(str(APP_PATH), default_timeout=60)
     app.run()
     assert not app.exception, app.exception
-    assert len(app.tabs) == 11
+    assert len(app.tabs) == 5

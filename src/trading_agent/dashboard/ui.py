@@ -237,9 +237,14 @@ def _altair_theme() -> dict:
 def _enable_altair_theme() -> None:
     if alt is None:
         return
+    # altair>=5.5 moved theming to ``alt.theme``; fall back to the legacy
+    # ``alt.themes`` registry on older versions. Never let theming break the app.
     try:
-        alt.themes.register("c4_dark", _altair_theme)
-        alt.themes.enable("c4_dark")
+        if hasattr(alt, "theme") and hasattr(alt.theme, "register"):
+            alt.theme.register("c4_dark", enable=True)(_altair_theme)
+        else:
+            alt.themes.register("c4_dark", _altair_theme)
+            alt.themes.enable("c4_dark")
     except Exception:  # pragma: no cover - altair API drift shouldn't break the app
         pass
 
