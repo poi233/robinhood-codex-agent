@@ -100,7 +100,7 @@ flowchart TD
 
     subgraph S5["5 · Score and plan (deterministic)"]
         direction TB
-        E1["ai_signals (H3)<br/><i>normalize DSA/Kronos/catalyst<br/>→ ai_signals.json</i>"] --> E2["data_status_summary<br/><i>fail-closed gate</i>"]
+        E1["ai_signals (H3)<br/><i>normalize DSA/Kronos/catalyst<br/>→ ai_signals.json</i>"] --> E1b["fundamental_layer (H7)<br/><i>quality flags<br/>→ fundamental_snapshot.json</i>"] --> E1c["event_layer (H8)<br/><i>earnings/analyst flags<br/>→ event_snapshot.json</i>"] --> E2["data_status_summary<br/><i>fail-closed gate</i>"]
         E2 --> E3["candidate_scoring<br/><b>5-component weighted score</b><br/><i>→ candidate_scores.json</i>"]
         E3 --> E4["risk_overlay<br/><i>regime · watchlist · tradable<br/>· allowed_actions</i>"]
         E4 --> E5["final_planner (Codex)<br/><b>daily_plan.json</b>"] --> E6["archive"]
@@ -221,7 +221,7 @@ actually improved outcomes before any further promotion.
 | `analytics trend [--since --until --output]` | I3: aggregate `history/*/nightly_summary.json` into per-metric time series → `trend.json`. |
 | `analytics nightly-health` | L4 → `nightly_health.json`: report freshness + the last nightly run's failed steps. Surfaced as a 🟢/🔴 banner on the dashboard Trends tab. |
 | `analytics thesis [--since --until]` | K3 → `thesis_attribution.{json,md}`: per-thesis (theme/DSA tags) win rate + mean forward return — "which theses actually make money". |
-| `dashboard` | Read-only Streamlit UI (`localhost:8501`): 10 tabs — Today / Candidates / Decisions / Decision Overlay / Paper / Strategy Comparison / Calibration / Self-Growth / Themes / Trends. |
+| `dashboard` | Read-only Streamlit UI (`localhost:8501`): **11 tabs** — Today / Candidates / Decisions / Decision Overlay / Paper / Strategy Comparison / Calibration / Self-Growth / Themes / Trends / **Thesis**. |
 
 ### Nightly batch (read-only / shadow-only)
 `python3 -m trading_agent nightly-analysis` runs the analytics + self-growth commands best-effort
@@ -294,7 +294,8 @@ RISK_TIER=3 / PAPER_RISK_TIER=4
 PAPER_STARTING_CASH=400000
 PAPER_FILL_MODEL=conservative / PAPER_SLIPPAGE_BPS=10 / HARD_STOP_LOSS_PCT=0.08
 ENABLE_DSA_SIGNAL_LAYER / ENABLE_KRONOS_SIGNAL_LAYER / ENABLE_TECHNICAL_SIGNAL_LAYER=1
-ENABLE_NIGHTLY_ANALYSIS=1   # ENABLE_EVIDENCE_PROPOSALS / ENABLE_SHADOW_RESCORE=0 (in development)
+ENABLE_NIGHTLY_ANALYSIS=1       # ENABLE_EVIDENCE_PROPOSALS / ENABLE_SHADOW_RESCORE=0 (in development)
+ENABLE_BATCH_OHLCV_FETCH=1      # D2: one yf.download per timeframe instead of N Ticker.history; no effect when cache on
 ENABLE_INTRADAY_ADVISORY_OVERLAY=0   # M-stage overlay loader; keep off outside paper/shadow tests
 ```
 Precedence: shell exports > `runtime.env.local` > `runtime.env` > `strategy_registry.yaml` defaults.
