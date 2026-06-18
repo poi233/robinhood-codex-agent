@@ -84,7 +84,7 @@
 | **C 只读可视化与观测** | C1 | Dashboard MVP（Streamlit 只读） | docx | ✅ **已完成**（2026-06-15，视觉未验证） |
 | | C2 | theme exposure / speculative cap 诊断 | docx | ✅ **已完成**（2026-06-15） |
 | | C3 | Dashboard v2（可读性重构 + 策略对比，含 F1） | 用户新增 | ✅ **已完成**（2026-06-16，首次 headless 渲染验证；像素级视觉仍待人工目测） |
-| | C4 | Dashboard v3（高级化重设计：中文化 + 深色主题/卡片 + 11→5 主区 + 四种指引） | 用户新增（2026-06-18） | 🟡 **进行中（2026-06-18）**：只读不变；中文为主、深色高级主题、KPI 卡片、11 标签合并为 5 主区、每类数据带「好坏判定 / 基准对比 / 同比变化 / 行动建议」 |
+| | C4 | Dashboard v3（高级化重设计：中文化 + 深色主题/卡片 + 11→5 主区 + 四种指引） | 用户新增（2026-06-18） | ✅ **已完成（2026-06-18）**：只读不变；中文为主、深色高级主题、KPI 卡片、11 标签合并为 5 主区、每类数据带「好坏判定 / 基准对比 / 同比变化 / 行动建议」；headless AppTest 渲染 5 主区全绿（33 dashboard 测试通过） |
 | **D 工程优化 · 不阻塞** | D1 | DSA/Technical token 优化 | design doc | ✅ **已完成**（2026-06-15，见下方实现记录） |
 | | D2 | market_feed 跨日缓存 / batch | 旧 R4 | 🟡 缓存（2026-06-15）+ batch 拉取能力（2026-06-17：`fetch_live_rows_batch` 一次 `yf.download` 多 ticker + 分发纯函数 + 测试）已建；采集主流程逐步采用 |
 | | D3 | Kronos batch 推理 | 旧 R5 | ✅ **已完成**（2026-06-16） |
@@ -208,7 +208,7 @@
 
 ---
 
-# C4 阶段 · Dashboard v3 高级化重设计（只读不变 · 进行中 2026-06-18）
+# C4 阶段 · Dashboard v3 高级化重设计（只读不变 · ✅ 已完成 2026-06-18）
 
 > **背景**：用户反馈现有 dashboard「太丑陋、看不懂、缺指引、对比弱」。v1/v2（C1/C3）功能齐了，但 UI 大量是
 > `st.dataframe` / `st.json` 原始数据倾倒、内部代号（H2/H3/K1/K2/E1/E4/L4…）和裸字段名（`no_trade_rate_pct`/
@@ -246,6 +246,15 @@
 
 **验收**：`pip install -e ".[dashboard]"` 后 `AppTest` 渲染 5 主区全部无异常（空态 + 有数据态）；界面无内部
 代号、关键指标带好坏色/同比/基准/建议四类指引。
+
+**实现记录（2026-06-18，全部完成）**：C4.1–C4.5 已落地——`dashboard/ui.py`（verdict/THRESHOLDS、KPI 卡片
+带同比 delta + 好坏色、guidance_box、中文列名 + pretty_table、vs_benchmark、delta_vs_prev、一次性 CSS +
+Altair 深色主题，兼容 altair≥5.5 的新 `alt.theme` API）+ `.streamlit/config.toml` 深色主题；`queries.py` 加
+`overview_with_delta` + `equity_with_benchmark`（本地 market_feed SPY 日线归一化，纯只读）；`charts.py`/`app.py`
+重写为 5 主区（今日驾驶舱 / 选股与决策 / 业绩与对比 / 校准与归因 / 成长与趋势）每区带 guidance；
+`dashboard` CLI 现尊重 `AGENT_ROOT`（cwd 仍忽略）。smoke test 改断言 5 主区 + 中文 header 并设 `AGENT_ROOT`
+真正喂入 seed 数据。**33 个 dashboard 测试通过、全套 606 通过**（仅 2 个 kronos setup-script 测试因需联网
+pip 安装假包而失败，与本改动无关）。README「11 tabs」段落 + nightly-health/overlay 指向已同步更新。
 
 ---
 
