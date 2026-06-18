@@ -9,6 +9,7 @@ def test_load_growth_policy_reads_repo_config():
     assert policy["mode"] == "paper_only"
     assert "TRADING_MODE" in policy["forbidden_mutations"]
     assert policy["allowed_mutations"]["scoring"]["trade_threshold"]["max_delta"] == 10
+    assert policy["allowed_mutations"]["overlay"]["factor_weight"]["max_delta"] == 0.05
 
 
 def test_missing_file_falls_back_to_safe_defaults(tmp_path):

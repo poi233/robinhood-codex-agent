@@ -38,6 +38,22 @@ def test_valid_paper_only_mutation_passes():
     assert violations == []
 
 
+def test_valid_overlay_mutation_passes():
+    ok, violations = validate_mutation(
+        {"module": "overlay", "field": "factor_weight", "current": 0.10, "proposed": 0.14}, POLICY
+    )
+    assert ok is True
+    assert violations == []
+
+
+def test_overlay_mutation_respects_max_delta():
+    ok, violations = validate_mutation(
+        {"module": "overlay", "field": "regime_size_multiplier", "current": 0.50, "proposed": 0.80}, POLICY
+    )
+    assert ok is False
+    assert any("delta" in v for v in violations)
+
+
 def test_field_not_in_whitelist_is_rejected():
     ok, violations = validate_mutation(
         {"module": "scoring", "field": "mystery_knob", "current": 1, "proposed": 2}, POLICY

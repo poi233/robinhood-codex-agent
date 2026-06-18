@@ -190,8 +190,9 @@ orders, email, and the dashboard Decision Overlay tab. M2 applies H2/H3-derived 
 `trade_readiness_score` only when the flag is enabled; it does not add hard blocks, change sizing, or
 wire real order placement. M3 lets K1/K2 tighten only: `risk_off`/`panic` regime or portfolio
 breaches can block new buys, and regime/portfolio multipliers can only reduce order size. M5 core
-feeds overlay components into forward-return calibration/growth evidence so the system can measure
-whether the overlay actually improved outcomes before any further promotion.
+feeds overlay components into forward-return calibration/growth evidence and whitelists bounded
+paper-only overlay mutations in `growth_policy.json`, so the system can measure whether the overlay
+actually improved outcomes before any further promotion.
 
 ---
 

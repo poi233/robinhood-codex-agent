@@ -18,6 +18,12 @@
     },
     "setups": {
       "enabled_setups": {"allowed": ["pullback", "breakout", "trend_continuation"]}
+    },
+    "overlay": {
+      "factor_weight": {"min": 0.00, "max": 0.25, "max_delta": 0.05},
+      "ai_weight": {"min": 0.00, "max": 0.20, "max_delta": 0.05},
+      "regime_size_multiplier": {"min": 0.00, "max": 1.00, "max_delta": 0.20},
+      "portfolio_near_cap_multiplier": {"min": 0.00, "max": 1.00, "max_delta": 0.20}
     }
   },
   "forbidden_mutations": [
