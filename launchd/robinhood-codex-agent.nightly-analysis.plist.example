@@ -4,25 +4,26 @@
 <plist version="1.0">
 <dict>
   <!-- Replace __REPO_ROOT__ with your local checkout path before loading. -->
+  <!-- Nightly read-only / shadow-only analysis batch (I1). Never trades, approves, or promotes. -->
   <key>Label</key>
   <string>com.example.robinhood-codex-agent.nightly-analysis</string>
   <key>ProgramArguments</key>
   <array>
-    <string>__REPO_ROOT__/.venv/bin/python</string>
-    <string>-m</string>
-    <string>trading_agent</string>
-    <string>nightly-analysis</string>
+    <string>/bin/bash</string>
+    <string>__REPO_ROOT__/src/scripts/entrypoints/run_nightly_analysis.sh</string>
   </array>
   <key>WorkingDirectory</key>
   <string>__REPO_ROOT__</string>
   <key>EnvironmentVariables</key>
   <dict>
+    <!-- Optional (the script also derives it), but makes the run explicit. -->
     <key>AGENT_ROOT</key>
     <string>__REPO_ROOT__</string>
-    <key>CODEX_BIN</key>
-    <string>/Users/yinyin-jiang/.codex/packages/standalone/releases/0.137.0-aarch64-apple-darwin/bin/codex</string>
+    <!-- Portable PATH only. Do NOT hardcode a versioned codex release dir or a user home:
+         codex auto-updates and those paths disappear, silently breaking runs. The script
+         resolves a working Python via resolve_runtime_python_bin regardless of this PATH. -->
     <key>PATH</key>
-    <string>/Users/yinyin-jiang/.local/bin:/Users/yinyin-jiang/.codex/packages/standalone/releases/0.137.0-aarch64-apple-darwin/bin:/Users/yinyin-jiang/Documents/trade/robinhood-codex-agent/.venv/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+    <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
   </dict>
   <!-- 20:00 PT on weekdays (after the close, so the day's daily bar has settled). -->
   <key>StartCalendarInterval</key>
