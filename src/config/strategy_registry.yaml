@@ -2,9 +2,9 @@
 # scoring_profile + policy_profile + risk_tier combo at once (see
 # trading_agent/strategy/registry.py). The three presets below differ only in
 # their policy_profile, which controls trade-gating cadence (new positions per
-# day/week, rebuy cooldown, daily/weekly risk budget). Each preset also has a
-# matching cron block in cron.example — switching frequency means changing BOTH
-# this `active_strategy` line AND the installed crontab block.
+# day/week, rebuy cooldown, daily/weekly risk budget). The launchd installer
+# reads this `active_strategy` value and renders the matching intraday schedule.
+# If you use cron instead of launchd, pick the matching block in cron.example.
 #
 #   baseline_v1  -> ~30 min cadence  (low,    policy_profile: aggressive_growth)
 #   midfreq_v1   -> ~5 min cadence   (medium, policy_profile: aggressive_growth_mid)

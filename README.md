@@ -405,10 +405,12 @@ postmarket · `20:00` nightly analysis (weekdays).
 
 ### Frequency presets
 
-Trading frequency = cron cadence × policy-profile trade gating. Three switchable presets are
-registered in `src/config/strategy_registry.yaml`; switch by changing the `active_strategy:` line
-**and** the matching intraday cron block in `cron.example`. `intraday` is pure deterministic Python
-(no Codex/LLM, no Robinhood), so a higher cadence adds no LLM cost — only more yfinance quote fetches.
+Trading frequency = scheduler cadence × policy-profile trade gating. Three switchable presets are
+registered in `src/config/strategy_registry.yaml`; switch by changing the `active_strategy:` line.
+The launchd installer reads that value and renders the matching intraday schedule automatically. If
+you use cron instead of launchd, pick the matching intraday block in `cron.example`. `intraday` is
+pure deterministic Python (no Codex/LLM, no Robinhood), so a higher cadence adds no LLM cost — only
+more yfinance quote fetches.
 
 | Preset | `active_strategy` | `policy_profile` | Cadence | New positions/day | Rebuy cooldown | Max daily risk |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -417,7 +419,8 @@ registered in `src/config/strategy_registry.yaml`; switch by changing the `activ
 | High | `highfreq_v1` | `aggressive_growth_high` | ~1 min | 8 | 0 days | 6% |
 
 On macOS, install the launchd jobs in one command — it derives the repo path from its own
-location (so it works wherever you cloned the repo) and reloads `launchctl`:
+location, reads `src/config/strategy_registry.yaml` for the intraday cadence, and reloads
+`launchctl`:
 
 ```bash
 src/scripts/launchd/install_launchd_jobs.sh            # render + (re)load all jobs

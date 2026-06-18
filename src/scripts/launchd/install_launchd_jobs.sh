@@ -41,6 +41,57 @@ label_for() {
   sed -n '/<key>Label<\/key>/{n;s/.*<string>\(.*\)<\/string>.*/\1/p;}' "$template" | head -n1
 }
 
+active_strategy() {
+  local registry="$REPO_ROOT/src/config/strategy_registry.yaml"
+  if [[ ! -f "$registry" ]]; then
+    printf 'baseline_v1\n'
+    return
+  fi
+  sed -n 's/^active_strategy:[[:space:]]*//p' "$registry" | head -n1
+}
+
+interval_dict() {
+  local hour="$1" minute="$2"
+  printf '    <dict><key>Hour</key><integer>%s</integer><key>Minute</key><integer>%s</integer></dict>\n' "$hour" "$minute"
+}
+
+intraday_schedule_xml() {
+  local strategy
+  strategy="$(active_strategy)"
+  case "$strategy" in
+    baseline_v1)
+      interval_dict 6 45
+      for hour in 7 8 9 10 11 12; do
+        interval_dict "$hour" 15
+        interval_dict "$hour" 45
+      done
+      ;;
+    midfreq_v1)
+      interval_dict 6 45
+      interval_dict 6 50
+      interval_dict 6 55
+      for hour in 7 8 9 10 11 12; do
+        for minute in 0 5 10 15 20 25 30 35 40 45 50 55; do
+          interval_dict "$hour" "$minute"
+        done
+      done
+      ;;
+    highfreq_v1)
+      for minute in 45 46 47 48 49 50 51 52 53 54 55 56 57 58 59; do
+        interval_dict 6 "$minute"
+      done
+      for hour in 7 8 9 10 11 12; do
+        for minute in $(seq 0 59); do
+          interval_dict "$hour" "$minute"
+        done
+      done
+      ;;
+    *)
+      die "unknown active_strategy '$strategy' in src/config/strategy_registry.yaml; cannot render intraday schedule"
+      ;;
+  esac
+}
+
 render_one() {
   local job="$1" template label dest
   template="$(template_for "$job")"
@@ -52,7 +103,24 @@ render_one() {
   # Escape & and | so they survive sed replacement of an arbitrary path.
   local escaped_root
   escaped_root="$(printf '%s' "$REPO_ROOT" | sed -e 's/[&|]/\\&/g')"
-  sed "s|__REPO_ROOT__|$escaped_root|g" "$template" > "$dest"
+  if [[ "$job" == "intraday" ]]; then
+    local schedule_file
+    schedule_file="$(mktemp)"
+    intraday_schedule_xml > "$schedule_file"
+    sed "s|__REPO_ROOT__|$escaped_root|g" "$template" \
+      | awk -v schedule_file="$schedule_file" '
+          /__INTRADAY_SCHEDULE__/ {
+            while ((getline line < schedule_file) > 0) print line
+            close(schedule_file)
+            next
+          }
+          { print }
+        ' \
+      > "$dest"
+    rm -f "$schedule_file"
+  else
+    sed "s|__REPO_ROOT__|$escaped_root|g" "$template" > "$dest"
+  fi
   printf '%s\t%s\n' "$label" "$dest"
 }
 
@@ -80,6 +148,7 @@ do_install() {
   echo
   echo "Done. Verify with:  launchctl list | grep robinhood-codex-agent"
   echo "Logs:  $REPO_ROOT/runtime/logs/launchd.<job>.{out,err}"
+  echo "Intraday schedule source: src/config/strategy_registry.yaml active_strategy=$(active_strategy)"
 }
 
 do_uninstall() {
