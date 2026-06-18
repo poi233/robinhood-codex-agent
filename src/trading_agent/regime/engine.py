@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+import os
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 from trading_agent.core.io import read_json, write_json
 
@@ -68,9 +69,45 @@ def _bars_close(market_feed_dir: Path, symbol: str) -> list[float]:
     return [float(b["close"]) for b in load_daily_bars(market_feed_dir, symbol) if isinstance(b, dict) and b.get("close") is not None]
 
 
-def indicators_from_market_feed(market_feed_dir: Path, *, vix: float | None = None) -> dict[str, Any]:
+def _vix_capture_enabled() -> bool:
+    # Default on: one extra best-effort yfinance call for ^VIX completes the regime classification's
+    # panic/risk_off thresholds. Flip off to keep regime SPY/QQQ-only (VIX rules degrade gracefully).
+    return str(os.environ.get("ENABLE_REGIME_VIX_FETCH", "1") or "1") == "1"
+
+
+def fetch_vix_level() -> float | None:
+    """Best-effort latest ^VIX close from yfinance. Returns None on any failure (the regime engine
+    then degrades the VIX rules gracefully). Network call — kept out of the pure classify path."""
+    try:
+        import yfinance as yf
+
+        frame = yf.download(tickers="^VIX", period="5d", interval="1d",
+                            auto_adjust=False, progress=False, threads=False)
+        if frame is None or frame.empty:
+            return None
+        closes = frame["Close"]
+        # yfinance may return a multi-column frame keyed by ticker.
+        if hasattr(closes, "columns"):
+            closes = closes.iloc[:, 0]
+        series = closes.dropna()
+        return float(series.values[-1]) if not series.empty else None
+    except Exception:
+        return None
+
+
+def indicators_from_market_feed(
+    market_feed_dir: Path,
+    *,
+    vix: float | None = None,
+    vix_fetcher: Callable[[], float | None] | None = None,
+) -> dict[str, Any]:
     """Derive regime indicators from the market_feed SPY/QQQ daily bars (L3 guarantees they exist).
-    VIX is not in market_feed; pass it in when available, else the VIX rules degrade gracefully."""
+    VIX is not in market_feed; when not passed in, best-effort fetch ^VIX (K2 second version) so the
+    panic/risk_off VIX thresholds engage. The fetcher is injectable for offline tests; any failure
+    leaves vix=None and the VIX rules degrade gracefully."""
+    if vix is None and _vix_capture_enabled():
+        fetcher = vix_fetcher or fetch_vix_level
+        vix = fetcher()
     spy = _bars_close(market_feed_dir, "SPY")
     qqq = _bars_close(market_feed_dir, "QQQ")
 

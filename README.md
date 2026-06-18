@@ -296,6 +296,7 @@ PAPER_FILL_MODEL=conservative / PAPER_SLIPPAGE_BPS=10 / HARD_STOP_LOSS_PCT=0.08
 ENABLE_DSA_SIGNAL_LAYER / ENABLE_KRONOS_SIGNAL_LAYER / ENABLE_TECHNICAL_SIGNAL_LAYER=1
 ENABLE_NIGHTLY_ANALYSIS=1       # ENABLE_EVIDENCE_PROPOSALS / ENABLE_SHADOW_RESCORE=0 (in development)
 ENABLE_BATCH_OHLCV_FETCH=1      # D2: one yf.download per timeframe instead of N Ticker.history; no effect when cache on
+ENABLE_REGIME_VIX_FETCH=1       # K2: best-effort ^VIX fetch so regime panic/risk_off thresholds engage
 ENABLE_INTRADAY_ADVISORY_OVERLAY=0   # M-stage overlay loader; keep off outside paper/shadow tests
 ```
 Precedence: shell exports > `runtime.env.local` > `runtime.env` > `strategy_registry.yaml` defaults.

@@ -1,7 +1,7 @@
 # 项目状态总表 — 做了什么 / 没做什么
 
 > 最后更新：2026-06-18
-> 范围：`src/trading_agent/` + 配置 + 编排 + 入口 + 测试（579 passed）
+> 范围：`src/trading_agent/` + 配置 + 编排 + 入口 + 测试（584 passed）
 > 用途：**单一权威的"现状"文档**，按子系统逐块说明已实现与未实现。未来要做的事另见
 > [`roadmap.md`](./roadmap.md)。
 >
@@ -39,7 +39,7 @@
 | AI signal 结构化 + 归因 / ablation | ✅ H3 全完成（2026-06-17）：AI schema 标准化（step 1）+ AI 信号研究 confidence calibration/方向准确率/code lift（step 2）+ 层 ablation marginal IC（step 3）；统计显著性待 paper 数据积累 |
 | 量化校准 / 评估命令族（E1/E2/E4 + H3 + I2/I3） | ✅ `analytics calibrate`（E1 桶/IC/excess）·`fill-quality`（E4 滑点/保守成交）·`ai-signal-study`/`ai-ablation`（H3）·`weight-suggestion`（E2 只建议不应用）·`snapshot`/`trend`（I2/I3）全部上线；统计意义待 15–30 交易日 |
 | 基本面 / 事件层 | ✅ H7/H8 **骨架已建 + 已接入 premarket advisory（2026-06-18）**：`run_fundamental_layer` / `run_event_layer` 作为 advisory stage 写 `fundamental_snapshot.json` / `event_snapshot.json`，_run_advisory 包裹（失败不破坏 premarket）；write-only、**不进 champion scoring**，接 scoring/risk 待数据验证 |
-| 组合管理 / 市场 regime 引擎 / thesis 归因 | 🟡 **K1+K2+K3 第一版已建（2026-06-17）** + **K3 thesis tags 落盘（2026-06-18）**：K1 `portfolio/target.py`（cash/单仓/主题敞口 vs 上限）；K2 `regime/engine.py`（确定性 regime + 仓位乘子）；K3 `replay/thesis.py` + `analytics thesis`（主题级胜率）+ `OrderIntent.thesis_tags` 买入时点落盘（universe_meta theme + DSA primary/strategy_matches）。K1/K2 premarket advisory write-only；均 dashboard 显示、绝不加买入/不接 sizing。 |
+| 组合管理 / 市场 regime 引擎 / thesis 归因 | 🟡 **K1+K2+K3 第一版已建（2026-06-17）** + **K3 thesis tags 落盘 + K2 VIX 自动接入（2026-06-18）**：K1 `portfolio/target.py`（cash/单仓/主题敞口 vs 上限）；K2 `regime/engine.py`（确定性 regime + 仓位乘子 + **自动拉 ^VIX**，`ENABLE_REGIME_VIX_FETCH`）；K3 `replay/thesis.py` + `analytics thesis`（主题级胜率）+ `OrderIntent.thesis_tags` 买入时点落盘。K1/K2 premarket advisory write-only；接 sizing 由 M3 overlay 实现（只收紧）。 |
 | 调度自动化 | ✅ 交易生命周期已 cron 化（premarket/intraday/postmarket）+ **夜间分析批处理已上线**（I1：`run_nightly_analysis.sh`，只读/shadow-only，`ENABLE_NIGHTLY_ANALYSIS` 默认 1；I2 快照 + I3 趋势 + I4 Trends tab） |
 | 止损/退出逻辑 | ✅ `full_invalidation_exit`（跌破技术 invalidation 全清）+ **兜底硬止损已上线**（J1：`HARD_STOP_LOSS_PCT` 默认 8%，独立于 levels/actions，paper-only）；strategy.md 已与 code 一致。剩 `risk_exit` 分级减仓仍未启用（策略选择，待人工） |
 | review/live 真实下单 | ⛔ 故意未接线 |
@@ -381,6 +381,8 @@
 | **K3 dashboard** | dashboard 新增第 11 个 ⑪ Thesis tab：`thesis_attribution_view` 显示每个 thesis 胜率/均值收益/n；缺数据时显示运行提示 | 见 git log |
 | **H6** 扩展 evidence 类型 | `gather_evidence` 新增 `factor_positive_ic` / `ai_calibration` / `setup_outcomes`；`evidence_for_proposal` 扩展支持 `scoring.component_weights` / `setups` / `policy.price_setup_weight` | 见 git log |
 | **H7/H8** premarket 接入 | `run_fundamental_layer` / `run_event_layer` 作为 advisory stage 接进 premarket pipeline，_run_advisory 包裹；write-only → `fundamental_snapshot.json` / `event_snapshot.json` | 见 git log |
+| **H4** shadow 贵路径 | `rescore_candidate_scores` 重聚合 challenger 打分（disable 分量 / 重配权重 / 纳入 factor_alpha）；shadow runner 从 `changes` 抽 `analyzer.*.enabled` / `<comp>_weight` / `factor.factor_alpha_weight`；复用 champion 落盘诊断、point-in-time 安全 | 见 git log |
+| **K2** VIX 自动接入 | `fetch_vix_level()` best-effort 拉 `^VIX`（可注入、失败 None），`indicators_from_market_feed` vix 未传时自动拉；`ENABLE_REGIME_VIX_FETCH`（默认 1，doctor 回显） | 见 git log |
 | **G9** challenger 隔离账本 | `build_experiment_runtime_paths` + broker `paths_override`；shadow runner 跑 challenger 自己的 paper 账本；G7 出真实 fill/drawdown/PnL | 见 git log |
 | **B5** watchlist resolver | `parse_active_watchlist` 从 `active_strategy.watchlist` 解析文件名（+override），切策略真能切 watchlist，回退兼容 | 见 git log |
 | **TODO_FIX** technical 覆盖 | premarket 全天快照 + intraday merge；`run_symbol_research.sh` 单票输出改写到 `manual/<SYMBOL>/`（不再覆盖全局、可找到） | 见 git log |

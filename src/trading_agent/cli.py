@@ -234,6 +234,7 @@ def _run_doctor(agent_root: Path) -> int:
         f"  ENABLE_EVIDENCE_PROPOSALS = {env.get('ENABLE_EVIDENCE_PROPOSALS', '0')}",
         f"  ENABLE_SHADOW_RESCORE     = {env.get('ENABLE_SHADOW_RESCORE', '0')}",
         f"  ENABLE_INTRADAY_ADVISORY_OVERLAY = {env.get('ENABLE_INTRADAY_ADVISORY_OVERLAY', '0')}",
+        f"  ENABLE_REGIME_VIX_FETCH   = {env.get('ENABLE_REGIME_VIX_FETCH', '1')}",
         "",
         "  --- Notifications ---",
         f"  ENABLE_TRADE_EMAIL        = {env.get('ENABLE_TRADE_EMAIL_NOTIFICATIONS', '1')}",

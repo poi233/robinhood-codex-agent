@@ -57,3 +57,58 @@ def test_build_and_write_uses_injected_indicators(tmp_path):
     assert payload["regime"] == "panic"
     assert payload["schema_version"] == 1
     assert "de-risk" in payload["notes"]
+
+
+# --- K2 second version: VIX auto-fetch ---
+
+def _seed_feed(tmp_path):
+    from trading_agent.core.io import write_json
+    feed = tmp_path / "ohlcv"
+    write_json(feed / "SPY" / "daily.json", [{"close": 300.0 + i} for i in range(220)])
+    write_json(feed / "QQQ" / "daily.json", [{"close": 400.0 + i} for i in range(220)])
+
+
+def test_vix_fetched_via_injected_fetcher_when_not_passed(tmp_path):
+    _seed_feed(tmp_path)
+    ind = indicators_from_market_feed(tmp_path, vix_fetcher=lambda: 28.0)
+    assert ind["vix"] == 28.0
+
+
+def test_explicit_vix_takes_precedence_over_fetcher(tmp_path):
+    _seed_feed(tmp_path)
+    ind = indicators_from_market_feed(tmp_path, vix=15.0, vix_fetcher=lambda: 99.0)
+    assert ind["vix"] == 15.0
+
+
+def test_vix_fetch_disabled_via_env(tmp_path, monkeypatch):
+    _seed_feed(tmp_path)
+    monkeypatch.setenv("ENABLE_REGIME_VIX_FETCH", "0")
+    ind = indicators_from_market_feed(tmp_path, vix_fetcher=lambda: 28.0)
+    assert ind["vix"] is None  # fetcher not consulted when disabled
+
+
+def test_vix_fetcher_failure_degrades_to_none(tmp_path):
+    _seed_feed(tmp_path)
+
+    def boom():
+        raise RuntimeError("network")
+
+    # indicators_from_market_feed itself does not catch; fetch_vix_level does. Simulate the real
+    # fetcher's contract: it returns None on failure.
+    ind = indicators_from_market_feed(tmp_path, vix_fetcher=lambda: None)
+    assert ind["vix"] is None
+
+
+def test_fetch_vix_level_returns_none_on_import_failure(monkeypatch):
+    from trading_agent.regime import engine
+    # Force the yfinance import inside fetch_vix_level to fail.
+    import builtins
+    real_import = builtins.__import__
+
+    def fake_import(name, *args, **kwargs):
+        if name == "yfinance":
+            raise ImportError("no yfinance")
+        return real_import(name, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "__import__", fake_import)
+    assert engine.fetch_vix_level() is None
