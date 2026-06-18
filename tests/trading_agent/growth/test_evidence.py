@@ -104,3 +104,134 @@ def test_overlay_unknown_field_yields_no_evidence():
     proposal = {"mutation": {"module": "overlay", "field": "unknown_field", "current": 0.0, "proposed": 0.1}}
     items = evidence_for_proposal(proposal, ev)
     assert items == []
+
+
+# --- H6 extended evidence types ---
+
+def _calibration_with_attribution(components: dict[str, float]) -> dict:
+    """Build a mock calibration_report with attribution IC rows."""
+    rows = [{"component": c, "ic": ic} for c, ic in components.items()]
+    return {
+        "near_miss": {},
+        "attribution": {"5": rows},
+        "calibration_sample_size": 20,
+        "weight_components": [],
+        "overlay_components": [],
+        "factor_positive_ic": [],
+        "ai_calibration": [],
+        "setup_outcomes": [],
+    }
+
+
+def test_factor_positive_ic_gathered_from_calibration(tmp_path):
+    import json
+    from trading_agent.growth.evidence import gather_evidence
+
+    out = tmp_path / "runtime" / "analytics"
+    out.mkdir(parents=True)
+    (out / "calibration_report.json").write_text(json.dumps({
+        "sample_size": 20,
+        "attribution": {
+            "5": [
+                {"component": "technical", "ic": 0.18},
+                {"component": "dsa", "ic": -0.05},
+            ]
+        },
+    }), encoding="utf-8")
+
+    ev = gather_evidence(tmp_path)
+
+    # factor_positive_ic should contain both scoring components
+    comps = {item["component"]: item for item in ev["factor_positive_ic"]}
+    assert "technical" in comps
+    assert comps["technical"]["positive"] is True
+    assert "dsa" in comps
+    assert comps["dsa"]["positive"] is False
+
+
+def test_ai_calibration_evidence_gathered_from_study(tmp_path):
+    import json
+    from trading_agent.growth.evidence import gather_evidence
+
+    out = tmp_path / "runtime" / "analytics"
+    out.mkdir(parents=True)
+    (out / "calibration_report.json").write_text(json.dumps({"sample_size": 10}), encoding="utf-8")
+    (out / "ai_signal_study.json").write_text(json.dumps({
+        "layers": {
+            "kronos": {
+                "confidence_calibration": {
+                    "5": [
+                        {"confidence_low": 0.5, "confidence_high": 0.7, "mean_return": 0.01},
+                        {"confidence_low": 0.7, "confidence_high": 0.9, "mean_return": 0.02},
+                    ]
+                },
+                "confidence_ic": {"5": 0.15},
+            }
+        }
+    }), encoding="utf-8")
+
+    ev = gather_evidence(tmp_path)
+
+    assert len(ev["ai_calibration"]) == 1
+    item = ev["ai_calibration"][0]
+    assert item["layer"] == "kronos"
+    assert item["monotone_calibrated"] is True
+    assert item["confidence_ic"] == 0.15
+
+
+def test_setup_outcomes_in_evidence(tmp_path):
+    import json
+    from trading_agent.growth.evidence import gather_evidence
+
+    out = tmp_path / "runtime" / "analytics"
+    out.mkdir(parents=True)
+    (out / "calibration_report.json").write_text(json.dumps({
+        "sample_size": 15,
+        "setup_outcomes": [
+            {"setup_type": "pullback", "fills": 8, "win_rate": 0.625},
+            {"setup_type": "breakout", "fills": 4, "win_rate": 0.25},
+        ],
+    }), encoding="utf-8")
+
+    ev = gather_evidence(tmp_path)
+
+    assert len(ev["setup_outcomes"]) == 2
+    assert ev["setup_outcomes"][0]["setup_type"] == "pullback"
+
+
+def test_setups_proposal_backed_by_setup_outcomes():
+    from trading_agent.growth.evidence import evidence_for_proposal
+
+    ev = {
+        "near_miss": {}, "attribution": {}, "calibration_sample_size": 15,
+        "weight_components": [], "overlay_components": [], "factor_positive_ic": [],
+        "ai_calibration": [],
+        "setup_outcomes": [{"setup_type": "breakout", "fills": 4, "win_rate": 0.25}],
+    }
+    proposal = {"mutation": {"module": "setups", "field": "enabled_setups", "current": ["pullback", "breakout"], "proposed": ["pullback"]}}
+    items = evidence_for_proposal(proposal, ev)
+    assert any(i.get("setup_type") == "breakout" for i in items)
+
+
+def test_policy_price_setup_weight_backed_by_setup_outcomes():
+    from trading_agent.growth.evidence import evidence_for_proposal
+
+    ev = {
+        "near_miss": {}, "attribution": {}, "calibration_sample_size": 15,
+        "weight_components": [], "overlay_components": [], "factor_positive_ic": [],
+        "ai_calibration": [],
+        "setup_outcomes": [{"setup_type": "pullback", "fills": 10, "win_rate": 0.70}],
+    }
+    proposal = {"mutation": {"module": "policy", "field": "price_setup_weight", "current": 0.15, "proposed": 0.20}}
+    items = evidence_for_proposal(proposal, ev)
+    assert items  # setup_outcomes back this
+
+
+def test_gather_evidence_missing_reports_returns_empty_new_keys(tmp_path):
+    from trading_agent.growth.evidence import gather_evidence
+
+    ev = gather_evidence(tmp_path)
+
+    assert ev["factor_positive_ic"] == []
+    assert ev["ai_calibration"] == []
+    assert ev["setup_outcomes"] == []
