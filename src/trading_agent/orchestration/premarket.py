@@ -65,6 +65,8 @@ class PremarketPipeline:
     run_ai_signals: callable = lambda: None  # H3 standardized AI-signal layer (advisory; default no-op for callers that omit it)
     run_portfolio_target: callable = lambda: None  # K1 portfolio target layer (advisory; default no-op for callers that omit it)
     run_regime_state: callable = lambda: None  # K2 market-regime engine (advisory; default no-op for callers that omit it)
+    run_fundamental_layer: callable = lambda: None  # H7 fundamental quality layer (advisory; default no-op)
+    run_event_layer: callable = lambda: None  # H8 earnings/analyst event layer (advisory; default no-op)
 
     def run(self) -> None:
         self.run_account_snapshot()
@@ -92,6 +94,8 @@ class PremarketPipeline:
         # H3 AI-signal normalization runs after DSA/Kronos/Catalyst have written their artifacts, so
         # it can fold all three into one validated envelope file. Advisory + write-only.
         self._run_advisory(self.run_ai_signals)
+        self._run_advisory(self.run_fundamental_layer)
+        self._run_advisory(self.run_event_layer)
         self._run_advisory(self.run_portfolio_target)
         self._run_advisory(self.run_regime_state)
         self.run_data_status_summary()
@@ -372,6 +376,24 @@ def run_premarket_pipeline(*, dry_run: bool) -> int:
 
         build_and_write_regime_state(agent_root, run_date)
 
+    def run_fundamental_layer() -> None:
+        # H7 fundamental quality layer. Always runs (advisory): fetches profitability/margin/debt
+        # quality flags for active symbols, writes fundamental_snapshot.json. Write-only — does NOT
+        # feed champion scoring/risk/decisions. _run_advisory wraps it so a failure never breaks
+        # premarket. Data source: yfinance best-effort (no book data needed).
+        from trading_agent.analyzers.fundamental import build_and_write_fundamental_layer
+
+        build_and_write_fundamental_layer(agent_root, run_date, symbols=active_symbols)
+
+    def run_event_layer() -> None:
+        # H8 earnings/analyst event layer. Always runs (advisory): fetches next_earnings_date,
+        # analyst revisions, surprise flags for active symbols, writes event_snapshot.json.
+        # Write-only — does NOT feed champion scoring. _run_advisory wraps it so a failure never
+        # breaks premarket. Data source: yfinance best-effort.
+        from trading_agent.analyzers.events import build_and_write_event_layer
+
+        build_and_write_event_layer(agent_root, run_date, symbols=active_symbols)
+
     def run_market_calendar() -> None:
         status = run_codex_prompt(
             "market_calendar",
@@ -470,6 +492,8 @@ def run_premarket_pipeline(*, dry_run: bool) -> int:
         run_technical=lambda: run_stage("technical", run_technical),
         run_price_factors=lambda: run_stage("price_factors", run_price_factors),
         run_ai_signals=lambda: run_stage("ai_signals", run_ai_signals),
+        run_fundamental_layer=lambda: run_stage("fundamental_layer", run_fundamental_layer),
+        run_event_layer=lambda: run_stage("event_layer", run_event_layer),
         run_portfolio_target=lambda: run_stage("portfolio_target", run_portfolio_target),
         run_regime_state=lambda: run_stage("regime_state", run_regime_state),
         run_market_calendar=lambda: run_stage("market_calendar", run_market_calendar),

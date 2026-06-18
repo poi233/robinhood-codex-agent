@@ -506,3 +506,43 @@ class PremarketAdvisoryFailureTests(unittest.TestCase):
             self.assertIn(required, events)
         # a sibling advisory stage after the failing one still ran:
         self.assertIn("run_ai_signals", events)
+
+    def test_h7_h8_fundamental_and_event_layers_run_as_advisory(self) -> None:
+        """H7/H8: fundamental + event layers run as advisory stages and never break premarket."""
+        events: list[str] = []
+        names = ["run_account_snapshot", "run_capital_snapshot", "collect_market_context", "run_dsa",
+                 "run_kronos", "run_technical", "run_market_calendar", "run_quote_snapshot_core",
+                 "run_trader_watch_levels", "run_candidate_merge", "run_quote_snapshot_candidates",
+                 "run_tradability_candidates", "run_catalyst_enrichment", "run_data_status_summary",
+                 "run_candidate_scoring", "run_risk_overlay", "run_final_planner", "run_archive",
+                 "run_price_factors", "run_ai_signals", "run_portfolio_target", "run_regime_state"]
+        kwargs = {n: (lambda n=n: events.append(n)) for n in names}
+        kwargs["run_fundamental_layer"] = lambda: events.append("run_fundamental_layer")
+        kwargs["run_event_layer"] = lambda: events.append("run_event_layer")
+
+        pipeline = PremarketPipeline(**kwargs)
+        pipeline.run()
+
+        self.assertIn("run_fundamental_layer", events)
+        self.assertIn("run_event_layer", events)
+        for required in ("run_candidate_scoring", "run_final_planner", "run_archive"):
+            self.assertIn(required, events)
+
+    def test_h7_h8_failure_does_not_break_pipeline(self) -> None:
+        """H7/H8: if fundamental or event layer raises, premarket still completes."""
+        events: list[str] = []
+        names = ["run_account_snapshot", "run_capital_snapshot", "collect_market_context", "run_dsa",
+                 "run_kronos", "run_technical", "run_market_calendar", "run_quote_snapshot_core",
+                 "run_trader_watch_levels", "run_candidate_merge", "run_quote_snapshot_candidates",
+                 "run_tradability_candidates", "run_catalyst_enrichment", "run_data_status_summary",
+                 "run_candidate_scoring", "run_risk_overlay", "run_final_planner", "run_archive",
+                 "run_price_factors", "run_ai_signals", "run_portfolio_target", "run_regime_state"]
+        kwargs = {n: (lambda n=n: events.append(n)) for n in names}
+        kwargs["run_fundamental_layer"] = lambda: (_ for _ in ()).throw(RuntimeError("yfinance quota"))
+        kwargs["run_event_layer"] = lambda: (_ for _ in ()).throw(RuntimeError("no calendar data"))
+
+        pipeline = PremarketPipeline(**kwargs)
+        pipeline.run()  # must not raise
+
+        for required in ("run_candidate_scoring", "run_final_planner", "run_archive"):
+            self.assertIn(required, events)
