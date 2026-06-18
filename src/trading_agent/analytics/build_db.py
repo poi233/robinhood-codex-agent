@@ -4,7 +4,7 @@ import sqlite3
 from pathlib import Path
 
 from trading_agent.analytics import loaders
-from trading_agent.analytics.schema import TABLE_DDL
+from trading_agent.analytics.schema import INDEX_DDL, TABLE_DDL
 from trading_agent.replay.analysis import discover_run_dates
 
 
@@ -39,6 +39,9 @@ def build_analytics_db(
         "paper_equity": loaders.load_paper_equity(agent_root, run_dates),
         "blocked_reasons": loaders.load_blocked_reasons(decisions_rows),
         "intraday_rankings": loaders.load_intraday_rankings(agent_root, run_dates),
+        "factor_alpha": loaders.load_factor_alpha(agent_root, run_dates),
+        "regime_state": loaders.load_regime_state(agent_root, run_dates),
+        "portfolio_target": loaders.load_portfolio_target(agent_root, run_dates),
     }
 
     connection = sqlite3.connect(db_path)
@@ -57,6 +60,9 @@ def build_analytics_db(
                 f"INSERT INTO {table_name} ({column_list}) VALUES ({placeholders})",
                 [tuple(row.get(column) for column in columns) for row in rows],
             )
+        # N2: indexes (after tables; dropped implicitly when a table is dropped on rebuild).
+        for index_ddl in INDEX_DDL:
+            connection.execute(index_ddl)
         connection.commit()
     finally:
         connection.close()

@@ -96,7 +96,11 @@ def load_candidates(agent_root: Path, run_dates: list[str]) -> list[dict[str, An
 
 
 def load_decisions(agent_root: Path, run_dates: list[str]) -> list[dict[str, Any]]:
-    """One row per intraday policy decision, flattening proposed_order."""
+    """One row per intraday policy decision, flattening proposed_order.
+
+    N1: also captures per_candidate_blocks (E3 near-miss), advisory_overlay (M4), and the
+    proposed order's thesis_tags (K3) as JSON strings so SQL can analyze them.
+    """
     rows: list[dict[str, Any]] = []
     for row in collect_decisions(agent_root, run_dates=run_dates):
         proposed_order = row.get("proposed_order") or {}
@@ -112,13 +116,21 @@ def load_decisions(agent_root: Path, run_dates: list[str]) -> list[dict[str, Any
                 "setup_type": proposed_order.get("setup_type"),
                 "blocked_reasons": json.dumps(row.get("blocked_reasons") or []),
                 "confidence": proposed_order.get("confidence"),
+                "per_candidate_blocks": json.dumps(row.get("per_candidate_blocks") or {}),
+                "advisory_overlay": json.dumps(row.get("advisory_overlay") or {}),
+                "thesis_tags": json.dumps(proposed_order.get("thesis_tags") or []),
             }
         )
     return rows
 
 
 def load_orders(agent_root: Path, run_dates: list[str]) -> list[dict[str, Any]]:
-    """One row per paper order, resolved to its final fill/cancel state."""
+    """One row per paper order, resolved to its final fill/cancel state.
+
+    N1: also captures the E4 fill-quality fields (bid/ask/mid_price/spread_bps/slippage_bps) and the
+    E1 setup-outcome levels (setup_type/stop_price/target_1/target_2/reward_risk) the order record
+    already persists, so they're queryable in SQL.
+    """
     rows: list[dict[str, Any]] = []
     for row in collect_paper_orders(agent_root, run_dates=run_dates):
         rows.append(
@@ -134,6 +146,17 @@ def load_orders(agent_root: Path, run_dates: list[str]) -> list[dict[str, Any]]:
                 "fill_price": row.get("fill_price"),
                 "notional": row.get("notional"),
                 "reason_codes": json.dumps(row.get("reason_codes") or []),
+                "setup_type": row.get("setup_type"),
+                "stop_price": row.get("stop_price"),
+                "target_1": row.get("target_1"),
+                "target_2": row.get("target_2"),
+                "reward_risk": row.get("reward_risk"),
+                "confidence": row.get("confidence"),
+                "bid": row.get("bid"),
+                "ask": row.get("ask"),
+                "mid_price": row.get("mid_price"),
+                "spread_bps": row.get("spread_bps"),
+                "slippage_bps": row.get("slippage_bps"),
             }
         )
     return rows
@@ -176,14 +199,88 @@ def load_intraday_rankings(agent_root: Path, run_dates: list[str]) -> list[dict[
                     "run_date": row.get("run_date", run_date),
                     "symbol": row.get("symbol"),
                     "trade_readiness_score": row.get("trade_readiness_score"),
+                    "base_trade_readiness_score": row.get("base_trade_readiness_score"),
+                    "advisory_rank_delta": row.get("advisory_rank_delta"),
                     "price_setup_score": row.get("price_setup_score"),
                     "candidate_score": row.get("candidate_score"),
                     "technical_score": row.get("technical_score"),
                     "research_score": row.get("research_score"),
                     "catalyst_score": row.get("catalyst_score"),
                     "liquidity_score": row.get("liquidity_score"),
+                    "advisory_overlay": json.dumps(row.get("advisory_overlay") or {}),
                 }
             )
+    return rows
+
+
+def load_factor_alpha(agent_root: Path, run_dates: list[str]) -> list[dict[str, Any]]:
+    """N1: one row per (run_date, symbol) from the H2 factor_alpha.json layer."""
+    rows: list[dict[str, Any]] = []
+    for run_date in run_dates:
+        paths = build_runtime_paths(agent_root, run_date=run_date)
+        payload = _read_json_or_empty(paths.factor_alpha_path)
+        symbols = payload.get("symbols")
+        if not isinstance(symbols, dict):
+            continue
+        for symbol, data in symbols.items():
+            if not isinstance(data, dict):
+                continue
+            rows.append(
+                {
+                    "run_date": run_date,
+                    "symbol": symbol,
+                    "factor_alpha_score": data.get("factor_alpha_score"),
+                    "risk_flags": json.dumps(data.get("risk_flags") or []),
+                    "factor_components": json.dumps(data.get("factor_components") or {}),
+                }
+            )
+    return rows
+
+
+def load_regime_state(agent_root: Path, run_dates: list[str]) -> list[dict[str, Any]]:
+    """N1: one row per run_date from the K2 regime_state.json."""
+    rows: list[dict[str, Any]] = []
+    for run_date in run_dates:
+        paths = build_runtime_paths(agent_root, run_date=run_date)
+        payload = _read_json_or_empty(paths.planner_dir / "regime_state.json")
+        if not payload:
+            continue
+        indicators = payload.get("indicators") or {}
+        spy_above = indicators.get("spy_above_sma200")
+        rows.append(
+            {
+                "run_date": run_date,
+                "regime": payload.get("regime"),
+                "multiplier": payload.get("multiplier"),
+                "applied_multiplier": payload.get("applied_multiplier"),
+                "vix": indicators.get("vix"),
+                "spy_return_20d": indicators.get("spy_return_20d"),
+                "spy_above_sma200": None if spy_above is None else (1 if spy_above else 0),
+                "reasons": json.dumps(payload.get("reasons") or []),
+            }
+        )
+    return rows
+
+
+def load_portfolio_target(agent_root: Path, run_dates: list[str]) -> list[dict[str, Any]]:
+    """N1: one row per run_date from the K1 portfolio_target.json (scalars + JSON exposures)."""
+    rows: list[dict[str, Any]] = []
+    for run_date in run_dates:
+        paths = build_runtime_paths(agent_root, run_date=run_date)
+        payload = _read_json_or_empty(paths.planner_dir / "portfolio_target.json")
+        if not payload:
+            continue
+        rows.append(
+            {
+                "run_date": run_date,
+                "total_equity": payload.get("total_equity"),
+                "cash": payload.get("cash"),
+                "cash_weight": payload.get("cash_weight"),
+                "theme_exposure": json.dumps(payload.get("theme_exposure") or {}),
+                "sector_exposure": json.dumps(payload.get("sector_exposure") or {}),
+                "breaches": json.dumps(payload.get("breaches") or {}),
+            }
+        )
     return rows
 
 
