@@ -515,3 +515,38 @@ def trends_view(history_dates: list, snapshot: dict, trend: dict) -> None:
         df = pd.DataFrame(points).set_index("date")[["value"]].rename(columns={"value": metric})
         st.caption(metric)
         st.line_chart(df, use_container_width=True)
+
+
+def thesis_attribution_view(report: dict[str, Any]) -> None:
+    """K3: per-thesis win rate + mean return — which investment theses actually make money."""
+    if not report or not report.get("theses"):
+        st.info(
+            "No thesis attribution yet. Run `analytics thesis` (or the nightly batch) to generate "
+            "thesis_attribution.json. Needs ≥15-30 run dates for statistical meaning."
+        )
+        return
+    st.caption(
+        f"Primary horizon: {report.get('primary_horizon', '?')}d  ·  "
+        f"samples: {report.get('sample_size', 0)}  ·  "
+        f"min count per thesis: {report.get('min_count', '?')}"
+    )
+    rows = report["theses"]
+    df = pd.DataFrame(rows)
+    df["win_rate_pct"] = (df["win_rate"] * 100).round(1)
+    df["mean_return_pct"] = (df["mean_return"] * 100).round(2)
+    st.dataframe(
+        df[["thesis", "win_rate_pct", "mean_return_pct", "count"]].rename(columns={
+            "thesis": "Thesis",
+            "win_rate_pct": "Win Rate %",
+            "mean_return_pct": "Mean Return %",
+            "count": "n",
+        }),
+        use_container_width=True,
+    )
+    if len(rows) > 1:
+        chart_data = pd.DataFrame({
+            "Thesis": [r["thesis"] for r in rows],
+            "Win Rate %": [round(r["win_rate"] * 100, 1) for r in rows],
+        }).set_index("Thesis")
+        st.caption("Win rate by thesis")
+        st.bar_chart(chart_data, use_container_width=True)

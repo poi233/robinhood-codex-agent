@@ -92,7 +92,7 @@ def test_dashboard_renders_all_tabs_without_error(tmp_path, monkeypatch):
     app = AppTest.from_file(str(APP_PATH), default_timeout=60)
     app.run()
     assert not app.exception, app.exception
-    assert len(app.tabs) == 10
+    assert len(app.tabs) == 11
     headers = [h.value for h in app.header]
     assert any("Strategy Comparison" in h for h in headers)
     assert any("Calibration" in h for h in headers)
@@ -107,4 +107,4 @@ def test_dashboard_ignores_current_working_directory(tmp_path, monkeypatch):
     app = AppTest.from_file(str(APP_PATH), default_timeout=60)
     app.run()
     assert not app.exception, app.exception
-    assert len(app.tabs) == 10
+    assert len(app.tabs) == 11

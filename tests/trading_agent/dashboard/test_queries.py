@@ -452,3 +452,35 @@ def test_advisory_overlay_summary_reads_intraday_rankings(tmp_path: Path) -> Non
             "portfolio": "",
         }
     ]
+
+
+def test_thesis_attribution_returns_report(tmp_path):
+    import json
+    from trading_agent.dashboard.queries import thesis_attribution
+
+    out = tmp_path / "runtime" / "analytics"
+    out.mkdir(parents=True)
+    (out / "thesis_attribution.json").write_text(json.dumps({
+        "generated_at": "2026-06-18T01:00:00+00:00",
+        "primary_horizon": 5,
+        "sample_size": 25,
+        "min_count": 3,
+        "theses": [
+            {"thesis": "AI_INFRA", "count": 10, "win_rate": 0.70, "mean_return": 0.018},
+            {"thesis": "MOMENTUM", "count": 8, "win_rate": 0.625, "mean_return": 0.012},
+        ],
+    }), encoding="utf-8")
+
+    result = thesis_attribution(tmp_path)
+
+    assert result["primary_horizon"] == 5
+    assert len(result["theses"]) == 2
+    assert result["theses"][0]["thesis"] == "AI_INFRA"
+
+
+def test_thesis_attribution_missing_returns_empty(tmp_path):
+    from trading_agent.dashboard.queries import thesis_attribution
+
+    result = thesis_attribution(tmp_path)
+
+    assert result == {}

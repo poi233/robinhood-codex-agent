@@ -501,3 +501,10 @@ def advisory_overlay_summary(agent_root: Path, run_date: str) -> list[dict[str, 
             "portfolio": ", ".join(portfolio_bits),
         })
     return rows
+
+
+def thesis_attribution(agent_root: Path) -> dict[str, Any]:
+    """Read-only: K3 thesis_attribution.json (per-thesis win rate / mean return)."""
+    from trading_agent.replay.thesis import default_thesis_path
+
+    return _read_json_or_empty(default_thesis_path(agent_root))

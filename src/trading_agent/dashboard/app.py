@@ -39,9 +39,10 @@ with st.sidebar:
     st.caption(f"{len(run_dates)} run date(s) available")
     st.caption("All views are read-only.")
 
-today_tab, candidates_tab, decisions_tab, overlay_tab, paper_tab, compare_tab, calibration_tab, growth_tab, themes_tab, trends_tab = st.tabs(
+today_tab, candidates_tab, decisions_tab, overlay_tab, paper_tab, compare_tab, calibration_tab, growth_tab, themes_tab, trends_tab, thesis_tab = st.tabs(
     ["① Today", "② Candidates", "③ Decisions", "④ Decision Overlay", "⑤ Paper",
-     "⑥ Strategy Comparison", "⑦ Calibration", "⑧ Self-Growth", "⑨ Themes", "⑩ Trends"]
+     "⑥ Strategy Comparison", "⑦ Calibration", "⑧ Self-Growth", "⑨ Themes", "⑩ Trends",
+     "⑪ Thesis"]
 )
 
 with today_tab:
@@ -120,3 +121,9 @@ with trends_tab:
         queries.analysis_snapshot(AGENT_ROOT, _selected_snapshot_date) if _selected_snapshot_date else {},
         queries.analysis_trend(AGENT_ROOT),
     )
+
+with thesis_tab:
+    st.header("Thesis Attribution (K3: which investment theses actually make money)")
+    st.caption("Tags derived at trade time from universe_meta theme + DSA primary_theme/strategy_matches. "
+               "Read-only — run `analytics thesis` to refresh.")
+    charts.thesis_attribution_view(queries.thesis_attribution(AGENT_ROOT))
