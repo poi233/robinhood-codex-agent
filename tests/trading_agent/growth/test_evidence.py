@@ -44,3 +44,26 @@ def test_gather_evidence_handles_missing_reports(tmp_path):
     ev = gather_evidence(tmp_path)
     assert ev["near_miss"] == {}
     assert ev["calibration_sample_size"] == 0
+
+
+def test_gather_evidence_extracts_overlay_component_ic(tmp_path):
+    import json
+
+    out = tmp_path / "runtime" / "analytics"
+    out.mkdir(parents=True)
+    (out / "calibration_report.json").write_text(json.dumps({
+        "sample_size": 20,
+        "attribution": {
+            "1": [
+                {"component": "final_rank_delta", "ic": 0.31},
+                {"component": "regime_multiplier", "ic": -0.2},
+            ]
+        },
+    }), encoding="utf-8")
+
+    ev = gather_evidence(tmp_path)
+
+    assert ev["overlay_components"] == [
+        {"source": "calibration.overlay_component_ic", "horizon_d": "1", "component": "final_rank_delta", "ic": 0.31},
+        {"source": "calibration.overlay_component_ic", "horizon_d": "1", "component": "regime_multiplier", "ic": -0.2},
+    ]

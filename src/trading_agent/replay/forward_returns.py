@@ -110,6 +110,7 @@ def _candidate_scores_for_run(agent_root: Path, run_date: str) -> dict[str, dict
             # Latest row wins (file is appended chronologically).
             entry["trade_readiness_score"] = _as_float(row.get("trade_readiness_score"))
             entry["price_setup_score"] = _as_float(row.get("price_setup_score"))
+            entry.setdefault("components", {}).update(_overlay_components(row))
 
     # H2 auto-pickup: fold factor_alpha + per-factor ranks into components so the dynamic
     # calibration bucketing + IC attribution cover them by name with zero extra code.
@@ -131,6 +132,53 @@ def _candidate_scores_for_run(agent_root: Path, run_date: str) -> dict[str, dict
                     if val is not None:
                         comps[fname] = val
     return scores
+
+
+def _signed_ai_confidence(payload: dict[str, Any]) -> float | None:
+    values: list[float] = []
+    for layer in payload.values():
+        if not isinstance(layer, dict):
+            continue
+        confidence = _as_float(layer.get("confidence"))
+        if confidence is None:
+            continue
+        direction = str(layer.get("direction") or "").lower()
+        sign = -1.0 if direction in {"short", "bearish", "negative", "avoid", "sell"} else 1.0
+        values.append(sign * confidence)
+    if not values:
+        return None
+    return round(sum(values) / len(values), 6)
+
+
+def _overlay_components(row: dict[str, Any]) -> dict[str, float]:
+    overlay = row.get("advisory_overlay") if isinstance(row.get("advisory_overlay"), dict) else {}
+    if not overlay:
+        return {}
+    components = overlay.get("components") if isinstance(overlay.get("components"), dict) else {}
+    factor = components.get("factor_alpha") if isinstance(components.get("factor_alpha"), dict) else {}
+    ai = components.get("ai") if isinstance(components.get("ai"), dict) else {}
+    regime = components.get("regime") if isinstance(components.get("regime"), dict) else {}
+    portfolio = components.get("portfolio") if isinstance(components.get("portfolio"), dict) else {}
+    out: dict[str, float] = {}
+    rank_delta = _as_float(row.get("advisory_rank_delta") if row.get("advisory_rank_delta") is not None else overlay.get("rank_delta"))
+    if rank_delta is not None:
+        out["final_rank_delta"] = rank_delta
+    size_multiplier = _as_float(overlay.get("size_multiplier"))
+    if size_multiplier is not None:
+        out["advisory_size_multiplier"] = size_multiplier
+    factor_alpha = _as_float(factor.get("score"))
+    if factor_alpha is not None:
+        out["factor_alpha"] = factor_alpha
+    ai_composite = _signed_ai_confidence(ai)
+    if ai_composite is not None:
+        out["ai_composite"] = ai_composite
+    regime_multiplier = _as_float(regime.get("applied_multiplier"))
+    if regime_multiplier is not None:
+        out["regime_multiplier"] = regime_multiplier
+    portfolio_weight = _as_float(portfolio.get("position_weight"))
+    if portfolio_weight is not None:
+        out["portfolio_position_weight"] = portfolio_weight
+    return out
 
 
 def _entry_index(bars: list[tuple[str, float]], run_date: str) -> int | None:

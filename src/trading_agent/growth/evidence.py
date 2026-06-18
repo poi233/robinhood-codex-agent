@@ -35,6 +35,7 @@ def gather_evidence(agent_root: Path) -> dict[str, Any]:
         "attribution": calibration.get("attribution") or {},
         "calibration_sample_size": calibration.get("sample_size") or 0,
         "weight_components": weight.get("components") or [],
+        "overlay_components": _overlay_component_evidence(calibration.get("attribution") or {}),
     }
 
 
@@ -64,6 +65,32 @@ def _component_ic_evidence(evidence: dict[str, Any]) -> list[dict[str, Any]]:
             if row.get("ic") is not None:
                 out.append({"source": "calibration.attribution", "horizon_d": horizon,
                             "component": row.get("component"), "ic": row.get("ic")})
+    return out
+
+
+_OVERLAY_COMPONENTS = {
+    "final_rank_delta",
+    "advisory_size_multiplier",
+    "factor_alpha",
+    "ai_composite",
+    "regime_multiplier",
+    "portfolio_multiplier",
+    "portfolio_position_weight",
+}
+
+
+def _overlay_component_evidence(attribution: dict[str, Any]) -> list[dict[str, Any]]:
+    out: list[dict[str, Any]] = []
+    for horizon, rows in attribution.items():
+        for row in rows:
+            component = str(row.get("component") or "")
+            if component in _OVERLAY_COMPONENTS and row.get("ic") is not None:
+                out.append({
+                    "source": "calibration.overlay_component_ic",
+                    "horizon_d": horizon,
+                    "component": component,
+                    "ic": row.get("ic"),
+                })
     return out
 
 

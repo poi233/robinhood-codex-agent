@@ -51,6 +51,47 @@ def test_forward_returns_computed_per_horizon(tmp_path):
     assert rec.returns[5] == round(110.0 / 100.0 - 1, 6)   # 5 trading days later
 
 
+def test_forward_returns_folds_advisory_overlay_into_components(tmp_path):
+    run_date = "2026-06-15"
+    run_dir = tmp_path / "runtime" / "state" / "runs" / run_date
+    run_dir.mkdir(parents=True, exist_ok=True)
+    write_json(run_dir / "planner" / "candidate_scores.json", {"symbols": {
+        "NVDA": {"score": 66.0, "total_score": 66.0, "score_status": "scored", "components": {}}}})
+    _write_jsonl(tmp_path / "runtime" / "logs" / "runs" / run_date / "audit" / "intraday_rankings.jsonl", [
+        {
+            "timestamp": f"{run_date}T09:31:00",
+            "run_date": run_date,
+            "symbol": "NVDA",
+            "trade_readiness_score": 72.0,
+            "price_setup_score": 70.0,
+            "advisory_rank_delta": 5.0,
+            "advisory_overlay": {
+                "rank_delta": 5.0,
+                "size_multiplier": 0.5,
+                "components": {
+                    "factor_alpha": {"score": 88.0},
+                    "ai": {"kronos": {"direction": "long", "confidence": 0.8}},
+                    "regime": {"applied_multiplier": 0.5},
+                    "portfolio": {"position_weight": 0.04},
+                },
+            },
+        }
+    ])
+    loader = _fake_loader({
+        "NVDA": [("2026-06-15", 100.0), ("2026-06-16", 101.0)],
+        "SPY": [("2026-06-15", 400.0), ("2026-06-16", 401.0)],
+    })
+
+    records = compute_forward_return_records(tmp_path, horizons=(1,), price_loader=loader)
+
+    assert records[0].components["final_rank_delta"] == 5.0
+    assert records[0].components["advisory_size_multiplier"] == 0.5
+    assert records[0].components["factor_alpha"] == 88.0
+    assert records[0].components["ai_composite"] == 0.8
+    assert records[0].components["regime_multiplier"] == 0.5
+    assert records[0].components["portfolio_position_weight"] == 0.04
+
+
 def test_forward_return_is_none_when_not_enough_future_bars(tmp_path):
     _seed_run(tmp_path, "2026-06-15", candidate_score=66.0, trade_readiness=72.0, price_setup=70.0)
     loader = _fake_loader({"NVDA": [("2026-06-15", 100.0), ("2026-06-16", 101.0)]})
