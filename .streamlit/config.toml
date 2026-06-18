@@ -1,0 +1,19 @@
+# Dashboard v3 (C4) — premium dark theme.
+# Read-only UI only; this file sets base colors so the dashboard looks polished
+# when launched via `python3 -m trading_agent dashboard` (cwd = repo root).
+# Per-component card styling + Altair chart theme are injected at runtime by
+# trading_agent/dashboard/ui.py.
+
+[theme]
+base = "dark"
+primaryColor = "#3b82f6"
+backgroundColor = "#0e1117"
+secondaryBackgroundColor = "#161b27"
+textColor = "#e6edf6"
+font = "sans serif"
+
+[server]
+headless = true
+
+[browser]
+gatherUsageStats = false
