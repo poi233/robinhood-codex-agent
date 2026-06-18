@@ -84,6 +84,7 @@
 | **C 只读可视化与观测** | C1 | Dashboard MVP（Streamlit 只读） | docx | ✅ **已完成**（2026-06-15，视觉未验证） |
 | | C2 | theme exposure / speculative cap 诊断 | docx | ✅ **已完成**（2026-06-15） |
 | | C3 | Dashboard v2（可读性重构 + 策略对比，含 F1） | 用户新增 | ✅ **已完成**（2026-06-16，首次 headless 渲染验证；像素级视觉仍待人工目测） |
+| | C4 | Dashboard v3（高级化重设计：中文化 + 深色主题/卡片 + 11→5 主区 + 四种指引） | 用户新增（2026-06-18） | 🟡 **进行中（2026-06-18）**：只读不变；中文为主、深色高级主题、KPI 卡片、11 标签合并为 5 主区、每类数据带「好坏判定 / 基准对比 / 同比变化 / 行动建议」 |
 | **D 工程优化 · 不阻塞** | D1 | DSA/Technical token 优化 | design doc | ✅ **已完成**（2026-06-15，见下方实现记录） |
 | | D2 | market_feed 跨日缓存 / batch | 旧 R4 | 🟡 缓存（2026-06-15）+ batch 拉取能力（2026-06-17：`fetch_live_rows_batch` 一次 `yf.download` 多 ticker + 分发纯函数 + 测试）已建；采集主流程逐步采用 |
 | | D3 | Kronos batch 推理 | 旧 R5 | ✅ **已完成**（2026-06-16） |
@@ -204,6 +205,47 @@
 > 2026-06-16 的旧焦点已被 2026-06-17 收口轮覆盖，不再在本文重复保留。核心纪律仍是：冻结 baseline
 > → 一次一个实验 → 只用数据 promote（≥10 shadow 日、fill rate / drawdown / forward return 不劣于
 > champion、无 safety violation、人工 approve）。
+
+---
+
+# C4 阶段 · Dashboard v3 高级化重设计（只读不变 · 进行中 2026-06-18）
+
+> **背景**：用户反馈现有 dashboard「太丑陋、看不懂、缺指引、对比弱」。v1/v2（C1/C3）功能齐了，但 UI 大量是
+> `st.dataframe` / `st.json` 原始数据倾倒、内部代号（H2/H3/K1/K2/E1/E4/L4…）和裸字段名（`no_trade_rate_pct`/
+> `factor_alpha_score`/`advisory_rank_delta`）直接暴露在界面上。C4 是一次**纯只读的可读性/视觉重设计**，
+> 不改任何查询语义、不写任何交易参数。
+
+**用户确定的四个方向（2026-06-18）**：
+1. **语言**：中文为主（标题/指标名/解读说明全中文，去掉内部代号）。
+2. **视觉**：高级深色主题 + 卡片化（自定义主题 + KPI 卡 + 统一图表风格）。
+3. **信息架构**：11 标签合并为 **5 主区**。
+4. **每类数据的指引**：四种全要 ——「**好坏判定**（阈值色标）/ **基准对比**（vs SPY/champion）/
+   **同比变化**（vs 上一交易日/上一快照 delta）/ **行动建议**（规则化一句话）」。
+
+**新信息架构（11 → 5）**：
+| 新主区 | 合并自 | 解决 |
+|---|---|---|
+| 📊 今日驾驶舱 | ① Today + K2 Regime + L4 Nightly Health + K1 组合集中度 | 今天能不能交易、为什么、风险状态 |
+| 🎯 选股与决策 | ② Candidates + H2 因子 + ④ 决策叠加 + ③ 决策/拦截 | 候选股 打分→因子→最终决策 全链路 |
+| 💰 业绩与对比 | ⑤ Paper + ⑥ 策略对比 + vs SPY 基准 | 赚没赚、跑赢大盘没、哪个版本更好 |
+| 🔬 校准与归因 | ⑦ Calibration + ⑪ Thesis + ⑨ Themes | 打分/逻辑灵不灵、哪类主题真赚钱 |
+| 🌱 成长与趋势 | ⑧ Self-Growth + ⑩ Trends | 实验进展 + 指标随时间走向 |
+
+**实现拆解（每步独立 commit + 更新本文档）**：
+- **C4.1 UI 工具层**：新增 `dashboard/ui.py`——`kpi_card`（值+同比 delta+好坏色条+悬停说明）、
+  `verdict`（阈值→🟢/🟡/🔴+文案）、`guidance_box`（这是什么/怎么看/建议做什么）、`pretty_table`
+  （中文列名 + 红绿着色，基于 `st.column_config`）、`vs_benchmark`、`delta_vs_prev`；阈值集中在 `THRESHOLDS`。
+- **C4.2 主题**：`.streamlit/config.toml` 深色高级主题 + 一次性 CSS（卡片样式）+ 统一 Altair 主题。
+- **C4.3 数据层补充**（`queries.py`，仍只读）：`overview_with_delta`（当前日 vs 上一交易日）、权益曲线对齐
+  SPY 基准；其余复用现有查询。
+- **C4.4 主区重构**：`charts.py` 用 ui 工具重写各 view；`app.py` 11 tab → 5 主区，每主区内分小节 + 顶部 guidance。
+- **C4.5 配套**：`test_app_smoke.py` 断言 11→5 + 新中文 header；`README.md` 的「11 tabs」改为 5 主区说明。
+
+**红线（不变）**：纯只读；不新增运行时必需依赖（主题/CSS 为 Streamlit 内置）；不碰 scoring/risk/paper/decision
+任何行为；既有非 dashboard 测试逐字不变。
+
+**验收**：`pip install -e ".[dashboard]"` 后 `AppTest` 渲染 5 主区全部无异常（空态 + 有数据态）；界面无内部
+代号、关键指标带好坏色/同比/基准/建议四类指引。
 
 ---
 
