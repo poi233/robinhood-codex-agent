@@ -149,6 +149,36 @@ def _portfolio_component(artifacts: dict[str, dict[str, Any]], symbol: str) -> d
     }
 
 
+def _factor_rank_delta(component: dict[str, Any]) -> tuple[float, list[str]]:
+    score = component.get("score")
+    if not isinstance(score, (int, float)):
+        return 0.0, []
+    if score >= 80.0:
+        return 3.0, ["factor_alpha_high"]
+    if score <= 30.0:
+        return -3.0, ["factor_alpha_low"]
+    return 0.0, []
+
+
+def _ai_rank_delta(component: dict[str, Any]) -> tuple[float, list[str]]:
+    delta = 0.0
+    reasons: list[str] = []
+    for layer_name, payload in component.items():
+        if not isinstance(payload, dict):
+            continue
+        confidence = payload.get("confidence")
+        if not isinstance(confidence, (int, float)) or confidence < 0.70:
+            continue
+        direction = str(payload.get("direction") or "").lower()
+        if direction in {"long", "bullish", "positive", "buy"}:
+            delta += 2.0
+            reasons.append(f"ai_{layer_name}_bullish")
+        elif direction in {"short", "bearish", "negative", "avoid", "sell"}:
+            delta -= 2.0
+            reasons.append(f"ai_{layer_name}_bearish")
+    return delta, reasons
+
+
 def build_advisory_overlay(inputs: Any, artifacts: dict[str, dict[str, Any]]) -> AdvisoryOverlay:
     run_date = str(getattr(inputs, "run_date", ""))
     symbols = _symbols_from_inputs(inputs) | _symbols_from_artifacts(artifacts)
@@ -161,13 +191,18 @@ def build_advisory_overlay(inputs: Any, artifacts: dict[str, dict[str, Any]]) ->
             "regime": regime,
             "portfolio": _portfolio_component(artifacts, symbol),
         }
+        factor_delta, factor_reasons = _factor_rank_delta(components["factor_alpha"])
+        ai_delta, ai_reasons = _ai_rank_delta(components["ai"])
         reason_codes = [
             source
             for source, value in components.items()
             if value
         ]
+        reason_codes.extend(factor_reasons)
+        reason_codes.extend(ai_reasons)
         overlay_symbols[symbol] = SymbolOverlay(
             symbol=symbol,
+            rank_delta=max(-5.0, min(5.0, factor_delta + ai_delta)),
             reason_codes=reason_codes,
             components=components,
         )

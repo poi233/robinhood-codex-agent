@@ -186,7 +186,9 @@ current champion intraday path is unchanged. When enabled for paper/shadow testi
 the H2 `factor_alpha`, H3 `ai_signals`, K1 `portfolio_target`, and K2 `regime_state` artifacts into
 a normalized `advisory_overlay` object for later ranking/risk/audit use. M1 only loads and
 normalizes these artifacts; M4 audit skeleton now also writes the per-symbol overlay into intraday
-rankings and proposed orders. It still does not change sorting, sizing, blocking, or order placement.
+rankings and proposed orders. M2 applies H2/H3-derived `rank_delta` to the intraday
+`trade_readiness_score` only when the flag is enabled; it does not add hard blocks, change sizing, or
+wire real order placement.
 
 ---
 

@@ -77,7 +77,7 @@ def test_build_advisory_overlay_normalizes_symbols_without_trading_effect() -> N
     assert isinstance(overlay, AdvisoryOverlay)
     assert isinstance(nvda, SymbolOverlay)
     assert nvda.block_buy is False
-    assert nvda.rank_delta == 0.0
+    assert nvda.rank_delta == 5.0
     assert nvda.size_multiplier == 1.0
     assert nvda.components["factor_alpha"]["score"] == 88.0
     assert nvda.components["ai"]["kronos"]["direction"] == "long"
@@ -85,6 +85,42 @@ def test_build_advisory_overlay_normalizes_symbols_without_trading_effect() -> N
     assert nvda.components["portfolio"]["position_weight"] == 0.09
     assert pltr.components["regime"]["regime"] == "risk_off"
     assert pltr.components["factor_alpha"] == {}
+
+
+def test_build_advisory_overlay_penalizes_weak_factor_and_negative_ai_without_blocking() -> None:
+    inputs = PolicyInputs(
+        run_date="2026-06-18",
+        trading_mode="paper",
+        risk_tier=4,
+        today_allowlist=["AMD"],
+    )
+    artifacts = {
+        "factor_alpha": {"symbols": {"AMD": {"factor_alpha_score": 22.0}}},
+        "ai_signals": {
+            "layers": {
+                "dsa": {
+                    "symbols": {
+                        "AMD": {
+                            "direction": "short",
+                            "confidence": 0.75,
+                            "warning_codes": ["avoid_chase"],
+                        }
+                    }
+                }
+            }
+        },
+        "regime_state": {},
+        "portfolio_target": {},
+    }
+
+    overlay = build_advisory_overlay(inputs, artifacts)
+    amd = overlay_for_symbol(overlay, "AMD")
+
+    assert amd.rank_delta == -5.0
+    assert amd.block_buy is False
+    assert amd.size_multiplier == 1.0
+    assert "factor_alpha_low" in amd.reason_codes
+    assert "ai_dsa_bearish" in amd.reason_codes
 
 
 def test_overlay_for_symbol_returns_empty_symbol_overlay_for_unknown_symbol() -> None:

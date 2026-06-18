@@ -63,6 +63,8 @@ def _append_intraday_rankings(agent_root: Path, inputs, *, run_date: str | None 
                         "run_date": run_date,
                         "symbol": candidate.symbol,
                         "trade_readiness_score": candidate.trade_readiness_score,
+                        "base_trade_readiness_score": candidate.base_trade_readiness_score,
+                        "advisory_rank_delta": candidate.advisory_rank_delta,
                         "price_setup_score": candidate.price_setup_score,
                         "candidate_score": candidate.candidate_score,
                         "technical_score": candidate.technical_score,

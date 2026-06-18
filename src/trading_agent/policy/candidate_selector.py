@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import date
 
+from trading_agent.policy.advisory_overlay import overlay_for_symbol
 from trading_agent.policy.models import PolicyInputs
 from trading_agent.policy.risk import eligible_symbols, has_open_order, losing_position_exists, quote_is_fresh, quote_is_tradeable
 from trading_agent.policy.scoring import score_symbol
@@ -19,6 +20,8 @@ class RankedCandidate:
     catalyst_score: float
     liquidity_score: float
     price_setup_score: float = 0.0  # pending calibration via replay component attribution
+    base_trade_readiness_score: float = 0.0
+    advisory_rank_delta: float = 0.0
     reason_codes: list[str] = field(default_factory=list)
 
 
@@ -126,17 +129,26 @@ def rank_candidates(inputs: PolicyInputs) -> tuple[list[RankedCandidate], dict[s
             + 0.10 * research_score
             + 0.05 * catalyst_score
         )
+        overlay = overlay_for_symbol(inputs.advisory_overlay, symbol)
+        rank_delta = float(overlay.rank_delta or 0.0)
+        final_trade_readiness_score = max(0.0, min(100.0, trade_readiness_score + rank_delta))
+        reason_codes = ["candidate_ranked", "hard_blocks_cleared"]
+        if rank_delta:
+            reason_codes.append("advisory_overlay_rank_delta")
+            reason_codes.extend(code for code in overlay.reason_codes if code not in reason_codes)
         ranked.append(
             RankedCandidate(
                 symbol=symbol,
                 candidate_score=round(candidate_total, 2),
-                trade_readiness_score=round(trade_readiness_score, 2),
+                trade_readiness_score=round(final_trade_readiness_score, 2),
                 technical_score=round(technical_score, 2),
                 research_score=round(research_score, 2),
                 catalyst_score=round(catalyst_score, 2),
                 liquidity_score=round(liquidity_score, 2),
                 price_setup_score=round(pss, 2),
-                reason_codes=["candidate_ranked", "hard_blocks_cleared"],
+                base_trade_readiness_score=round(trade_readiness_score, 2),
+                advisory_rank_delta=round(rank_delta, 2),
+                reason_codes=reason_codes,
             )
         )
     ranked.sort(key=lambda item: (-item.trade_readiness_score, -item.candidate_score, item.symbol))

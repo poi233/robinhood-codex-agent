@@ -1,6 +1,7 @@
 import unittest
 from datetime import datetime
 
+from trading_agent.policy.advisory_overlay import AdvisoryOverlay, SymbolOverlay
 from trading_agent.policy.candidate_selector import RankedCandidate, rank_candidates
 from trading_agent.policy.models import Position
 from trading_agent.policy.models import PolicyInputs, Quote
@@ -258,6 +259,78 @@ class PriceSetupScoreTests(unittest.TestCase):
         amd_idx = symbols.index("AMD")
         # NVDA in entry zone → higher price_setup_score → ranks first
         self.assertLess(nvda_idx, amd_idx)
+
+    def test_advisory_overlay_rank_delta_changes_order_without_hard_block(self) -> None:
+        fresh = datetime.now(tz=PT).isoformat()
+        watch = {
+            "entry_low": 99.5,
+            "entry_high": 100.5,
+            "buy_trigger_above": 100.5,
+            "do_not_chase_above": 102.0,
+            "no_trade_low": None,
+            "no_trade_high": None,
+            "invalidation_below": 99.0,
+            "target_1": 103.0,
+            "target_2": 105.0,
+        }
+        inputs = PolicyInputs(
+            run_date="2026-06-14",
+            trading_mode="paper",
+            risk_tier=0,
+            risk_caps={"max_single_order_notional": 10000, "max_daily_notional": 40000},
+            universe=["NVDA", "AMD"],
+            today_allowlist=["NVDA", "AMD"],
+            daily_plan={
+                "date": "2026-06-14",
+                "market_regime": "normal",
+                "allowed_actions": ["small_limit_buy"],
+                "today_watchlist": ["NVDA", "AMD"],
+                "symbol_trade_rules": {
+                    "NVDA": {"max_notional": 500, "allow_buy": True},
+                    "AMD": {"max_notional": 500, "allow_buy": True},
+                },
+            },
+            candidate_scores={
+                "symbols": {
+                    "NVDA": {"total_score": 80, "components": {"technical": 80}},
+                    "AMD": {"total_score": 80, "components": {"technical": 80}},
+                }
+            },
+            risk_overlay={
+                "symbol_trade_rules": {
+                    "NVDA": {"allow_buy": True},
+                    "AMD": {"allow_buy": True},
+                }
+            },
+            trader_watch_levels={"symbols": {"NVDA": {**watch}, "AMD": {**watch}}},
+            data_status_summary={"execution_blocking": False},
+            capital_snapshot={"sizing_buying_power": 10000.0},
+            catalyst_snapshot={"symbols": {"NVDA": {"score": 60}, "AMD": {"score": 60}}},
+            policy_profile={"per_trade_risk_pct": 0.005, "min_reward_risk": 1.5},
+            daily_usage={},
+            account={"buying_power": 10000.0},
+            quotes={
+                "NVDA": Quote(symbol="NVDA", price=100.0, previous_close=101.0, timestamp=fresh),
+                "AMD": Quote(symbol="AMD", price=100.0, previous_close=101.0, timestamp=fresh),
+            },
+            technical_signals={"symbols": {"NVDA": {"setup": "pullback"}, "AMD": {"setup": "pullback"}}},
+            advisory_overlay=AdvisoryOverlay(
+                run_date="2026-06-14",
+                symbols={
+                    "NVDA": SymbolOverlay(symbol="NVDA", rank_delta=-4.0, reason_codes=["factor_alpha_low"]),
+                    "AMD": SymbolOverlay(symbol="AMD", rank_delta=4.0, reason_codes=["factor_alpha_high"]),
+                },
+            ),
+        )
+
+        ranked, blocked = rank_candidates(inputs)
+
+        self.assertEqual(blocked, {})
+        self.assertEqual([candidate.symbol for candidate in ranked], ["AMD", "NVDA"])
+        self.assertEqual(ranked[0].base_trade_readiness_score, ranked[1].base_trade_readiness_score)
+        self.assertEqual(ranked[0].advisory_rank_delta, 4.0)
+        self.assertEqual(ranked[1].advisory_rank_delta, -4.0)
+        self.assertIn("advisory_overlay_rank_delta", ranked[0].reason_codes)
 
 
 if __name__ == "__main__":
