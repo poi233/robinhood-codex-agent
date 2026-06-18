@@ -1,6 +1,8 @@
 # Robinhood Codex Agent
 
-Low-frequency trading automation for a single dedicated Robinhood Agentic Account. The day splits
+Configurable-frequency trading automation for a single dedicated Robinhood Agentic Account.
+Trading frequency is a config choice (low ~30 min / medium ~5 min / high ~1 min presets — see
+[Frequency presets](#frequency-presets)); the default active preset is **medium**. The day splits
 into three phases:
 
 - **Premarket** — Codex (LLM) + the Robinhood Trading MCP gather data and write a **daily plan**.
@@ -25,7 +27,7 @@ python3 -m trading_agent doctor        # print effective config — run this fir
 
 # Run a paper day:
 python3 -m trading_agent premarket     # gather data → daily plan (the only phase that calls MCP)
-python3 -m trading_agent intraday      # one policy decision per run (repeat every ~30 min)
+python3 -m trading_agent intraday      # one policy decision per run (cadence set by active preset)
 python3 -m trading_agent postmarket    # day-end paper summary + Codex review
 
 # Look at results:
@@ -398,7 +400,21 @@ ALLOW_OUTSIDE_MARKET_TEST=1 ./src/scripts/entrypoints/run_all_paper_once.sh   # 
 ## Schedule & rollout
 
 Scheduled (America/Los_Angeles) via `cron.example` / `launchd/*.plist.example`: `05:30` premarket ·
-`06:45`–`12:45` intraday every 30 min · `13:10` postmarket · `20:00` nightly analysis (weekdays).
+`06:45`–`12:55` intraday (cadence per active [frequency preset](#frequency-presets)) · `13:10`
+postmarket · `20:00` nightly analysis (weekdays).
+
+### Frequency presets
+
+Trading frequency = cron cadence × policy-profile trade gating. Three switchable presets are
+registered in `src/config/strategy_registry.yaml`; switch by changing the `active_strategy:` line
+**and** the matching intraday cron block in `cron.example`. `intraday` is pure deterministic Python
+(no Codex/LLM, no Robinhood), so a higher cadence adds no LLM cost — only more yfinance quote fetches.
+
+| Preset | `active_strategy` | `policy_profile` | Cadence | New positions/day | Rebuy cooldown | Max daily risk |
+| --- | --- | --- | --- | --- | --- | --- |
+| Low (original) | `baseline_v1` | `aggressive_growth` | ~30 min | 2 | 3 days | 1.5% |
+| Medium (default) | `midfreq_v1` | `aggressive_growth_mid` | ~5 min | 4 | 1 day | 3% |
+| High | `highfreq_v1` | `aggressive_growth_high` | ~1 min | 8 | 0 days | 6% |
 
 On macOS, install the launchd jobs in one command — it derives the repo path from its own
 location (so it works wherever you cloned the repo) and reloads `launchctl`:
