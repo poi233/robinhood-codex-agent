@@ -68,7 +68,7 @@ class PackageCliTests(unittest.TestCase):
         self.assertIn("PAPER_RISK_TIER", result.stdout)
         self.assertIn("effective_risk_tier", result.stdout)
         self.assertIn("active_strategy", result.stdout)
-        self.assertIn("baseline_v1", result.stdout)
+        self.assertIn("midfreq_v1", result.stdout)
         self.assertIn("ENABLE_OHLCV_CACHE", result.stdout)
         self.assertIn("PAPER_PARTIAL_FILL", result.stdout)
 

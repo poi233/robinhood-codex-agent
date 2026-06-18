@@ -19,10 +19,10 @@ def test_load_active_strategy_falls_back_to_default_when_registry_missing(tmp_pa
 def test_load_active_strategy_reads_repo_registry() -> None:
     strategy = load_active_strategy(Path("."))
 
-    assert strategy["strategy_id"] == "baseline_v1"
+    assert strategy["strategy_id"] == "midfreq_v1"
     assert strategy["status"] == "active"
     assert strategy["scoring_profile"] == "aggressive_growth"
-    assert strategy["policy_profile"] == "aggressive_growth"
+    assert strategy["policy_profile"] == "aggressive_growth_mid"
     assert strategy["risk_tier_paper"] == 4
     assert strategy["risk_tier_live"] == 3
 
@@ -91,7 +91,7 @@ def test_apply_active_strategy_env_defaults_fills_unset_keys_only(tmp_path: Path
 
 
 def test_list_strategy_ids_reads_repo_registry() -> None:
-    assert list_strategy_ids(Path(".")) == ["baseline_v1"]
+    assert list_strategy_ids(Path(".")) == ["baseline_v1", "midfreq_v1", "highfreq_v1"]
 
 
 def test_every_registered_strategy_has_a_changelog_entry() -> None:

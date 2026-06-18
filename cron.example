@@ -8,9 +8,25 @@ PATH=/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin
 # Premarket research, no trading.
 30 5 * * 1-5 __REPO_ROOT__/src/scripts/entrypoints/run_premarket.sh
 
-# Intraday checks every 30 minutes, starting 15 minutes after market open.
-45 6 * * 1-5 __REPO_ROOT__/src/scripts/entrypoints/run_intraday.sh
-15,45 7-12 * * 1-5 __REPO_ROOT__/src/scripts/entrypoints/run_intraday.sh
+# ---------------------------------------------------------------------------
+# Intraday cadence. Pick ONE block to match the active_strategy frequency
+# preset in src/config/strategy_registry.yaml. run_intraday is pure Python
+# (no Codex/LLM, no Robinhood calls); it self-skips outside the 06:45-12:55 PT
+# window, so a wide schedule is safe. Higher cadence = more yfinance quote
+# fetches, which can occasionally rate-limit.
+#
+# --- LOW frequency: ~30 min  (active_strategy: baseline_v1) ---
+# 45 6 * * 1-5 __REPO_ROOT__/src/scripts/entrypoints/run_intraday.sh
+# 15,45 7-12 * * 1-5 __REPO_ROOT__/src/scripts/entrypoints/run_intraday.sh
+#
+# --- MEDIUM frequency: ~5 min  (active_strategy: midfreq_v1)  [ACTIVE] ---
+45,50,55 6 * * 1-5 __REPO_ROOT__/src/scripts/entrypoints/run_intraday.sh
+*/5 7-12 * * 1-5 __REPO_ROOT__/src/scripts/entrypoints/run_intraday.sh
+#
+# --- HIGH frequency: ~1 min  (active_strategy: highfreq_v1) ---
+# 45-59 6 * * 1-5 __REPO_ROOT__/src/scripts/entrypoints/run_intraday.sh
+# * 7-12 * * 1-5 __REPO_ROOT__/src/scripts/entrypoints/run_intraday.sh
+# ---------------------------------------------------------------------------
 
 # Postmarket summary, no trading.
 10 13 * * 1-5 __REPO_ROOT__/src/scripts/entrypoints/run_postmarket.sh

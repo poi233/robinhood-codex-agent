@@ -1,4 +1,15 @@
-active_strategy: baseline_v1
+# Active strategy version. Switching `active_strategy` swaps the whole
+# scoring_profile + policy_profile + risk_tier combo at once (see
+# trading_agent/strategy/registry.py). The three presets below differ only in
+# their policy_profile, which controls trade-gating cadence (new positions per
+# day/week, rebuy cooldown, daily/weekly risk budget). Each preset also has a
+# matching cron block in cron.example — switching frequency means changing BOTH
+# this `active_strategy` line AND the installed crontab block.
+#
+#   baseline_v1  -> ~30 min cadence  (low,    policy_profile: aggressive_growth)
+#   midfreq_v1   -> ~5 min cadence   (medium, policy_profile: aggressive_growth_mid)
+#   highfreq_v1  -> ~1 min cadence   (high,   policy_profile: aggressive_growth_high)
+active_strategy: midfreq_v1
 strategies:
   baseline_v1:
     status: active
@@ -8,4 +19,22 @@ strategies:
     risk_tier_paper: 4
     risk_tier_live: 3
     parent: null
-    change_reason: "Initial registration of the strategy in effect before this registry existed (RISK_TIER=3 live / PAPER_RISK_TIER=4 paper, aggressive_growth scoring + policy profiles). No behavior change."
+    change_reason: "Low-frequency preset (original baseline): ~30 min cadence, max 2 new positions/day, 3-day rebuy cooldown."
+  midfreq_v1:
+    status: active
+    scoring_profile: aggressive_growth
+    policy_profile: aggressive_growth_mid
+    watchlist: active_watchlist.txt
+    risk_tier_paper: 4
+    risk_tier_live: 3
+    parent: baseline_v1
+    change_reason: "Medium-frequency preset: ~5 min cadence, max 4 new positions/day, 1-day rebuy cooldown, higher daily/weekly risk budget."
+  highfreq_v1:
+    status: active
+    scoring_profile: aggressive_growth
+    policy_profile: aggressive_growth_high
+    watchlist: active_watchlist.txt
+    risk_tier_paper: 4
+    risk_tier_live: 3
+    parent: baseline_v1
+    change_reason: "High-frequency preset: ~1 min cadence, max 8 new positions/day, no rebuy cooldown, widest risk budget. Paper experimentation."

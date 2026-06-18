@@ -1,8 +1,32 @@
 # Strategy
 
-This is a low-frequency, aggressive-growth rollout strategy for a small dedicated Robinhood Agentic Account.
-It is designed for scheduled checks every 30 minutes, not for fast stop-losses, event-chasing, or intraday scalping.
+This is an aggressive-growth rollout strategy for a small dedicated Robinhood Agentic Account.
 The goal is higher upside capture through carefully gated small positions, not uncontrolled trade frequency.
+
+## Frequency presets
+
+Trading frequency is a config choice, not a hardcoded behavior. It is governed by two
+layers that must be set together:
+
+1. **Cadence (how often the policy engine runs)** — the intraday cron block in `cron.example`.
+   Note: `run_intraday` is pure deterministic Python — it does **not** call Codex/LLM and does
+   **not** call Robinhood (only premarket/postmarket use Codex). Running it every minute incurs
+   no LLM cost; the only added load is more yfinance quote fetches.
+2. **Trade gating (how many entries are actually allowed)** — the active `policy_profile`
+   (`max_new_positions_per_day` / `_per_week`, `cooldown_days_after_buy`, `max_daily_risk_pct`,
+   `max_weekly_risk_pct`) in `policy_profiles.json`.
+
+Three switchable presets are registered in `src/config/strategy_registry.yaml`. Switch by
+changing the `active_strategy:` line **and** uncommenting the matching cron block:
+
+| Preset | `active_strategy` | policy_profile | Cadence | New positions/day | Rebuy cooldown | Max daily risk |
+| --- | --- | --- | --- | --- | --- | --- |
+| Low (original) | `baseline_v1` | `aggressive_growth` | ~30 min | 2 | 3 days | 1.5% |
+| Medium (active) | `midfreq_v1` | `aggressive_growth_mid` | ~5 min | 4 | 1 day | 3% |
+| High | `highfreq_v1` | `aggressive_growth_high` | ~1 min | 8 | 0 days | 6% |
+
+The active preset is **medium frequency** (`midfreq_v1`). It is designed for scheduled checks
+every ~5 minutes, not for fast stop-losses, event-chasing, or millisecond scalping.
 
 > Path note: file references below use the runtime-block variable names (e.g. `TODAY_ALLOWLIST_PATH`,
 > `DAILY_PLAN_PATH`, `DSA_SIGNALS_PATH`, `DAILY_USAGE_PATH`) that the runtime block injects. They
