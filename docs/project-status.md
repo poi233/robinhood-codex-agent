@@ -413,3 +413,7 @@
   [`superpowers/plans/2026-06-16-self-growth-platform-g0-g2.md`](./superpowers/plans/2026-06-16-self-growth-platform-g0-g2.md)）；
   proposal 生成/校验/实验队列（G3–G5）；shadow runner + evaluator + 人工 promote（G6–G8）。
   详见 roadmap G 阶段。**只提议、不自动改 champion，绝不自动升级 live。**
+- **N 数据存储强化（空数据期红利，2026-06-18 新规划）**：N1 `analytics.db` schema 漂移修复（补全 E4/E3/K3/M
+  的新落盘字段 + factor/regime/portfolio 表）、N2 索引、N3 build 数据校验 + `analytics validate`、N4 数据保留/
+  归档（后期）。趁表都还是空的、改 schema 零风险时做；db 是 drop+recreate 派生视图、无需 migration。详见
+  roadmap N 阶段。
