@@ -12,11 +12,11 @@ if an earlier one fails; it exits non-zero only if a **required** step fails.
 
 | Group | Steps | Needs |
 |---|---|---|
-| Config + safety | `doctor` · `safety/check_safety.sh` | local |
+| Config + safety | `doctor` · `safety/check_safety.sh` · `launchd/check_launchd_plists.sh` | local |
 | Read-only analytics | `analytics build` · `fill-quality` · `weight-suggestion` · `snapshot` · `trend` · `nightly-health` · `replay` | local |
 | Self-growth (paper/shadow only) | `growth observe` · `propose` · `shadow` · `evaluate` | local |
 | Network analytics (opt-in) | `analytics calibrate` · `ai-signal-study` · `ai-ablation` | yfinance |
-| Lifecycle dry-runs (opt-in) | `premarket` (dry-run) · `intraday` (outside-market) · `postmarket` | Codex/MCP |
+| Lifecycle dry-runs (opt-in) | `premarket` (dry-run) · `intraday` (outside-market) · `postmarket` · `nightly-analysis` (dry-run) | Codex/MCP |
 
 Opt into the heavier groups:
 

@@ -37,6 +37,7 @@ echo "Running smoke (AGENT_ROOT=$AGENT_ROOT) ..."
 # 1) Config + safety
 smoke "doctor"                 "$python_bin" -m trading_agent doctor
 [[ -x ./src/scripts/safety/check_safety.sh ]] && smoke "safety check" ./src/scripts/safety/check_safety.sh
+[[ -x ./src/scripts/launchd/check_launchd_plists.sh ]] && smoke "launchd plists" ./src/scripts/launchd/check_launchd_plists.sh
 
 # 2) Local, read-only analytics (no network)
 smoke "analytics build"        "$python_bin" -m trading_agent analytics build
@@ -65,6 +66,7 @@ if [[ "${SMOKE_INCLUDE_LIFECYCLE:-0}" == "1" ]]; then
   smoke_opt "premarket (dry-run)"  env CODEX_EXEC_DRY_RUN=1 ./src/scripts/entrypoints/run_premarket.sh
   smoke_opt "intraday (outside-market)" env ALLOW_OUTSIDE_MARKET_TEST=1 ./src/scripts/entrypoints/run_intraday.sh
   smoke_opt "postmarket"           ./src/scripts/entrypoints/run_postmarket.sh
+  smoke_opt "nightly-analysis"     env CODEX_EXEC_DRY_RUN=1 ./src/scripts/entrypoints/run_nightly_analysis.sh
 fi
 
 echo ""
