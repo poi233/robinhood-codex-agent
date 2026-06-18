@@ -4,16 +4,16 @@
 <plist version="1.0">
 <dict>
   <!-- Replace __REPO_ROOT__ with your local checkout path before loading. -->
-  <!-- Runs the entrypoint script (not python directly), so it stays portable: the script
-       derives AGENT_ROOT from its own location and resolves a working Python via
-       resolve_runtime_python_bin (.venv -> python3 -> homebrew -> system). Nothing here is
-       pinned to a specific .venv, codex version, or user home. -->
+  <!-- Runs the package entrypoint directly. This avoids macOS launchd/TCC failures seen when
+       executing repo-local shell wrappers from Documents while still keeping AGENT_ROOT explicit. -->
   <key>Label</key>
   <string>com.example.robinhood-codex-agent.premarket</string>
   <key>ProgramArguments</key>
   <array>
-    <string>/bin/bash</string>
-    <string>__REPO_ROOT__/src/scripts/entrypoints/run_premarket.sh</string>
+    <string>__REPO_ROOT__/.venv/bin/python</string>
+    <string>-m</string>
+    <string>trading_agent</string>
+    <string>premarket</string>
   </array>
   <key>WorkingDirectory</key>
   <string>__REPO_ROOT__</string>
@@ -27,7 +27,7 @@
          resolved from CODEX_BIN (set a stable path in src/config/runtime.env.local if
          needed), PATH, or common install locations including ~/.local/bin. -->
     <key>PATH</key>
-    <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+    <string>__REPO_ROOT__/.venv/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
   </dict>
   <key>StartCalendarInterval</key>
   <dict>

@@ -34,9 +34,10 @@ python3 -m trading_agent analytics build   # build runtime/analytics/analytics.d
 python3 -m trading_agent dashboard         # read-only Streamlit UI (localhost:8501)
 ```
 
-Defaults are paper-only and safe. The canonical operational path is the shell wrappers in
-`src/scripts/entrypoints/` (they export the cron/launchd defaults); the `python3 -m trading_agent`
-commands are equivalent for manual use and accept `--dry-run`.
+Defaults are paper-only and safe. Manual runs can use either `python3 -m trading_agent ...` or the
+shell wrappers in `src/scripts/entrypoints/`. The macOS launchd plists use the Python module
+entrypoints directly (`.venv/bin/python -m trading_agent ...`) because launchd can reject repo-local
+shell wrappers under `~/Documents` with `Operation not permitted`.
 
 ---
 
@@ -210,10 +211,11 @@ with `execution_not_wired`, so only a human can take it live.
 | `dashboard` | Read-only Streamlit UI (`localhost:8501`): 9 tabs — Today / Candidates / Decisions / Paper / Strategy Comparison / Calibration / Self-Growth / Themes / Trends. |
 
 ### Nightly batch (read-only / shadow-only)
-`src/scripts/entrypoints/run_nightly_analysis.sh` runs the analytics + self-growth commands best-effort
+`python3 -m trading_agent nightly-analysis` runs the analytics + self-growth commands best-effort
 after the close (rebuild DB → calibrate → fill-quality → AI study/ablation → weight-suggestion →
 growth observe/propose/validate/shadow/evaluate → snapshot → trend). It never trades, approves, or
-promotes. Gated by `ENABLE_NIGHTLY_ANALYSIS` (default 1).
+promotes. Gated by `ENABLE_NIGHTLY_ANALYSIS` (default 1). The shell wrapper
+`src/scripts/entrypoints/run_nightly_analysis.sh` remains available for manual/cron use.
 
 ### Self-growth (paper/shadow only — proposes, never auto-applies)
 Diagnoses the system, proposes **bounded** experiments, runs challenger strategies in **shadow
@@ -332,9 +334,17 @@ src/scripts/launchd/install_launchd_jobs.sh            # render + (re)load all j
 src/scripts/launchd/install_launchd_jobs.sh uninstall  # unload + remove them
 ```
 
-The plists run the entrypoint scripts, which resolve Python and `codex` at runtime, so nothing
-is pinned to a `.venv`, a codex release version, or a user home. If `codex` is not on `PATH` or
-in `~/.local/bin`, set a stable `CODEX_BIN` in `src/config/runtime.env.local`.
+The plists run `.venv/bin/python -m trading_agent <phase>` with `AGENT_ROOT` and `WorkingDirectory`
+set to the rendered repo path. This avoids the macOS launchd/TCC failure where `/bin/bash
+.../run_*.sh` exits `126` with `Operation not permitted`. `codex` is still resolved at runtime from
+`CODEX_BIN`, `PATH`, or common locations including `~/.local/bin`; if needed, set a stable
+`CODEX_BIN` in `src/config/runtime.env.local`.
+
+Validate launchd templates before loading:
+
+```bash
+src/scripts/launchd/check_launchd_plists.sh
+```
 
 Rollout: paper → review → live tier 0, advancing only after clean logs. A human removes `KILL_SWITCH`
 and sets `RISK_TIER`; Codex never does. Postmarket may *recommend* a tier change; a human makes it.

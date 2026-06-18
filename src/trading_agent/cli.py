@@ -3,6 +3,8 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import subprocess
+import sys
 from pathlib import Path
 
 from trading_agent.core.context import resolve_agent_root
@@ -15,6 +17,11 @@ def build_parser() -> argparse.ArgumentParser:
     for command in ("premarket", "intraday", "postmarket", "dsa"):
         subparser = subparsers.add_parser(command)
         subparser.add_argument("--dry-run", action="store_true")
+
+    subparsers.add_parser(
+        "nightly-analysis",
+        help="Run the read-only/shadow-only nightly analytics batch.",
+    )
 
     subparsers.add_parser("doctor", help="Print effective runtime configuration and exit.")
 
@@ -477,10 +484,95 @@ def _run_analytics_thesis(agent_root: Path, *, since: str | None, until: str | N
     return 0
 
 
-def _run_dashboard(agent_root: Path) -> int:
-    import subprocess
-    import sys
+def _run_nightly_analysis(agent_root: Path) -> int:
+    from trading_agent.core.config import load_env_files
+    from trading_agent.core.context import build_runtime_paths
+    from trading_agent.core.time import pt_now
 
+    load_env_files(agent_root)
+    if os.environ.get("ENABLE_NIGHTLY_ANALYSIS", "1") != "1":
+        print("nightly analysis disabled (ENABLE_NIGHTLY_ANALYSIS=0); skipping")
+        return 0
+
+    paths = build_runtime_paths(agent_root)
+    nightly_log_dir = paths.run_logs_dir / "nightly"
+    nightly_log_dir.mkdir(parents=True, exist_ok=True)
+    paths.error_log_path.parent.mkdir(parents=True, exist_ok=True)
+    analysis_log = nightly_log_dir / "analysis.log"
+    step_results = nightly_log_dir / "step_results.jsonl"
+    step_results.write_text("", encoding="utf-8")
+
+    env = {
+        **os.environ,
+        "AGENT_ROOT": str(agent_root),
+        "PYTHONPATH": f"{agent_root / 'src'}:{os.environ.get('PYTHONPATH', '')}",
+    }
+
+    def timestamp() -> str:
+        return pt_now().strftime("%Y-%m-%dT%H:%M:%S%z")
+
+    def append(path: Path, text: str) -> None:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open("a", encoding="utf-8") as handle:
+            handle.write(text)
+
+    def run_step(label: str, argv: list[str]) -> None:
+        append(analysis_log, f"{timestamp()} [nightly] START {label}\n")
+        with analysis_log.open("a", encoding="utf-8") as log_handle:
+            result = subprocess.run(
+                [sys.executable, "-m", "trading_agent", *argv],
+                cwd=agent_root,
+                env=env,
+                stdout=log_handle,
+                stderr=subprocess.STDOUT,
+                text=True,
+                check=False,
+            )
+        status = "ok" if result.returncode == 0 else "fail"
+        marker = "OK   " if result.returncode == 0 else "FAIL "
+        append(analysis_log, f"{timestamp()} [nightly] {marker} {label}"
+                             + (f" (exit {result.returncode})" if result.returncode else "") + "\n")
+        if result.returncode:
+            append(paths.error_log_path, f"{timestamp()} nightly step failed: {label} (exit {result.returncode})\n")
+        append(step_results, json.dumps(
+            {"step": label, "status": status, "exit_code": result.returncode, "timestamp": timestamp()},
+            ensure_ascii=True,
+        ) + "\n")
+
+    print(f"nightly analysis starting (date={paths.run_date}, log={analysis_log})")
+
+    steps = [
+        ("analytics build", ["analytics", "build"]),
+        ("analytics calibrate", ["analytics", "calibrate"]),
+        ("analytics fill-quality", ["analytics", "fill-quality"]),
+        ("analytics ai-signal-study", ["analytics", "ai-signal-study"]),
+        ("analytics ai-ablation", ["analytics", "ai-ablation"]),
+        ("analytics thesis", ["analytics", "thesis"]),
+        ("analytics weight-suggestion", ["analytics", "weight-suggestion"]),
+        ("growth observe", ["growth", "observe"]),
+        ("growth propose", ["growth", "propose"]),
+    ]
+    for label, argv in steps:
+        run_step(label, argv)
+
+    proposals_dir = agent_root / "runtime" / "strategy_proposals" / paths.run_date
+    if proposals_dir.is_dir():
+        run_step("growth validate", ["growth", "validate", str(proposals_dir)])
+
+    for label, argv in [
+        ("growth shadow", ["growth", "shadow"]),
+        ("growth evaluate", ["growth", "evaluate"]),
+        ("analytics snapshot", ["analytics", "snapshot"]),
+        ("analytics trend", ["analytics", "trend"]),
+        ("analytics nightly-health", ["analytics", "nightly-health"]),
+    ]:
+        run_step(label, argv)
+
+    print(f"nightly analysis finished (date={paths.run_date}, log={analysis_log})")
+    return 0
+
+
+def _run_dashboard(agent_root: Path) -> int:
     app_path = Path(__file__).resolve().parent / "dashboard" / "app.py"
     env = {**os.environ, "PYTHONPATH": f"{agent_root / 'src'}:{os.environ.get('PYTHONPATH', '')}"}
     return subprocess.call(
@@ -512,6 +604,8 @@ def main(argv: list[str] | None = None) -> int:
             os.environ["CODEX_EXEC_DRY_RUN"] = "1"
         run_dsa_scan(agent_root)
         return 0
+    if args.command == "nightly-analysis":
+        return _run_nightly_analysis(agent_root)
     if args.command == "doctor":
         return _run_doctor(agent_root)
     if args.command == "replay":

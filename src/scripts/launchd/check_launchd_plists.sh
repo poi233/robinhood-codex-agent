@@ -1,18 +1,15 @@
 #!/usr/bin/env bash
 
-# Guard against launchd-job regressions (the kind introduced by reverting the plists to call
-# `python -m trading_agent <phase>` directly). For every launchd/*.plist.example this asserts the
-# job is wired the portable way and prints PASS/FAIL per plist. Exits non-zero if any check fails.
+# Guard against launchd-job regressions. For every launchd/*.plist.example this asserts the job is
+# wired through the Python package entrypoint and prints PASS/FAIL per plist. Exits non-zero if any
+# check fails.
 #
 # What it enforces, and why:
-#   - ProgramArguments runs /bin/bash <entrypoint>.sh   → entry scripts cd to AGENT_ROOT, export the
-#                                                          runtime env, and resolve python/codex. A
-#                                                          bare `.venv/bin/python` skips all of that
-#                                                          (this is what broke premarket's universe
-#                                                          path resolution: /src/config/universe.txt).
-#   - the entrypoint script actually exists             → no dangling reference.
-#   - NOT `trading_agent nightly-analysis`              → there is no such CLI subcommand; the nightly
-#                                                          batch only exists as run_nightly_analysis.sh.
+#   - ProgramArguments runs .venv/bin/python -m trading_agent <job>
+#       → launchd on macOS can reject repo-local shell wrappers under Documents with "Operation not
+#         permitted"; direct Python avoids that TCC/provenance failure while AGENT_ROOT and cwd keep
+#         runtime path resolution stable.
+#   - the matching Python CLI subcommand exists.
 #   - no version-pinned codex release dir / user home   → those paths vanish on codex auto-update.
 
 set -uo pipefail
@@ -49,30 +46,24 @@ for template in "${templates[@]}"; do
   body="$(cat "$template")"
   echo "[$job]"
 
-  # 1) runs via /bin/bash
-  check "$job: ProgramArguments should invoke /bin/bash" \
-    grep -q "<string>/bin/bash</string>" "$template"
+  check "$job: ProgramArguments should invoke repo .venv python" \
+    grep -q "<string>__REPO_ROOT__/.venv/bin/python</string>" "$template"
+  check "$job: should call python -m trading_agent" \
+    bash -c "grep -q '<string>-m</string>' '$template' && grep -q '<string>trading_agent</string>' '$template'"
+  check "$job: should pass subcommand $job" \
+    grep -q "<string>$job</string>" "$template"
+  check "$job: PATH should include repo .venv/bin first" \
+    grep -q "<string>__REPO_ROOT__/.venv/bin:" "$template"
 
-  # 2) invokes the matching entrypoint script, and that script exists
-  entry_rel="src/scripts/entrypoints/run_${job//-/_}.sh"
-  check "$job: should invoke $entry_rel" \
-    grep -q "$entry_rel" "$template"
-  check "$job: entrypoint $entry_rel must exist" \
-    test -f "$REPO_ROOT/$entry_rel"
-
-  # 3) must NOT call python -m trading_agent directly
-  if grep -q ".venv/bin/python" "$template" || grep -q "<string>-m</string>" "$template"; then
-    echo "  FAIL  $job: calls python -m trading_agent directly (bypasses entrypoint env/cwd setup)"
-    fail=$((fail + 1))
-  else
+  # Verify the CLI parser knows this subcommand without running the job.
+  if PYTHONPATH="$REPO_ROOT/src" "$REPO_ROOT/.venv/bin/python" -m trading_agent "$job" --help >/dev/null 2>&1; then
     pass=$((pass + 1))
+  else
+    echo "  FAIL  $job: python -m trading_agent $job --help failed"
+    fail=$((fail + 1))
   fi
 
-  # 4) must NOT reference a non-existent CLI subcommand (nightly only exists as a shell script)
-  check "$job: must not use the non-existent 'nightly-analysis' CLI subcommand" \
-    bash -c "! grep -q '<string>nightly-analysis</string>' '$template'"
-
-  # 5) no version-pinned codex release dir / hardcoded user home
+  # no version-pinned codex release dir / hardcoded user home
   check "$job: no version-pinned codex release path" \
     bash -c "! grep -Eq 'standalone/releases/[0-9]' '$template'"
   check "$job: no hardcoded /Users/<name> home path" \

@@ -1,6 +1,7 @@
 import subprocess
 import sys
 import unittest
+from unittest import mock
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -20,19 +21,38 @@ class PackageCliTests(unittest.TestCase):
         self.assertIn("premarket", result.stdout)
         self.assertIn("intraday", result.stdout)
         self.assertIn("postmarket", result.stdout)
+        self.assertIn("nightly-analysis", result.stdout)
         self.assertIn("dashboard", result.stdout)
 
     def test_parser_accepts_runtime_subcommands(self) -> None:
-        result = subprocess.run(
-            [sys.executable, "-m", "trading_agent", "premarket", "--help"],
-            cwd=REPO_ROOT,
-            capture_output=True,
-            text=True,
-            check=False,
-            env={**__import__("os").environ, "PYTHONPATH": str(REPO_ROOT / "src")},
-        )
-        self.assertEqual(result.returncode, 0, msg=result.stderr)
-        self.assertIn("--dry-run", result.stdout)
+        env = {**__import__("os").environ, "PYTHONPATH": str(REPO_ROOT / "src")}
+        for command in ("premarket", "intraday", "postmarket", "nightly-analysis"):
+            with self.subTest(command=command):
+                result = subprocess.run(
+                    [sys.executable, "-m", "trading_agent", command, "--help"],
+                    cwd=REPO_ROOT,
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                    env=env,
+                )
+                self.assertEqual(result.returncode, 0, msg=result.stderr)
+                self.assertIn(command, result.stdout)
+                if command != "nightly-analysis":
+                    self.assertIn("--dry-run", result.stdout)
+
+    def test_nightly_analysis_can_be_disabled_without_side_effects(self) -> None:
+        from trading_agent.cli import main
+
+        import os
+        from tempfile import TemporaryDirectory
+
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "src" / "trading_agent").mkdir(parents=True)
+            with mock.patch("trading_agent.cli.resolve_agent_root", return_value=root), \
+                    mock.patch.dict(os.environ, {"ENABLE_NIGHTLY_ANALYSIS": "0"}, clear=False):
+                self.assertEqual(main(["nightly-analysis"]), 0)
 
     def test_doctor_command_prints_effective_config(self) -> None:
         result = subprocess.run(
