@@ -60,6 +60,9 @@ def build_parser() -> argparse.ArgumentParser:
     analytics_thesis_parser = analytics_subparsers.add_parser("thesis", help="Write runtime/analytics/thesis_attribution.{json,md} (K3: per-thesis win rate / mean forward return; needs network for yfinance).")
     analytics_thesis_parser.add_argument("--since", metavar="YYYY-MM-DD", default=None)
     analytics_thesis_parser.add_argument("--until", metavar="YYYY-MM-DD", default=None)
+    analytics_validate_parser = analytics_subparsers.add_parser("validate", help="Write runtime/analytics/validate_report.{json,md} (N3: read-only scan for malformed JSONL lines + rows missing key fields; local-only, modifies nothing).")
+    analytics_validate_parser.add_argument("--since", metavar="YYYY-MM-DD", default=None)
+    analytics_validate_parser.add_argument("--until", metavar="YYYY-MM-DD", default=None)
 
     subparsers.add_parser("dashboard", help="Launch the read-only Streamlit dashboard at http://localhost:8501.")
 
@@ -478,6 +481,16 @@ def _run_analytics_nightly_health(agent_root: Path) -> int:
     return 0
 
 
+def _run_analytics_validate(agent_root: Path, *, since: str | None, until: str | None) -> int:
+    from trading_agent.analytics.validate import write_validate_report
+
+    out, report = write_validate_report(agent_root, since=since, until=until)
+    print(f"Wrote {out}  (status: {report['status']}"
+          f", malformed: {report['total_malformed']}"
+          f", missing_key: {report['total_missing_key']})")
+    return 0
+
+
 def _run_analytics_thesis(agent_root: Path, *, since: str | None, until: str | None) -> int:
     from trading_agent.replay.thesis import write_thesis_attribution
 
@@ -633,6 +646,8 @@ def main(argv: list[str] | None = None) -> int:
         return _run_analytics_nightly_health(agent_root)
     if args.command == "analytics" and args.analytics_command == "thesis":
         return _run_analytics_thesis(agent_root, since=args.since, until=args.until)
+    if args.command == "analytics" and args.analytics_command == "validate":
+        return _run_analytics_validate(agent_root, since=args.since, until=args.until)
     if args.command == "dashboard":
         return _run_dashboard(agent_root)
     if args.command == "growth" and args.growth_command == "observe":

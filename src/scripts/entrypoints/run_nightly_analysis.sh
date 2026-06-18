@@ -51,6 +51,7 @@ log_line "nightly analysis starting (date=$RUN_DATE_PT, log=$ANALYSIS_LOG)"
 
 # 1) Rebuild the analytics DB + refresh the read-only calibration / fill / AI study reports.
 run_step "analytics build"          "$python_bin" -m trading_agent analytics build
+run_step "analytics validate"       "$python_bin" -m trading_agent analytics validate
 run_step "analytics calibrate"      "$python_bin" -m trading_agent analytics calibrate
 run_step "analytics fill-quality"   "$python_bin" -m trading_agent analytics fill-quality
 run_step "analytics ai-signal-study" "$python_bin" -m trading_agent analytics ai-signal-study

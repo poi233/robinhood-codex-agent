@@ -220,6 +220,7 @@ actually improved outcomes before any further promotion.
 | `analytics snapshot [--date]` | I2: archive a dated copy of tonight's reports to `runtime/analytics/history/<date>/` + `nightly_summary.json`. Idempotent. |
 | `analytics trend [--since --until --output]` | I3: aggregate `history/*/nightly_summary.json` into per-metric time series → `trend.json`. |
 | `analytics nightly-health` | L4 → `nightly_health.json`: report freshness + the last nightly run's failed steps. Surfaced as a 🟢/🔴 banner on the dashboard Trends tab. |
+| `analytics validate [--since --until]` | N3 → `validate_report.{json,md}`: read-only scan of run JSONL for malformed lines + rows missing key fields (per source + per run). Modifies nothing; `status=ok` when clean. |
 | `analytics thesis [--since --until]` | K3 → `thesis_attribution.{json,md}`: per-thesis (theme/DSA tags) win rate + mean forward return — "which theses actually make money". |
 | `dashboard` | Read-only Streamlit UI (`localhost:8501`): **11 tabs** — Today / Candidates / Decisions / Decision Overlay / Paper / Strategy Comparison / Calibration / Self-Growth / Themes / Trends / **Thesis**. |
 
@@ -246,6 +247,9 @@ python3 -m trading_agent analytics build --since 2026-06-01 --until 2026-06-30  
 `build` is **idempotent**: it drops and recreates every table each time, so re-running never
 duplicates rows and always reflects the latest files on disk. Empty data → empty tables (0 rows), no
 error. The nightly batch rebuilds it automatically; run it manually whenever you want fresh tables.
+
+To sanity-check the source files before trusting the DB, run `analytics validate` — a read-only scan
+that reports malformed JSONL lines and rows missing key fields (it modifies nothing).
 
 **Tables** (one DB, 10 tables): `runs` (per-day manifest: strategy_id / git_commit / config_hash),
 `candidates` (per run×symbol scores + watchlist/tradable flags), `decisions` (one row per intraday

@@ -138,7 +138,7 @@
 | | L6 | **冻结 alpha 接线 + 跑 paper 15–30 天** | 评审二 | ⏳ **纪律项**：H7/H8 保持 skeleton-only 不接 scoring；M overlay 只能默认关闭 + shadow/audit 先行 |
 | **N 数据存储强化（空数据期红利）** | ~~N1~~ | analytics.db schema 漂移修复（补全新落盘字段 + 新表） | 用户新增（2026-06-18） | ✅ **已完成（2026-06-18）**：orders 补 E4 spread/slippage + setup levels；decisions 补 per_candidate_blocks/advisory_overlay/thesis_tags；intraday_rankings 补 base score/rank_delta/overlay；新增 factor_alpha/regime_state/portfolio_target 表 |
 | | ~~N2~~ | analytics.db 索引 | 用户新增（2026-06-18） | ✅ **已完成（2026-06-18）**：`INDEX_DDL` 给 candidates/decisions/orders/intraday_rankings/paper_equity/blocked_reasons/factor_alpha 常用过滤列建索引，随表重建 |
-| | N3 | build 数据校验 + `analytics validate` | 用户新增（2026-06-18） | 🔜 **规划中**：build 时报告 skipped/malformed 行 + 缺关键字段，避免坏数据静默变 NULL |
+| | ~~N3~~ | build 数据校验 + `analytics validate` | 用户新增（2026-06-18） | ✅ **已完成（2026-06-18）**：`analytics validate` 只读扫 decisions/orders/equity/rankings 的 JSONL，报告坏 JSON 行 + 缺关键字段行（per-source + per-run），写 `validate_report.{json,md}`；接进夜间批（build 之后）；改不动任何数据 |
 | | N4 | 数据保留 / 归档策略 | 用户新增（2026-06-18） | 🔜 **规划中（后期）**：`runtime/state/runs/*` 无限增长治理（压缩/归档旧 run），数月后再做 |
 
 > **新旧编号对照**：R1→E1（增 benchmark returns）、R2→E2、R3→A3、R4→D2、R5→D3、R6→D4、R7→F2；
@@ -1302,22 +1302,26 @@ run_date×symbol）/`regime_state`（K2，逐 run_date）/`portfolio_target`（K
 
 </details>
 
-## N3 — build 数据校验 + `analytics validate` — 🔜 规划中
+## N3 — build 数据校验 + `analytics validate` — ✅ 已完成（2026-06-18）
 
-**目标**：build 当前用 `.get()` 静默吞缺失/坏字段——一行格式错的 JSONL 会无声变成一行 NULL。等真数据进来，
-需要能一眼看到「多少行被跳过 / 缺关键字段」，否则脏数据会污染 calibration/IC 而不自知。
+**目标**：build 当前用 `.get()` 静默吞缺失/坏字段——一行格式错的 JSONL 会无声变成一行 NULL。需要能一眼看到
+「多少行坏 / 缺关键字段」，否则脏数据会污染 calibration/IC 而不自知。
 
-**具体步骤**：
-1. `loaders.py` / `build_db.py`：统计每个源每个表的 `parsed` / `skipped`（坏 JSON 行）/ `missing_key`
-   （缺 timestamp/symbol 等关键字段）计数，`build_analytics_db` 返回值里带上（当前只返回行数）。
-2. 新增 `analytics validate [--since --until]` CLI：只读扫描 run 产物，报告坏行/缺字段/孤儿引用
-   （如 order 引用了不存在的 decision），写 `runtime/analytics/validate_report.{json,md}`，**不改任何数据**。
-3. 可选：接进 nightly 批 + L4 nightly-health（坏行超阈值 → `status=attention`）。
+**实现记录**：新增 `analytics/validate.py` + CLI `analytics validate [--since --until]`——只读扫每个 run 的 4 个
+JSONL 源（decisions / orders / paper_equity / intraday_rankings），逐源逐 run 统计 `lines/parsed/malformed`
+（坏 JSON 或非 dict）/`missing_key`（缺该源必填字段，如 decision 缺 `timestamp`/`decision`、order 缺
+`order_id`/`symbol`/`status`），含 `missing_key_detail`（哪个字段缺了几次）。写 `validate_report.{json,md}`，
+markdown 只列「有问题的 run date」保持简短；`status` 仅在无坏行无缺字段时为 `ok`，否则 `attention`。接进夜间
+批（`analytics build` 之后立即跑）。**纯只读、改不动任何数据**；空数据 status=ok 不报错。
 
-**涉及文件**：`analytics/loaders.py`、`analytics/build_db.py`、新增 `analytics/validate.py`、`cli.py`、测试。
+> 设计取舍：未改 `build_analytics_db` 的返回签名（保持 `{table: count}` 契约、不破坏既有测试）——校验做成
+> 独立命令而非塞进 build。孤儿引用检查（order ↔ decision 弱关联）未做，避免误报，优先级低、留作后续增量。
 
-**验收**：build 返回值/日志含 parsed/skipped/missing 统计；`analytics validate` 在故意注入坏行的 mock run 上
-准确报告；纯只读、不改数据；空数据不报错。
+**涉及文件**：新增 `analytics/validate.py` + `tests/.../test_validate.py`；`cli.py`（命令 + 回显）；
+`run_nightly_analysis.sh`（接进批处理）。
+
+**验收**：✅ `analytics validate` 在故意注入坏行/缺字段的 mock run 上准确报告（per-source + per-run）；
+✅ 纯只读不改数据；✅ 空数据不报错（实跑 3 个 run date status=ok）。601 测试通过。
 
 ## N4 — 数据保留 / 归档策略 — 🔜 规划中（后期，数月后）
 
