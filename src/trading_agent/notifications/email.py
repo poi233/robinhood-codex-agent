@@ -43,7 +43,7 @@ def send_trade_email_notification(
     report_body = ""
     if report_path is not None and report_path.exists():
         report_body = report_path.read_text(encoding="utf-8")
-    subject = f"[Robinhood Codex Agent][{event_tag}][{paths.run_date}] {title}"
+    subject = f"[RCA][{event_tag}][{paths.run_date}] {title}"
     gmail_label = "trade"
     payload = {
         "schema_version": 1,

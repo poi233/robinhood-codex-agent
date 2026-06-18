@@ -217,9 +217,9 @@ class PremarketOrchestrationTests(unittest.TestCase):
         self.assertNotIn("tradability_candidates", run_kinds)
         notify.assert_called_once()
         self.assertEqual(notify.call_args.kwargs["event_tag"], "PREMARKET_DONE")
-        self.assertIn("## 模块运行总结", notify.call_args.kwargs["body"])
-        self.assertIn("## 消息面重点", notify.call_args.kwargs["body"])
-        self.assertIn("## 可买股票重点", notify.call_args.kwargs["body"])
+        self.assertIn("【模块运行总结】", notify.call_args.kwargs["body"])
+        self.assertIn("【消息面重点】", notify.call_args.kwargs["body"])
+        self.assertIn("【可买股票重点】", notify.call_args.kwargs["body"])
         run_date = premarket_module.pt_date_string()
         self.assertEqual(
             notify.call_args.kwargs["report_path"].resolve(),

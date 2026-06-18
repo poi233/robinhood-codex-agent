@@ -61,14 +61,17 @@ def test_build_premarket_email_body_includes_news_buy_candidates_and_module_runt
     body = build_premarket_email_body(tmp_path, run_date="2026-06-17")
 
     assert body.startswith("【盘前计划通知】")
-    assert "## 消息面重点" in body
+    assert "##" not in body
+    assert "- " not in body
+    assert "【消息面重点】" in body
     assert "Nvidia expands AI platform" in body
-    assert "## 可买股票重点" in body
+    assert "【可买股票重点】" in body
     assert "NVDA：总分 86.4" in body
     assert "Blackwell 需求继续改善" in body
-    assert "## 模块运行总结" in body
+    assert "【模块运行总结】" in body
     assert "account_snapshot：完成，耗时 1.23 秒" in body
     assert "kronos：跳过" in body
+    assert "runtime/state/runs/2026-06-17/planner/daily_plan.json" in body
 
 
 def test_build_postmarket_email_body_includes_current_position_analysis_and_review() -> None:
@@ -99,9 +102,10 @@ def test_build_postmarket_email_body_includes_current_position_analysis_and_revi
     )
 
     assert body.startswith("【盘后复盘通知】")
-    assert "## 当前持仓分析" in body
+    assert "##" not in body
+    assert "【当前持仓分析】" in body
     assert "NVDA：数量 1，成本 $100.00，现价 $110.00，市值 $110.00，未实现盈亏 $10.00（10.00%）" in body
-    assert "## 今日回顾" in body
+    assert "【今日回顾】" in body
     assert "总权益变化 $12.50" in body
 
 
@@ -143,13 +147,14 @@ def test_build_intraday_trade_email_body_explains_buy_operation_in_chinese() -> 
     body = build_intraday_trade_email_body(decision)
 
     assert body.startswith("【盘中成交通知】")
-    assert "## 本次操作" in body
+    assert "##" not in body
+    assert "【本次操作】" in body
     assert "模拟盘已买入 NVDA，数量 1，限价 $100.50，名义金额 $100.50。" in body
-    assert "## 买入原因" in body
+    assert "【买入原因】" in body
     assert "候选排名通过、价格位于计划入场区间、仓位和风控额度通过" in body
-    assert "## 风险与价格" in body
+    assert "【风险与价格】" in body
     assert "止损 $98.00" in body
-    assert "## Advisory Overlay" in body
+    assert "【Advisory Overlay】" in body
     assert "排序调整：+5.00" in body
     assert "仓位乘数：0.50" in body
     assert "factor_alpha：88.0" in body
