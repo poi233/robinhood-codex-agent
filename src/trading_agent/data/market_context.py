@@ -222,6 +222,7 @@ def _process_one_symbol(
     mock: bool,
     output_dir: Path,
     cache_dir: Path | None = None,
+    prefetched_rows: dict[str, dict[str, list]] | None = None,
 ) -> tuple[str, dict[str, str], bool]:
     notes: list[str] = []
     ohlcv_status = "ok"
@@ -235,6 +236,10 @@ def _process_one_symbol(
             label = TIMEFRAME_MAP[timeframe]["label"]
             if mock:
                 rows = build_mock_rows(date_value, timeframe)
+            elif (prefetched_rows is not None
+                  and symbol in prefetched_rows
+                  and timeframe in prefetched_rows[symbol]):
+                rows = prefetched_rows[symbol][timeframe]
             elif cache_dir is not None:
                 from trading_agent.data.ohlcv_cache import fetch_cached_rows
 
@@ -278,6 +283,29 @@ def _process_one_symbol(
     return symbol, status, ohlcv_status == "ok" and chart_status == "ok"
 
 
+def _prefetch_ohlcv_batch(
+    symbols: list[str],
+    timeframes: list[str],
+) -> dict[str, dict[str, list]] | None:
+    """D2: pre-fetch OHLCV for all symbols in one yf.download per timeframe.
+
+    Returns {symbol: {timeframe: rows}} on success, None on any batch failure (caller falls
+    back to per-symbol fetch). Only used when ENABLE_BATCH_OHLCV_FETCH=1 (default) and
+    cache is disabled — the per-symbol cache path handles its own incremental pull.
+    """
+    if str(os.environ.get("ENABLE_BATCH_OHLCV_FETCH", "1") or "1") != "1":
+        return None
+    prefetched: dict[str, dict[str, list]] = {}
+    try:
+        for timeframe in timeframes:
+            batch = fetch_live_rows_batch(symbols, timeframe)
+            for sym, rows in batch.items():
+                prefetched.setdefault(sym, {})[timeframe] = rows
+    except Exception:
+        return None  # any failure → caller uses per-symbol fallback
+    return prefetched
+
+
 def collect_market_context(
     universe_file: Path,
     output_dir: Path,
@@ -306,6 +334,12 @@ def collect_market_context(
     ensure_dir(output_dir / "ohlcv")
     ensure_dir(output_dir / "news")
 
+    # D2: batch-prefetch OHLCV for all symbols in one yf.download per timeframe when no
+    # per-symbol cache is active. Falls back to None (per-symbol fetch) on any failure.
+    prefetched_rows: dict[str, dict[str, list]] | None = None
+    if not mock and cache_dir is None:
+        prefetched_rows = _prefetch_ohlcv_batch(requested_symbols, timeframes)
+
     completed_symbols: list[str] = []
     failed_symbols: list[str] = []
     symbol_status: dict[str, dict[str, str]] = {}
@@ -314,7 +348,8 @@ def collect_market_context(
     with ThreadPoolExecutor(max_workers=min(max_workers, max(1, len(requested_symbols)))) as executor:
         futures = {
             executor.submit(
-                _process_one_symbol, sym, date_value, run_date, timeframes, news_limit, mock, output_dir, cache_dir
+                _process_one_symbol, sym, date_value, run_date, timeframes, news_limit, mock,
+                output_dir, cache_dir, prefetched_rows
             ): sym
             for sym in requested_symbols
         }

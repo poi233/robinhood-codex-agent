@@ -213,6 +213,7 @@ def _run_doctor(agent_root: Path) -> int:
         f"  ENABLE_MARKET_FEED_LAYER  = {env.get('ENABLE_MARKET_FEED_LAYER', '1')}",
         f"  MARKET_FEED_TIMEFRAMES    = {config.market_feed_timeframes}",
         f"  ENABLE_OHLCV_CACHE        = {env.get('ENABLE_OHLCV_CACHE', '1')}",
+        f"  ENABLE_BATCH_OHLCV_FETCH  = {env.get('ENABLE_BATCH_OHLCV_FETCH', '1')}",
         f"  ENABLE_TECHNICAL_SIGNAL   = {env.get('ENABLE_TECHNICAL_SIGNAL_LAYER', '1')}",
         f"  TECHNICAL_MAX_SUBAGENTS   = {env.get('TECHNICAL_MAX_SUBAGENTS', '3')}",
         f"  ENABLE_TECHNICAL_FEATURES_PRECOMPUTE = {env.get('ENABLE_TECHNICAL_FEATURES_PRECOMPUTE', '1')}",
