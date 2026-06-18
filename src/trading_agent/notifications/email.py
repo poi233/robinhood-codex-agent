@@ -25,6 +25,7 @@ def send_trade_email_notification(
     event_tag: str,
     title: str,
     summary: str,
+    body: str | None = None,
     report_path: Path | None = None,
     artifacts: Sequence[Path] | None = None,
     details: Mapping[str, object] | None = None,
@@ -43,16 +44,19 @@ def send_trade_email_notification(
     if report_path is not None and report_path.exists():
         report_body = report_path.read_text(encoding="utf-8")
     subject = f"[Robinhood Codex Agent][{event_tag}][{paths.run_date}] {title}"
+    gmail_label = "trade"
     payload = {
         "schema_version": 1,
         "timestamp": pt_now().isoformat(),
         "date": paths.run_date,
         "recipient": recipient,
         "subject": subject,
-        "label": "交易系统通知",
+        "label": gmail_label,
+        "gmail_label": gmail_label,
         "event_tag": event_tag,
         "title": title,
         "summary": summary,
+        "body": body or "",
         "report_path": str(report_path) if report_path else "",
         "report_body": report_body,
         "trading_mode": os.environ.get("TRADING_MODE", "paper"),
@@ -71,6 +75,7 @@ def send_trade_email_notification(
             "TRADE_NOTIFY_PAYLOAD_PATH": str(payload_path),
             "TRADE_NOTIFY_SUBJECT": subject,
             "TRADE_NOTIFY_EVENT_TAG": event_tag,
+            "TRADE_NOTIFY_GMAIL_LABEL": gmail_label,
         },
     )
     if status != 0:

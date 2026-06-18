@@ -41,6 +41,31 @@ def _field(payload: Any, key: str, default: Any = 0) -> Any:
     return payload.get(key, default)
 
 
+def _position_details(positions: dict[str, Any]) -> list[dict[str, object]]:
+    details: list[dict[str, object]] = []
+    for symbol, payload in sorted(positions.items()):
+        if not isinstance(payload, dict):
+            continue
+        quantity = _money(payload.get("quantity"))
+        average_cost = _money(payload.get("average_cost"))
+        market_price = _money(payload.get("market_price") or payload.get("price") or payload.get("last_trade_price"))
+        market_value = _money(quantity * market_price)
+        unrealized_pnl = _money((market_price - average_cost) * quantity)
+        unrealized_return_pct = round(((market_price - average_cost) / average_cost * 100.0), 2) if average_cost else 0.0
+        details.append(
+            {
+                "symbol": str(payload.get("symbol") or symbol).upper(),
+                "quantity": quantity,
+                "average_cost": average_cost,
+                "market_price": market_price,
+                "market_value": market_value,
+                "unrealized_pnl": unrealized_pnl,
+                "unrealized_return_pct": unrealized_return_pct,
+            }
+        )
+    return details
+
+
 def build_paper_postmarket_summary(
     *,
     run_date: str,
@@ -75,6 +100,7 @@ def build_paper_postmarket_summary(
         "positions_market_value": _money(_field(day_end, "positions_market_value")),
         "open_position_count": len(positions),
         "open_positions": sorted(positions),
+        "open_position_details": _position_details(positions),
         "order_count": len(orders),
         "filled_order_count": len(filled_orders),
         "rejected_or_canceled_order_count": len(rejected_orders),
@@ -93,6 +119,15 @@ def build_paper_postmarket_zh_report(summary: dict[str, object]) -> str:
     usage_used = _money(_field(daily_usage, "used_notional")) if isinstance(daily_usage, dict) else 0.0
     usage_paper = _money(_field(daily_usage, "paper_filled_notional")) if isinstance(daily_usage, dict) else 0.0
     usage_orders = int(_field(daily_usage, "paper_order_count")) if isinstance(daily_usage, dict) else 0
+    position_detail_lines = [
+        (
+            f"- {item.get('symbol')}：数量 {item.get('quantity')}，成本 ${_money(item.get('average_cost')):,.2f}，"
+            f"现价 ${_money(item.get('market_price')):,.2f}，市值 ${_money(item.get('market_value')):,.2f}，"
+            f"未实现盈亏 ${_money(item.get('unrealized_pnl')):,.2f}（{float(item.get('unrealized_return_pct') or 0):.2f}%）"
+        )
+        for item in summary.get("open_position_details", [])
+        if isinstance(item, dict)
+    ]
     return "\n".join(
         [
             f"# 盘后复盘报告 - {summary.get('date', '')}",
@@ -122,6 +157,7 @@ def build_paper_postmarket_zh_report(summary: dict[str, object]) -> str:
             "## 持仓",
             f"- 持仓数量：{int(summary.get('open_position_count', 0) or 0)}",
             f"- 持仓标的：{positions_text}",
+            *position_detail_lines,
             "",
             "## 复盘提示",
             "- 若总权益变化与成交记录不一致，先检查 paper/orders.jsonl 与 paper/equity_curve.jsonl。",

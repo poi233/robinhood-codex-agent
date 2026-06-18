@@ -12,6 +12,7 @@ from trading_agent.core.time import PT
 from trading_agent.core.time import pt_date_string
 from trading_agent.data.live_quotes import fetch_yfinance_live_quotes
 from trading_agent.notifications.email import send_trade_email_notification
+from trading_agent.notifications.trade_email_reports import build_intraday_trade_email_body
 from trading_agent.paper.broker import apply_paper_intent, reconcile_pending_paper_orders, record_paper_day_start
 from trading_agent.policy.engine import generate_order_intent
 from trading_agent.policy.loaders import load_policy_inputs
@@ -163,6 +164,7 @@ def run_intraday_pipeline(*, dry_run: bool) -> int:
                         f"模拟盘已按策略执行 {decision.intent.side.upper()} {decision.intent.symbol}，"
                         f"数量 {decision.intent.quantity}，限价 {decision.intent.limit_price}。"
                     ),
+                    body=build_intraday_trade_email_body(decision),
                     artifacts=[
                         paths.paper_orders_log_path,
                         paths.paper_account_path,

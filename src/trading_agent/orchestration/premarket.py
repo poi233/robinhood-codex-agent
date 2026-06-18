@@ -16,6 +16,7 @@ from trading_agent.core.time import PT, pt_date_string
 from trading_agent.data.market_context import collect_market_context
 from trading_agent.data.universe import parse_universe
 from trading_agent.notifications.email import send_trade_email_notification
+from trading_agent.notifications.trade_email_reports import build_premarket_email_body
 from trading_agent.planner.candidates import build_candidate_snapshot
 from trading_agent.planner.data_status import build_data_status_summary_from_paths
 from trading_agent.planner.premarket_diagnostics import build_premarket_diagnostics_from_paths
@@ -496,6 +497,7 @@ def run_premarket_pipeline(*, dry_run: bool) -> int:
         event_tag="PREMARKET_DONE",
         title="盘前流程完成",
         summary="盘前扫描、信号层、候选合并、风险覆盖和最终计划流程已完成。",
+        body=build_premarket_email_body(agent_root, run_date=run_date),
         report_path=paths.daily_plan_zh_markdown_path,
         artifacts=[
             paths.daily_plan_path,

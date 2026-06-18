@@ -42,6 +42,7 @@ def test_email_notification_writes_payload_and_runs_prompt(tmp_path: Path, monke
         event_tag="TRADE_EXECUTED",
         title="模拟盘BUY成交",
         summary="模拟盘已成交。",
+        body="【盘中成交通知】\n\n## 本次操作\n- 已买入 NVDA。",
         report_path=report_path,
         artifacts=[tmp_path / "runtime" / "paper" / "orders.jsonl"],
         details={"symbol": "NVDA", "side": "buy"},
@@ -52,8 +53,21 @@ def test_email_notification_writes_payload_and_runs_prompt(tmp_path: Path, monke
     assert sent is True
     assert payload["recipient"] == "local@example.com"
     assert payload["subject"] == "[Robinhood Codex Agent][TRADE_EXECUTED][2026-06-14] 模拟盘BUY成交"
-    assert payload["label"] == "交易系统通知"
+    assert payload["label"] == "trade"
+    assert payload["gmail_label"] == "trade"
+    assert payload["body"] == "【盘中成交通知】\n\n## 本次操作\n- 已买入 NVDA。"
     assert payload["report_path"] == str(report_path)
     assert payload["report_body"] == "# 中文报告\n\n详细内容\n"
     assert calls[0][0] == "email_notification_trade_executed"
     assert calls[0][1]["TRADE_NOTIFY_EMAIL"] == "local@example.com"
+    assert calls[0][1]["TRADE_NOTIFY_GMAIL_LABEL"] == "trade"
+
+
+def test_trade_email_prompt_requires_exact_body_and_trade_label() -> None:
+    prompt = Path("src/prompts/notifications/trade_email.txt").read_text(encoding="utf-8")
+
+    assert "payload.body" in prompt
+    assert "TRADE_NOTIFY_GMAIL_LABEL" in prompt
+    assert "trade" in prompt
+    assert "发送后" in prompt
+    assert "标签" in prompt

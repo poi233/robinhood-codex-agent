@@ -224,6 +224,8 @@ class IntradayPolicyIntegrationTests(unittest.TestCase):
         self.assertTrue(manifest_written)
         notify.assert_called_once()
         self.assertEqual(notify.call_args.kwargs["event_tag"], "TRADE_EXECUTED")
+        self.assertIn("## 买入原因", notify.call_args.kwargs["body"])
+        self.assertIn("模拟盘已买入 NVDA", notify.call_args.kwargs["body"])
 
     def test_intraday_persists_ranking_scores(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

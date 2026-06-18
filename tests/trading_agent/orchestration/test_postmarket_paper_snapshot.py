@@ -120,6 +120,8 @@ class PostmarketPaperSnapshotTests(unittest.TestCase):
         self.assertIn("## 账户概览", zh_report)
         notify.assert_called_once()
         self.assertEqual(notify.call_args.kwargs["event_tag"], "POSTMARKET_DONE")
+        self.assertIn("## 当前持仓分析", notify.call_args.kwargs["body"])
+        self.assertIn("NVDA：数量 0.1", notify.call_args.kwargs["body"])
         self.assertEqual(
             notify.call_args.kwargs["report_path"].resolve(),
             (root / "runtime" / "logs" / "runs" / "2026-06-14" / "reports" / "postmarket_summary.md").resolve(),

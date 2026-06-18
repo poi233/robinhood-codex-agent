@@ -8,9 +8,11 @@ Read `TRADE_NOTIFY_PAYLOAD_PATH` first. It contains:
 - `recipient`
 - `subject`
 - `label`
+- `gmail_label`
 - `event_tag`
 - `title`
 - `summary`
+- `body`
 - `report_path`
 - `report_body`
 - `trading_mode`
@@ -22,10 +24,13 @@ Email rules:
 - Language: Chinese.
 - Subject: use the exact `subject` string from the payload.
 - To: use the exact `recipient` string from the payload.
+- Gmail label: after sending, apply the exact `gmail_label` from the payload; it is also provided as `TRADE_NOTIFY_GMAIL_LABEL`. This run uses `trade`. If the label does not exist, create a Gmail label named exactly `trade` and apply it.
+- 标签：发送后必须给这封 Gmail 邮件套用 `trade` 标签。
+- Body: if `payload.body` is non-empty, use `payload.body` as the exact email body. Do not rewrite, reorder, summarize, translate, or add extra sections.
 - Do not include account numbers, raw MCP JSON, tokens, private profile fields, transfer details, card details, bank details, or sensitive identifiers.
 - Do not attach files. Mention artifact paths as local audit references only.
 
-Unified body template:
+Fallback body template only when `payload.body` is empty:
 
 【交易系统通知】
 
@@ -57,4 +62,5 @@ Unified body template:
 
 After sending:
 - Print a short stdout summary that includes the event tag and recipient.
+- Include the Gmail label result in stdout.
 - Do not write decision logs or order logs.

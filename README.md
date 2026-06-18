@@ -307,6 +307,16 @@ KRONOS_BOOTSTRAP_PYTHON=$(command -v python3.12) ./src/scripts/kronos/setup_kron
 ./src/scripts/kronos/verify_kronos_env.sh
 ```
 
+Portable rebuild and validation flow:
+
+```bash
+KRONOS_BOOTSTRAP_PYTHON=$(command -v python3.12 || command -v python3.11) ./src/scripts/kronos/setup_kronos_env.sh
+./src/scripts/kronos/verify_kronos_env.sh
+./src/scripts/safety/check_safety.sh
+ALLOW_WEEKEND_RUN=1 KRONOS_USE_MOCK=1 ./src/scripts/kronos/run_kronos_premarket_scan.sh
+ALLOW_WEEKEND_RUN=1 CODEX_EXEC_DRY_RUN=1 ./src/scripts/entrypoints/run_premarket.sh
+```
+
 Optional dashboard dependency: `pip install -e ".[dashboard]"` (streamlit).
 
 ---
