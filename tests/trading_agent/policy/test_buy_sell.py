@@ -326,3 +326,70 @@ class HardStopTests(unittest.TestCase):
         inputs = self._inputs_with_position(average_cost=100.0, price=80.0)  # -20%
         with mock.patch.dict(os.environ, {"HARD_STOP_LOSS_PCT": "0"}, clear=False):
             self.assertIsNone(evaluate_sell(inputs))
+
+
+class K3ThesisTagsTests(unittest.TestCase):
+    """K3: thesis_tags are captured point-in-time in OrderIntent for per-order attribution."""
+
+    def _buy_inputs_with_dsa(self, primary_theme: str, strategy_matches: list) -> PolicyInputs:
+        from datetime import datetime
+        from trading_agent.core.time import PT
+        inputs = base_inputs()
+        inputs.dsa_signals = {
+            "date": "2026-06-14",
+            "symbol_signals": {
+                "NVDA": {
+                    "primary_theme": primary_theme,
+                    "strategy_matches": strategy_matches,
+                },
+            },
+        }
+        return inputs
+
+    def test_thesis_tags_from_dsa_primary_theme_and_matches_captured_on_buy(self):
+        from trading_agent.policy.buy import evaluate_buy
+        inputs = self._buy_inputs_with_dsa("AI Infrastructure", ["momentum", "breakout"])
+        inputs.today_allowlist = ["NVDA"]
+        result = evaluate_buy(inputs)
+        self.assertIsNotNone(result.intent)
+        tags = result.intent.thesis_tags
+        self.assertIn("AI_INFRASTRUCTURE", tags)
+        self.assertIn("MOMENTUM", tags)
+        self.assertIn("BREAKOUT", tags)
+
+    def test_thesis_tags_from_theme_map_included(self):
+        from trading_agent.policy.buy import evaluate_buy
+        inputs = self._buy_inputs_with_dsa("", [])
+        inputs.theme_map = {"NVDA": "AI_INFRA"}
+        inputs.today_allowlist = ["NVDA"]
+        result = evaluate_buy(inputs)
+        self.assertIsNotNone(result.intent)
+        self.assertIn("AI_INFRA", result.intent.thesis_tags)
+
+    def test_thesis_tags_empty_when_no_dsa_signal(self):
+        from trading_agent.policy.buy import evaluate_buy
+        inputs = base_inputs()
+        inputs.today_allowlist = ["NVDA"]
+        result = evaluate_buy(inputs)
+        self.assertIsNotNone(result.intent)
+        self.assertEqual(result.intent.thesis_tags, [])
+
+    def test_thesis_tags_in_to_json_dict(self):
+        from trading_agent.policy.buy import evaluate_buy
+        inputs = self._buy_inputs_with_dsa("AI Semiconductor", [])
+        inputs.today_allowlist = ["NVDA"]
+        result = evaluate_buy(inputs)
+        self.assertIsNotNone(result.intent)
+        d = result.intent.to_json_dict()
+        self.assertIn("thesis_tags", d)
+        self.assertIn("AI_SEMICONDUCTOR", d["thesis_tags"])
+
+    def test_no_duplicate_thesis_tags(self):
+        from trading_agent.policy.buy import evaluate_buy
+        inputs = self._buy_inputs_with_dsa("AI_INFRA", ["ai_infra", "AI_INFRA"])
+        inputs.theme_map = {"NVDA": "AI_INFRA"}
+        inputs.today_allowlist = ["NVDA"]
+        result = evaluate_buy(inputs)
+        self.assertIsNotNone(result.intent)
+        tags = result.intent.thesis_tags
+        self.assertEqual(len(tags), len(set(tags)), "no duplicate tags")

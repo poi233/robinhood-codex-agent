@@ -18,6 +18,17 @@ _EPS = 1e-9
 # produce a proposal that escapes the growth_policy safety boundary.
 ProposalRule = Callable[[list[dict[str, Any]], dict[str, Any], dict[tuple[str, str], float], str], list[dict[str, Any]]]
 
+# M5: Evidence-based rules use calibration IC (not observations) to suggest overlay tuning.
+EvidenceProposalRule = Callable[[dict[str, Any], dict[str, Any], dict[tuple[str, str], float], str], list[dict[str, Any]]]
+
+# Current overlay weights default to 0.0 — not yet wired in the live overlay code. Proposals
+# suggest bumping them toward their max once positive IC is observed. A human must review,
+# approve, and ultimately wire the weights before they take effect.
+_OVERLAY_DEFAULTS: dict[tuple[str, str], float] = {
+    ("overlay", "factor_weight"): 0.0,
+    ("overlay", "ai_weight"): 0.0,
+}
+
 
 def _threshold_step(
     module: str,
@@ -112,6 +123,92 @@ PROPOSAL_RULES: list[ProposalRule] = [
 ]
 
 
+def _mean_overlay_ic(evidence: dict[str, Any], component: str) -> float | None:
+    """Mean IC across all horizons for a given overlay component. None if no data."""
+    from trading_agent.growth.evidence import _overlay_ic_evidence, _OVERLAY_FIELD_TO_COMPONENT
+
+    # Reverse-map component name → field name to reuse _overlay_ic_evidence
+    field = next((f for f, c in _OVERLAY_FIELD_TO_COMPONENT.items() if c == component), None)
+    if not field:
+        return None
+    items = _overlay_ic_evidence(evidence, field)
+    ics = [i["ic"] for i in items if isinstance(i.get("ic"), (int, float))]
+    return sum(ics) / len(ics) if ics else None
+
+
+def _rule_overlay_factor_positive_ic(
+    evidence: dict[str, Any],
+    policy: dict[str, Any],
+    current: dict[tuple[str, str], float],
+    run_date: str,
+) -> list[dict[str, Any]]:
+    """If factor_alpha overlay has positive mean IC, propose incrementing overlay.factor_weight."""
+    ic = _mean_overlay_ic(evidence, "factor_alpha")
+    if ic is None or ic <= 0:
+        return []
+    proposal = _threshold_step(
+        "overlay", "factor_weight", policy, current,
+        direction=1,
+        based_on="overlay_factor_alpha_positive_ic",
+        rationale=(
+            f"factor_alpha overlay component shows positive mean IC ({ic:+.3f}) across calibration "
+            "horizons; bump overlay.factor_weight by one bounded step to give factor signals more "
+            "influence on intraday ranking. Paper-only experiment."
+        ),
+        run_date=run_date,
+    )
+    return [proposal] if proposal else []
+
+
+def _rule_overlay_ai_positive_ic(
+    evidence: dict[str, Any],
+    policy: dict[str, Any],
+    current: dict[tuple[str, str], float],
+    run_date: str,
+) -> list[dict[str, Any]]:
+    """If ai_composite overlay has positive mean IC, propose incrementing overlay.ai_weight."""
+    ic = _mean_overlay_ic(evidence, "ai_composite")
+    if ic is None or ic <= 0:
+        return []
+    proposal = _threshold_step(
+        "overlay", "ai_weight", policy, current,
+        direction=1,
+        based_on="overlay_ai_composite_positive_ic",
+        rationale=(
+            f"ai_composite overlay component shows positive mean IC ({ic:+.3f}) across calibration "
+            "horizons; bump overlay.ai_weight by one bounded step to give AI signal confidence "
+            "more influence on intraday ranking. Paper-only experiment."
+        ),
+        run_date=run_date,
+    )
+    return [proposal] if proposal else []
+
+
+EVIDENCE_RULES: list[EvidenceProposalRule] = [
+    _rule_overlay_factor_positive_ic,
+    _rule_overlay_ai_positive_ic,
+]
+
+
+def evidence_proposals(
+    evidence: dict[str, Any],
+    policy: dict[str, Any],
+    current: dict[tuple[str, str], float],
+    *,
+    run_date: str,
+) -> list[dict[str, Any]]:
+    """M5: Generate proposals from calibration IC evidence (not observations).
+
+    These rules fire when overlay components show positive IC, suggesting the overlay is
+    helping and its weight should be increased. All proposals are still bounded by the
+    growth_policy whitelist and require human approval before any shadow run.
+    """
+    proposals: list[dict[str, Any]] = []
+    for rule in EVIDENCE_RULES:
+        proposals.extend(rule(evidence, policy, current, run_date))
+    return proposals
+
+
 def proposals_from_observations(
     observations: list[dict[str, Any]],
     policy: dict[str, Any],
@@ -136,10 +233,12 @@ def _current_values(agent_root: Path) -> dict[tuple[str, str], float]:
     from trading_agent.planner.scoring_profiles import load_scoring_profile
 
     profile = load_scoring_profile(agent_root / "src" / "config")
-    return {
+    values: dict[tuple[str, str], float] = {
         ("scoring", "trade_threshold"): float(profile["trade_threshold"]),
         ("scoring", "watchlist_threshold"): float(profile["watchlist_threshold"]),
     }
+    values.update(_OVERLAY_DEFAULTS)
+    return values
 
 
 def _flatten_observations(payload: dict[str, Any]) -> list[dict[str, Any]]:
@@ -165,10 +264,16 @@ def build_proposals(
 
     # H6 (ENABLE_EVIDENCE_PROPOSALS): require calibration/weight evidence — attach it and drop
     # proposals the data doesn't back. Default off => current behavior unchanged.
+    # M5: also run evidence-based overlay rules whenever evidence is available.
     from trading_agent.growth.evidence import apply_evidence_gate, evidence_proposals_enabled, gather_evidence
 
+    evidence_bundle = gather_evidence(agent_root)
+    # M5: evidence-based overlay rules (factor/ai IC → weight proposals). Always run; the gate
+    # below then filters by data quality when ENABLE_EVIDENCE_PROPOSALS=1.
+    proposals.extend(evidence_proposals(evidence_bundle, policy, current, run_date=resolved_run_date))
+
     if evidence_proposals_enabled():
-        proposals = apply_evidence_gate(proposals, gather_evidence(agent_root))
+        proposals = apply_evidence_gate(proposals, evidence_bundle)
     return proposals
 
 

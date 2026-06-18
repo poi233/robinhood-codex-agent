@@ -3,14 +3,17 @@ from pathlib import Path
 
 from trading_agent.growth.policy import load_growth_policy
 from trading_agent.growth.proposals import (
+    _OVERLAY_DEFAULTS,
     build_proposals,
     default_proposals_dir,
+    evidence_proposals,
     proposals_from_observations,
     write_proposals,
 )
 
 POLICY = load_growth_policy(Path.cwd())
 CURRENT = {("scoring", "trade_threshold"): 50.0, ("scoring", "watchlist_threshold"): 35.0}
+CURRENT_WITH_OVERLAY = {**CURRENT, **_OVERLAY_DEFAULTS}
 
 
 def test_rarely_trades_observation_proposes_lower_trade_threshold():
@@ -103,3 +106,65 @@ def test_build_proposals_reads_real_repo_policy_and_config():
     # and it must not raise.
     proposals = build_proposals(Path.cwd(), since="2099-01-01", until="2099-01-02")
     assert proposals == []
+
+
+# --- M5: Evidence-based overlay proposal rules ---
+
+def _overlay_evidence(factor_ic: float | None = None, ai_ic: float | None = None) -> dict:
+    components = []
+    if factor_ic is not None:
+        components.append({"source": "calibration.overlay_component_ic", "horizon_d": "5",
+                           "component": "factor_alpha", "ic": factor_ic})
+    if ai_ic is not None:
+        components.append({"source": "calibration.overlay_component_ic", "horizon_d": "5",
+                           "component": "ai_composite", "ic": ai_ic})
+    return {"near_miss": {}, "attribution": {}, "calibration_sample_size": 20,
+            "weight_components": [], "overlay_components": components}
+
+
+def test_overlay_factor_positive_ic_proposes_bump():
+    ev = _overlay_evidence(factor_ic=0.18)
+    proposals = evidence_proposals(ev, POLICY, CURRENT_WITH_OVERLAY, run_date="2026-06-18")
+    assert len(proposals) == 1
+    p = proposals[0]
+    assert p["mutation"]["module"] == "overlay"
+    assert p["mutation"]["field"] == "factor_weight"
+    assert p["mutation"]["proposed"] > p["mutation"]["current"]
+    assert p["validation"]["ok"] is True
+
+
+def test_overlay_ai_positive_ic_proposes_bump():
+    ev = _overlay_evidence(ai_ic=0.12)
+    proposals = evidence_proposals(ev, POLICY, CURRENT_WITH_OVERLAY, run_date="2026-06-18")
+    assert len(proposals) == 1
+    assert proposals[0]["mutation"]["field"] == "ai_weight"
+    assert proposals[0]["mutation"]["proposed"] > 0
+
+
+def test_overlay_negative_ic_yields_no_proposal():
+    ev = _overlay_evidence(factor_ic=-0.05, ai_ic=-0.10)
+    proposals = evidence_proposals(ev, POLICY, CURRENT_WITH_OVERLAY, run_date="2026-06-18")
+    assert proposals == []
+
+
+def test_overlay_both_positive_ic_yields_two_proposals():
+    ev = _overlay_evidence(factor_ic=0.15, ai_ic=0.08)
+    proposals = evidence_proposals(ev, POLICY, CURRENT_WITH_OVERLAY, run_date="2026-06-18")
+    fields = {p["mutation"]["field"] for p in proposals}
+    assert fields == {"factor_weight", "ai_weight"}
+    for p in proposals:
+        assert p["validation"]["ok"] is True
+
+
+def test_overlay_no_evidence_yields_no_proposal():
+    ev = _overlay_evidence()
+    proposals = evidence_proposals(ev, POLICY, CURRENT_WITH_OVERLAY, run_date="2026-06-18")
+    assert proposals == []
+
+
+def test_overlay_proposal_at_max_is_not_proposed():
+    # factor_weight already at its max (0.25): bumping further is a clamped no-op.
+    current_at_max = {**CURRENT_WITH_OVERLAY, ("overlay", "factor_weight"): 0.25}
+    ev = _overlay_evidence(factor_ic=0.20)
+    proposals = evidence_proposals(ev, POLICY, current_at_max, run_date="2026-06-18")
+    assert all(p["mutation"]["field"] != "factor_weight" for p in proposals)

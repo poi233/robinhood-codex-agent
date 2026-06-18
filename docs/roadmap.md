@@ -124,12 +124,12 @@
 | | ~~J2~~ | Codex-facing 文档旧路径统一 | 评审 | ✅ **已完成（2026-06-16）** |
 | **K 组合与归因（评审一·真缺口）** | K1 | **Portfolio Layer**（cash/theme exposure + 单仓上限目标） | 评审一 | 🟡 **第一版已建（2026-06-17）**：`portfolio/target.py` 算当前组合 cash/单仓/主题敞口 vs 目标上限 + 超限 flag，premarket advisory 落 `portfolio_target.json`，dashboard Themes tab 显示；write-only、绝不加买入、只能收紧。第二版接 sizing 上限待校准 |
 | | K2 | **量化 Market Regime 引擎**（Bull/Neutral/RiskOff/Panic + 仓位乘子） | 评审一 | 🟡 **第一版已建（2026-06-17）**：`regime/engine.py` 确定性分类（SPY/QQQ 趋势 + VIX → bull/neutral/risk_off/panic + 乘子 1.2/1.0/0.5/0.0），premarket advisory 落 `regime_state.json`，dashboard Today tab banner；write-only、接 sizing 时 `applied_multiplier=min(1.0,·)` 只降风险。VIX 自动接入 + 接 sizing 待后续 |
-| | K3 | **Thesis Tracker**（交易绑主题标签 → 主题级胜率归因） | 评审一 | 🟡 **第一版已建（2026-06-17）**：`replay/thesis.py` + `analytics thesis`——thesis 标签（universe_meta theme + DSA primary_theme/strategy_matches）join E1 forward returns，按 thesis 出胜率/均值；接进夜间批 + I2 快照；只读、无需 flag。统计意义待数据 |
+| | K3 | **Thesis Tracker**（交易绑主题标签 → 主题级胜率归因） | 评审一 | 🟡 **第一版已建（2026-06-17）** + **thesis tags 落盘（2026-06-18）**：`replay/thesis.py` + `analytics thesis`——thesis 标签（universe_meta theme + DSA primary_theme/strategy_matches）join E1 forward returns，按 thesis 出胜率/均值；接进夜间批 + I2 快照；`OrderIntent.thesis_tags` 已落盘（2026-06-18），逐单归因无需事后重建。统计意义待数据 |
 | **M Advisory Overlay 接线（用户 D 方案）** | ~~M1~~ | intraday 读取 advisory artifacts + overlay 归一化 | 用户新增 | ✅ **已完成（2026-06-18）**：`policy/advisory_overlay.py` + `PolicyInputs.advisory_overlay` + loader flag；读取 `factor_alpha`/`ai_signals`/`portfolio_target`/`regime_state`，输出空影响 overlay |
 | | ~~M2~~ | H2/H3 进入排序，不做硬拦 | 用户新增 | ✅ **已完成（2026-06-18）**：`factor_alpha` + AI envelopes 只生成小幅 `rank_delta` 并调整 `trade_readiness_score`；不直接 block buy、不改 sizing |
 | | ~~M3~~ | K1/K2 进入风控/仓位，只收紧 | 用户新增 | ✅ **已完成（2026-06-18）**：regime risk_off/panic 和 portfolio breach 可 block new buy；size multiplier clamp `<=1.0`，只能降仓位 |
 | | ~~M4~~ | 决策日志和 dashboard 显示每个因子如何影响最终决策 | 用户新增 | ✅ **核心已完成（2026-06-18）**：`intraday_rankings.jsonl`、proposed order、email、dashboard Decision Overlay 已落 `advisory_overlay`；后续可继续美化/趋势化 |
-| | M5 | growth 分析 overlay 效果并提出 paper-only 改进建议 | 用户新增 | 🟡 **核心已完成（2026-06-18）**：forward returns/calibration 自动纳入 overlay components，growth evidence 能读取 overlay IC，`growth_policy`/validator 允许 bounded paper-only overlay mutation；自动 proposal rule 仍待 |
+| | ~~M5~~ | growth 分析 overlay 效果并提出 paper-only 改进建议 | 用户新增 | ✅ **已完成（2026-06-17）**：forward returns/calibration 自动纳入 overlay components，growth evidence 能读取 overlay IC，`growth_policy`/validator 允许 bounded paper-only overlay mutation；自动 proposal rule 已建（2026-06-18）：`factor_alpha`/`ai_composite` 正 IC → 自动建议 bump `overlay.factor_weight/ai_weight` |
 | **L 收口与验证（评审二·P0）** | L1 | 文档权威源收敛 | 评审二 | 🟢 **进行中（2026-06-17）**：project-status 漂移已修（顶部 point-in-time 约定 + 状态表更正）；README 已重写 |
 | | ~~L2~~ | 完整 smoke checklist → `docs/smoke-test.md` | 评审二 | ✅ **已完成（2026-06-17）**：`src/scripts/smoke/run_smoke.sh`（doctor/safety/analytics/growth 一条龙 + PASS/FAIL 汇总；网络/lifecycle 步骤 opt-in）；实跑 13/13 本地命令 PASS；`docs/smoke-test.md` |
 | | ~~L3~~ | H2 factor **benchmark coverage 审计** | 评审二 | ✅ **已完成（2026-06-17）**：market_feed 永远采 `BENCHMARK_SYMBOLS`（SPY/QQQ/SMH/IWM）；factor_panel/alpha 报告 coverage%（多少 active_symbol 有 bars + benchmark 是否齐）；dashboard 显示 |
@@ -879,8 +879,7 @@ regime 是否真改善收益曲线；校准后接 sizing（只缩不放，Panic=
   （`min_count` 过滤小样本），按胜率排序。`analytics thesis` → `thesis_attribution.{json,md}`。
 - 接进夜间批处理 + I2 快照归档；天然隔离、只读、无需 flag。
 
-**剩余（增量）**：把 thesis 标签也**落进 buy intent/decision**（当前是分析时动态重建；落盘后可做更细的逐单
-thesis 归因 + dashboard 视图）；factor 触发也并入标签。统计意义待 15–30 交易日。
+**已完成（2026-06-18）**：`OrderIntent` 新增 `thesis_tags` 字段（universe_meta theme + DSA primary_theme/strategy_matches），买入时点落盘在 `decisions.jsonl`，不再需要事后重建 DSA 归档；`PolicyInputs` 加 `theme_map` 字段由 loader 从 `universe_meta.json` 读取。551 测试通过。factor 触发并入标签 + dashboard thesis 视图待后续。
 
 **验收**：✅ `analytics thesis` 输出各 thesis 胜率/均值（如 `AI_INFRA 胜率 61% · CPO 68% · NUCLEAR 39%`）；
 ✅ 只读不改交易行为。476 测试通过。

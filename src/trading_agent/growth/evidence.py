@@ -94,6 +94,26 @@ def _overlay_component_evidence(attribution: dict[str, Any]) -> list[dict[str, A
     return out
 
 
+# Maps overlay mutation field names to the calibration component names they're backed by.
+_OVERLAY_FIELD_TO_COMPONENT: dict[str, str] = {
+    "factor_weight": "factor_alpha",
+    "ai_weight": "ai_composite",
+    "regime_size_multiplier": "regime_multiplier",
+    "portfolio_near_cap_multiplier": "portfolio_multiplier",
+}
+
+
+def _overlay_ic_evidence(evidence: dict[str, Any], field: str) -> list[dict[str, Any]]:
+    """Evidence items for an overlay field: calibration IC for the matching overlay component."""
+    component = _OVERLAY_FIELD_TO_COMPONENT.get(field)
+    if not component:
+        return []
+    return [
+        item for item in (evidence.get("overlay_components") or [])
+        if item.get("component") == component and item.get("ic") is not None
+    ]
+
+
 def evidence_for_proposal(proposal: dict[str, Any], evidence: dict[str, Any]) -> list[dict[str, Any]]:
     """The evidence items that support a given proposal, by what it mutates. Empty list ⇒ unsupported
     (and, in evidence mode, the proposal is dropped)."""
@@ -105,6 +125,8 @@ def evidence_for_proposal(proposal: dict[str, Any], evidence: dict[str, Any]) ->
         items.extend(_near_miss_evidence(evidence))
     if module == "scoring":
         items.extend(_component_ic_evidence(evidence))
+    if module == "overlay":
+        items.extend(_overlay_ic_evidence(evidence, field))
     return items
 
 

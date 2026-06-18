@@ -10,6 +10,7 @@ from trading_agent.paper.broker import pending_paper_orders
 from trading_agent.data.universe import parse_universe
 from trading_agent.policy.models import OpenOrder, PolicyInputs, Position, Quote
 from trading_agent.policy.profiles import load_policy_profile
+from trading_agent.portfolio.target import load_theme_map
 from trading_agent.signals.technical_fallback import merge_technical_signals
 
 
@@ -359,6 +360,7 @@ def load_policy_inputs(
         ),
         research_reports=_load_research_reports(agent_root, run_date),
         kill_switch_present=(agent_root / "KILL_SWITCH").exists(),
+        theme_map=load_theme_map(config_dir),
     )
     if robinhood_gateway is None:
         _hydrate_snapshots_if_present(inputs, paths)

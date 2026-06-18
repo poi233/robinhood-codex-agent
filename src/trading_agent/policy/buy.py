@@ -1,12 +1,34 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import Any
 
 from trading_agent.policy.candidate_selector import rank_candidates
 from trading_agent.policy.advisory_overlay import overlay_for_symbol, symbol_overlay_to_dict
 from trading_agent.policy.models import OrderIntent, PolicyInputs
 from trading_agent.policy.price_policy import decide_buy_price
 from trading_agent.policy.sizing_policy import decide_size
+
+
+def _thesis_tags(inputs: PolicyInputs, symbol: str) -> list[str]:
+    """K3: Derive thesis tags at trade time from DSA signals + universe_meta theme map.
+    Tags are captured point-in-time so later attribution doesn't need to re-join DSA archives."""
+    tags: list[str] = []
+    sym_upper = symbol.upper()
+    meta_theme = str(inputs.theme_map.get(sym_upper) or "").strip().upper().replace(" ", "_")
+    if meta_theme:
+        tags.append(meta_theme)
+    sig = (((inputs.dsa_signals or {}).get("symbol_signals") or {}).get(sym_upper)
+           or (inputs.dsa_signals or {}).get("symbol_signals", {}).get(symbol) or {})
+    if isinstance(sig, dict):
+        pt = str(sig.get("primary_theme") or "").strip().upper().replace(" ", "_")
+        if pt and pt not in tags:
+            tags.append(pt)
+        for m in (sig.get("strategy_matches") or []):
+            nm = str(m or "").strip().upper().replace(" ", "_")
+            if nm and nm not in tags:
+                tags.append(nm)
+    return tags
 
 
 @dataclass(frozen=True)
@@ -74,6 +96,7 @@ def evaluate_buy(inputs: PolicyInputs) -> BuyEvaluation:
                 ask=inputs.quotes[candidate.symbol].ask,
                 spread_bps=inputs.quotes[candidate.symbol].spread_bps,
                 advisory_overlay=symbol_overlay_to_dict(overlay_for_symbol(inputs.advisory_overlay, candidate.symbol)),
+                thesis_tags=_thesis_tags(inputs, candidate.symbol),
                 setup_type=price.setup_type,
                 limit_price=price.limit_price,
                 estimated_notional=size.estimated_notional,

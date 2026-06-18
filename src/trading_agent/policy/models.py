@@ -87,6 +87,9 @@ class OrderIntent:
     ask: float | None = None
     spread_bps: float | None = None
     advisory_overlay: dict[str, Any] = field(default_factory=dict)
+    # K3: thesis tags at trade time (universe_meta theme + DSA primary_theme/strategy_matches).
+    # Captured point-in-time so later attribution doesn't need to re-join archived DSA signals.
+    thesis_tags: list[str] = field(default_factory=list)
 
     def to_json_dict(self) -> dict[str, object]:
         return {
@@ -107,6 +110,7 @@ class OrderIntent:
             "ask": self.ask,
             "spread_bps": self.spread_bps,
             "advisory_overlay": dict(self.advisory_overlay),
+            "thesis_tags": list(self.thesis_tags),
             "reason_codes": list(self.reason_codes),
             "confidence": self.confidence,
         }
@@ -140,6 +144,8 @@ class PolicyInputs:
     open_orders: list[OpenOrder] = field(default_factory=list)
     kill_switch_present: bool = False
     advisory_overlay: Any | None = None
+    # K3: symbol -> theme from universe_meta.json; used by buy policy to capture thesis tags.
+    theme_map: dict[str, str] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
