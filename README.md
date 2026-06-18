@@ -100,7 +100,7 @@ flowchart TD
 
     subgraph S5["5 · Score and plan (deterministic)"]
         direction TB
-        E1["ai_signals (H3)<br/><i>normalize DSA/Kronos/catalyst<br/>→ ai_signals.json</i>"] --> E1b["fundamental_layer (H7)<br/><i>quality flags<br/>→ fundamental_snapshot.json</i>"] --> E1c["event_layer (H8)<br/><i>earnings/analyst flags<br/>→ event_snapshot.json</i>"] --> E2["data_status_summary<br/><i>fail-closed gate</i>"]
+        E1["ai_signals (H3) · advisory<br/><i>normalize DSA/Kronos/catalyst<br/>→ ai_signals.json (not in score)</i>"] --> E1b["fundamental_layer (H7) · advisory<br/><i>quality flags → fundamental_snapshot.json<br/>(write-only, not in score)</i>"] --> E1c["event_layer (H8) · advisory<br/><i>earnings/analyst flags → event_snapshot.json<br/>(write-only, not in score)</i>"] --> E2["data_status_summary<br/><i>fail-closed gate</i>"]
         E2 --> E3["candidate_scoring<br/><b>5-component weighted score</b><br/><i>→ candidate_scores.json</i>"]
         E3 --> E4["risk_overlay<br/><i>regime · watchlist · tradable<br/>· allowed_actions</i>"]
         E4 --> E5["final_planner (Codex)<br/><b>daily_plan.json</b>"] --> E6["archive"]
@@ -313,8 +313,8 @@ Permanently forbidden from any mutation (hard-coded): `TRADING_MODE`, `RISK_TIER
 
 **Hard rules:** dedicated Agentic account only · long equities/ETFs only (no options/crypto/futures/
 margin/shorts) · limit orders only · notional capped by tier + daily plan · missing/stale data → do
-nothing · DSA/Kronos/technical/factor/fundamental signals are advisory only · real execution unwired
-in Python. Verify with `./src/scripts/safety/check_safety.sh`.
+nothing · DSA/Kronos/technical/factor/fundamental/event signals are advisory only · real execution
+unwired in Python. Verify with `./src/scripts/safety/check_safety.sh`.
 
 **Risk tiers** (`src/config/risk_tiers.json`; effective tier depends on `TRADING_MODE`):
 
