@@ -93,20 +93,39 @@ def _stage_summary_lines(agent_root: Path, run_date: str) -> list[str]:
     rows = [row for row in _read_jsonl(paths.run_logs_dir / "pipeline" / "pipeline.jsonl") if row.get("status") != "started"]
     if not rows:
         return ["未找到模块运行日志。"]
-    lines: list[str] = []
+
+    status_counts: dict[str, int] = {}
+    slowest: list[tuple[float, str, str]] = []
+    exceptions: list[str] = []
     for row in rows:
         stage = str(row.get("stage") or "unknown")
-        status = _status_zh(row.get("status"))
+        raw_status = str(row.get("status") or "unknown")
+        status = _status_zh(raw_status)
+        status_counts[status] = status_counts.get(status, 0) + 1
         elapsed = row.get("elapsed_seconds")
-        elapsed_text = ""
+        elapsed_seconds: float | None = None
         if elapsed is not None:
             try:
-                elapsed_text = f"，耗时 {float(elapsed):.2f} 秒"
+                elapsed_seconds = float(elapsed)
             except (TypeError, ValueError):
-                elapsed_text = ""
-        message = str(row.get("message") or "").strip()
-        suffix = f"。{message}" if message else "。"
-        lines.append(f"{stage}：{status}{elapsed_text}{suffix}")
+                elapsed_seconds = None
+        if elapsed_seconds is not None:
+            slowest.append((elapsed_seconds, stage, status))
+        if raw_status in {"failed", "skipped"}:
+            message = str(row.get("message") or "").strip()
+            detail = _clip_text(message, limit=48)
+            exceptions.append(f"{stage}：{status}" + (f"（{detail}）" if detail else ""))
+
+    total = len(rows)
+    ordered_status = "、".join(f"{status} {count}" for status, count in status_counts.items())
+    lines = [f"模块数：{total}；{ordered_status}。"]
+    if exceptions:
+        lines.append("异常/跳过：" + "；".join(exceptions[:5]) + ("；…" if len(exceptions) > 5 else ""))
+    else:
+        lines.append("异常/跳过：无。")
+    top_slowest = sorted(slowest, reverse=True)[:5]
+    if top_slowest:
+        lines.append("最耗时：" + "；".join(f"{stage} {elapsed:.1f}s" for elapsed, stage, _status in top_slowest) + "。")
     return lines
 
 

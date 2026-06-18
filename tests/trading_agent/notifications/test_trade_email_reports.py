@@ -69,8 +69,10 @@ def test_build_premarket_email_body_includes_news_buy_candidates_and_module_runt
     assert "NVDA：总分 86.4" in body
     assert "Blackwell 需求继续改善" in body
     assert "【模块运行总结】" in body
-    assert "account_snapshot：完成，耗时 1.23 秒" in body
-    assert "kronos：跳过" in body
+    assert "模块数：3；完成 2、跳过 1。" in body
+    assert "异常/跳过：kronos：跳过" in body
+    assert "最耗时：final_planner 2.0s；account_snapshot 1.2s。" in body
+    assert "account_snapshot completed" not in body
     assert "runtime/state/runs/2026-06-17/planner/daily_plan.json" in body
 
 
