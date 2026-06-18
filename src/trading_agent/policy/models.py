@@ -137,6 +137,7 @@ class PolicyInputs:
     positions: dict[str, Position] = field(default_factory=dict)
     open_orders: list[OpenOrder] = field(default_factory=list)
     kill_switch_present: bool = False
+    advisory_overlay: Any | None = None
 
 
 @dataclass(frozen=True)

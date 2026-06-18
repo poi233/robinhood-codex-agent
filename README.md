@@ -181,6 +181,12 @@ stop** guarantees every position has an automatic exit even with no technical le
 permits no discretionary sell; **review/live placement is never wired** in Python — it always blocks
 with `execution_not_wired`, so only a human can take it live.
 
+**M-stage advisory overlay (in progress)** — `ENABLE_INTRADAY_ADVISORY_OVERLAY=0` by default, so the
+current champion intraday path is unchanged. When enabled for paper/shadow testing, intraday loads
+the H2 `factor_alpha`, H3 `ai_signals`, K1 `portfolio_target`, and K2 `regime_state` artifacts into
+a normalized `advisory_overlay` object for later ranking/risk/audit use. M1 only loads and
+normalizes these artifacts; it does not change sorting, sizing, blocking, or order placement.
+
 ---
 
 ## Using each command
@@ -282,6 +288,7 @@ PAPER_STARTING_CASH=400000
 PAPER_FILL_MODEL=conservative / PAPER_SLIPPAGE_BPS=10 / HARD_STOP_LOSS_PCT=0.08
 ENABLE_DSA_SIGNAL_LAYER / ENABLE_KRONOS_SIGNAL_LAYER / ENABLE_TECHNICAL_SIGNAL_LAYER=1
 ENABLE_NIGHTLY_ANALYSIS=1   # ENABLE_EVIDENCE_PROPOSALS / ENABLE_SHADOW_RESCORE=0 (in development)
+ENABLE_INTRADAY_ADVISORY_OVERLAY=0   # M-stage overlay loader; keep off outside paper/shadow tests
 ```
 Precedence: shell exports > `runtime.env.local` > `runtime.env` > `strategy_registry.yaml` defaults.
 `doctor` shows the resolved values and every feature flag.

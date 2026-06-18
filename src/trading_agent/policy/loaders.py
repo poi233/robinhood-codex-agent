@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 from typing import Any, Callable, Protocol
 
@@ -273,6 +274,15 @@ def _hydrate_live_quotes(
     inputs.quotes.update(live_quotes)
 
 
+def _hydrate_advisory_overlay_if_enabled(inputs: PolicyInputs, paths: Any) -> None:
+    if os.environ.get("ENABLE_INTRADAY_ADVISORY_OVERLAY", "0") != "1":
+        return
+    from trading_agent.policy.advisory_overlay import build_advisory_overlay, load_advisory_artifacts
+
+    artifacts = load_advisory_artifacts(paths)
+    inputs.advisory_overlay = build_advisory_overlay(inputs, artifacts)
+
+
 def _hydrate_paper_ledger_if_present(inputs: PolicyInputs, paths: Any) -> None:
     if inputs.trading_mode != "paper":
         return
@@ -356,6 +366,7 @@ def load_policy_inputs(
         _hydrate_robinhood_inputs(inputs, robinhood_gateway)
     _hydrate_paper_ledger_if_present(inputs, paths)
     _hydrate_live_quotes(inputs, quote_provider, require_live_quotes=require_live_quotes)
+    _hydrate_advisory_overlay_if_enabled(inputs, paths)
     if not inputs.today_allowlist and inputs.risk_overlay:
         tradable = [str(s).upper() for s in (inputs.risk_overlay.get("tradable_candidates") or []) if s]
         if tradable:
