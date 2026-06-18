@@ -185,8 +185,8 @@ with `execution_not_wired`, so only a human can take it live.
 current champion intraday path is unchanged. When enabled for paper/shadow testing, intraday loads
 the H2 `factor_alpha`, H3 `ai_signals`, K1 `portfolio_target`, and K2 `regime_state` artifacts into
 a normalized `advisory_overlay` object for later ranking/risk/audit use. M1 only loads and
-normalizes these artifacts; M4 audit skeleton now also writes the per-symbol overlay into intraday
-rankings and proposed orders. M2 applies H2/H3-derived `rank_delta` to the intraday
+normalizes these artifacts; M4 now writes the per-symbol overlay into intraday rankings, proposed
+orders, email, and the dashboard Decision Overlay tab. M2 applies H2/H3-derived `rank_delta` to the intraday
 `trade_readiness_score` only when the flag is enabled; it does not add hard blocks, change sizing, or
 wire real order placement. M3 lets K1/K2 tighten only: `risk_off`/`panic` regime or portfolio
 breaches can block new buys, and regime/portfolio multipliers can only reduce order size.
@@ -218,7 +218,7 @@ breaches can block new buys, and regime/portfolio multipliers can only reduce or
 | `analytics trend [--since --until --output]` | I3: aggregate `history/*/nightly_summary.json` into per-metric time series → `trend.json`. |
 | `analytics nightly-health` | L4 → `nightly_health.json`: report freshness + the last nightly run's failed steps. Surfaced as a 🟢/🔴 banner on the dashboard Trends tab. |
 | `analytics thesis [--since --until]` | K3 → `thesis_attribution.{json,md}`: per-thesis (theme/DSA tags) win rate + mean forward return — "which theses actually make money". |
-| `dashboard` | Read-only Streamlit UI (`localhost:8501`): 9 tabs — Today / Candidates / Decisions / Paper / Strategy Comparison / Calibration / Self-Growth / Themes / Trends. |
+| `dashboard` | Read-only Streamlit UI (`localhost:8501`): 10 tabs — Today / Candidates / Decisions / Decision Overlay / Paper / Strategy Comparison / Calibration / Self-Growth / Themes / Trends. |
 
 ### Nightly batch (read-only / shadow-only)
 `python3 -m trading_agent nightly-analysis` runs the analytics + self-growth commands best-effort

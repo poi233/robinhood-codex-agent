@@ -48,8 +48,8 @@ def _append_intraday_rankings(agent_root: Path, inputs, *, run_date: str | None 
     from trading_agent.policy.candidate_selector import rank_candidates
     from trading_agent.policy.advisory_overlay import overlay_for_symbol, symbol_overlay_to_dict
 
-    ranked, _blocked = rank_candidates(inputs)
-    if not ranked:
+    ranked, blocked = rank_candidates(inputs)
+    if not ranked and not blocked:
         return
     log_path = build_runtime_paths(agent_root, run_date=run_date).intraday_rankings_log_path
     log_path.parent.mkdir(parents=True, exist_ok=True)
@@ -73,6 +73,21 @@ def _append_intraday_rankings(agent_root: Path, inputs, *, run_date: str | None 
                         "liquidity_score": candidate.liquidity_score,
                         "advisory_overlay": symbol_overlay_to_dict(
                             overlay_for_symbol(inputs.advisory_overlay, candidate.symbol)
+                        ),
+                    }
+                )
+                + "\n"
+            )
+        for symbol, reasons in sorted(blocked.items()):
+            handle.write(
+                json.dumps(
+                    {
+                        "timestamp": timestamp,
+                        "run_date": run_date,
+                        "symbol": symbol,
+                        "blocked_reasons": list(reasons),
+                        "advisory_overlay": symbol_overlay_to_dict(
+                            overlay_for_symbol(inputs.advisory_overlay, symbol)
                         ),
                     }
                 )

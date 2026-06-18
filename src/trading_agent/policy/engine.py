@@ -112,6 +112,10 @@ def generate_order_intent(inputs: PolicyInputs) -> PolicyDecision:
             "cooldown_after_stop",
             "daily_new_position_limit_reached",
             "weekly_new_position_limit_reached",
+            "advisory_overlay_blocks_buy",
+            "regime_blocks_new_buy",
+            "portfolio_oversize_position",
+            "portfolio_overexposed_theme",
         }
         if any(reason in hard_block_reasons for reason in buy_blocked_reasons):
             return PolicyDecision(

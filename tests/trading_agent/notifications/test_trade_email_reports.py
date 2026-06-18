@@ -125,6 +125,18 @@ def test_build_intraday_trade_email_body_explains_buy_operation_in_chinese() -> 
             reward_risk=2.0,
             reason_codes=["candidate_ranked", "entry_zone_ok", "risk_sizing_ok"],
             confidence=0.72,
+            advisory_overlay={
+                "rank_delta": 5.0,
+                "size_multiplier": 0.5,
+                "block_buy": False,
+                "blocked_reasons": [],
+                "components": {
+                    "factor_alpha": {"score": 88.0},
+                    "ai": {"kronos": {"direction": "long", "confidence": 0.8}},
+                    "regime": {"regime": "neutral", "applied_multiplier": 0.5},
+                    "portfolio": {"position_weight": 0.04},
+                },
+            },
         ),
     )
 
@@ -137,3 +149,8 @@ def test_build_intraday_trade_email_body_explains_buy_operation_in_chinese() -> 
     assert "候选排名通过、价格位于计划入场区间、仓位和风控额度通过" in body
     assert "## 风险与价格" in body
     assert "止损 $98.00" in body
+    assert "## Advisory Overlay" in body
+    assert "排序调整：+5.00" in body
+    assert "仓位乘数：0.50" in body
+    assert "factor_alpha：88.0" in body
+    assert "kronos：long（confidence 0.8）" in body

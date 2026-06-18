@@ -402,3 +402,53 @@ def test_regime_state_query(tmp_path):
     p.parent.mkdir(parents=True, exist_ok=True)
     p.write_text(json.dumps({"regime": "bull", "applied_multiplier": 1.0, "reasons": []}), encoding="utf-8")
     assert regime_state(tmp_path, "2026-06-17")["regime"] == "bull"
+
+
+def test_advisory_overlay_summary_reads_intraday_rankings(tmp_path: Path) -> None:
+    from trading_agent.dashboard.queries import advisory_overlay_summary
+
+    rows = advisory_overlay_summary(tmp_path, "2026-06-17")
+    assert rows == []
+
+    _write_jsonl(
+        tmp_path / "runtime" / "logs" / "runs" / "2026-06-17" / "audit" / "intraday_rankings.jsonl",
+        [
+            {
+                "timestamp": "2026-06-17T09:31:00",
+                "run_date": "2026-06-17",
+                "symbol": "NVDA",
+                "base_trade_readiness_score": 80.0,
+                "advisory_rank_delta": 5.0,
+                "trade_readiness_score": 85.0,
+                "advisory_overlay": {
+                    "rank_delta": 5.0,
+                    "size_multiplier": 0.5,
+                    "block_buy": False,
+                    "blocked_reasons": [],
+                    "components": {
+                        "factor_alpha": {"score": 88.0},
+                        "ai": {"kronos": {"direction": "long", "confidence": 0.8}},
+                    },
+                },
+            }
+        ],
+    )
+
+    rows = advisory_overlay_summary(tmp_path, "2026-06-17")
+
+    assert rows == [
+        {
+            "timestamp": "2026-06-17T09:31:00",
+            "symbol": "NVDA",
+            "base_trade_readiness_score": 80.0,
+            "advisory_rank_delta": 5.0,
+            "final_trade_readiness_score": 85.0,
+            "size_multiplier": 0.5,
+            "block_buy": False,
+            "blocked_reasons": "",
+            "factor_alpha_score": 88.0,
+            "ai_layers": "kronos:long@0.8",
+            "regime": "",
+            "portfolio": "",
+        }
+    ]

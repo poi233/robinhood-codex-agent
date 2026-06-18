@@ -156,6 +156,21 @@ def candidates_with_rankings_view(rows: list[dict[str, Any]]) -> None:
     st.dataframe(rows, use_container_width=True)
 
 
+def advisory_overlay_view(rows: list[dict[str, Any]]) -> None:
+    if not rows:
+        st.info("No advisory overlay audit rows for this run date yet. This fills after intraday writes rankings with ENABLE_INTRADAY_ADVISORY_OVERLAY=1.")
+        return
+    st.caption("Read-only M-stage audit: base score + rank delta = final score; size/block fields can only tighten risk.")
+    st.dataframe(rows, use_container_width=True)
+    deltas = [
+        (str(row.get("symbol")), float(row.get("advisory_rank_delta") or 0.0))
+        for row in rows
+        if row.get("symbol")
+    ]
+    if deltas:
+        _horizontal_bar_chart(deltas, x_title="advisory_rank_delta", y_title="symbol")
+
+
 def factor_view(payload: dict) -> None:
     symbols = payload.get("symbols") if isinstance(payload, dict) else None
     if not symbols:

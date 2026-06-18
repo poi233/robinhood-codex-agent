@@ -273,8 +273,40 @@ def build_intraday_trade_email_body(decision: PolicyDecision) -> str:
         "## 风险与价格",
         f"- 参考价格：{_money(intent.reference_price)}；限价：{_money(intent.limit_price)}；止损 {_money(intent.stop_price)}。",
         f"- 目标一：{_money(intent.target_1)}；目标二：{_money(intent.target_2)}；预估盈亏比：{_number(intent.reward_risk)}。",
+    ]
+    overlay_lines = _intraday_overlay_lines(intent.advisory_overlay)
+    if overlay_lines:
+        lines.extend(["", "## Advisory Overlay", *overlay_lines])
+    lines.extend([
         "",
         "## 本地记录",
         "- 订单、账户和持仓以本地 paper 账本与 intraday 决策日志为准。",
-    ]
+    ])
     return "\n".join(lines) + "\n"
+
+
+def _intraday_overlay_lines(overlay: dict[str, object]) -> list[str]:
+    if not overlay:
+        return []
+    components = overlay.get("components") if isinstance(overlay.get("components"), dict) else {}
+    factor = components.get("factor_alpha") if isinstance(components.get("factor_alpha"), dict) else {}
+    ai = components.get("ai") if isinstance(components.get("ai"), dict) else {}
+    regime = components.get("regime") if isinstance(components.get("regime"), dict) else {}
+    portfolio = components.get("portfolio") if isinstance(components.get("portfolio"), dict) else {}
+    lines = [
+        f"- 排序调整：{float(overlay.get('rank_delta') or 0):+.2f}；仓位乘数：{float(overlay.get('size_multiplier') or 1):.2f}。"
+    ]
+    if overlay.get("block_buy"):
+        reasons = ", ".join(str(reason) for reason in (overlay.get("blocked_reasons") or []))
+        lines.append(f"- 买入阻断：{reasons or '未记录原因'}。")
+    if factor.get("score") is not None:
+        lines.append(f"- factor_alpha：{factor.get('score')}。")
+    for layer, payload in ai.items():
+        if not isinstance(payload, dict):
+            continue
+        lines.append(f"- {layer}：{payload.get('direction') or '?'}（confidence {payload.get('confidence')}）。")
+    if regime.get("regime"):
+        lines.append(f"- regime：{regime.get('regime')}；applied_multiplier={regime.get('applied_multiplier')}。")
+    if portfolio.get("position_weight") is not None:
+        lines.append(f"- portfolio：position_weight={portfolio.get('position_weight')}。")
+    return lines

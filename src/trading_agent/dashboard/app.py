@@ -39,9 +39,9 @@ with st.sidebar:
     st.caption(f"{len(run_dates)} run date(s) available")
     st.caption("All views are read-only.")
 
-today_tab, candidates_tab, decisions_tab, paper_tab, compare_tab, calibration_tab, growth_tab, themes_tab, trends_tab = st.tabs(
-    ["① Today", "② Candidates", "③ Decisions", "④ Paper", "⑤ Strategy Comparison",
-     "⑥ Calibration", "⑦ Self-Growth", "⑧ Themes", "⑨ Trends"]
+today_tab, candidates_tab, decisions_tab, overlay_tab, paper_tab, compare_tab, calibration_tab, growth_tab, themes_tab, trends_tab = st.tabs(
+    ["① Today", "② Candidates", "③ Decisions", "④ Decision Overlay", "⑤ Paper",
+     "⑥ Strategy Comparison", "⑦ Calibration", "⑧ Self-Growth", "⑨ Themes", "⑩ Trends"]
 )
 
 with today_tab:
@@ -66,6 +66,10 @@ with decisions_tab:
     charts.blocked_reason_trend_view(queries.blocked_reason_trend(AGENT_ROOT))
     st.subheader("Fill rate + blocked reasons (across all run dates)")
     charts.replay_summary_view(queries.replay_summary(AGENT_ROOT))
+
+with overlay_tab:
+    st.header("Decision Overlay")
+    charts.advisory_overlay_view(queries.advisory_overlay_summary(AGENT_ROOT, selected_run_date))
 
 with paper_tab:
     st.header("Paper Performance")

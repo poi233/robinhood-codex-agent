@@ -122,6 +122,23 @@ def policy_ready_inputs_with_overlay() -> PolicyInputs:
     return inputs
 
 
+def policy_ready_inputs_with_overlay_block() -> PolicyInputs:
+    inputs = policy_ready_inputs()
+    inputs.advisory_overlay = AdvisoryOverlay(
+        run_date="2026-06-14",
+        symbols={
+            "NVDA": SymbolOverlay(
+                symbol="NVDA",
+                block_buy=True,
+                blocked_reasons=["regime_blocks_new_buy"],
+                size_multiplier=0.0,
+                components={"regime": {"regime": "risk_off", "applied_multiplier": 0.0}},
+            )
+        },
+    )
+    return inputs
+
+
 def read_decisions(root: Path) -> list[dict[str, object]]:
     path = root / "runtime" / "logs" / "runs" / "2026-06-14" / "audit" / "decisions.jsonl"
     return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()]
@@ -309,6 +326,35 @@ class IntradayPolicyIntegrationTests(unittest.TestCase):
         proposed_order = decisions[0]["proposed_order"]
         self.assertEqual(proposed_order["advisory_overlay"]["size_multiplier"], 1.0)
         self.assertEqual(proposed_order["advisory_overlay"]["components"]["ai"]["kronos"]["direction"], "long")
+
+    def test_intraday_persists_advisory_overlay_for_blocked_candidate(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            _prepare_repo_root(root)
+            original_cwd = os.getcwd()
+            os.chdir(root)
+            try:
+                with mock.patch.object(intraday_module, "_is_weekday_pt", return_value=True), \
+                    mock.patch.object(intraday_module, "_is_intraday_window_pt", return_value=True), \
+                    mock.patch.object(intraday_module, "pt_date_string", return_value="2026-06-14"), \
+                    mock.patch.object(intraday_module, "load_runtime_config") as load_runtime_config, \
+                    mock.patch.object(intraday_module, "load_policy_inputs", return_value=policy_ready_inputs_with_overlay_block()):
+                    load_runtime_config.return_value = mock.Mock(trading_mode="paper", risk_tier=0, paper_risk_tier=0, effective_risk_tier=0)
+
+                    status = intraday_module.run_intraday_pipeline(dry_run=False)
+                    rankings_path = root / "runtime" / "logs" / "runs" / "2026-06-14" / "audit" / "intraday_rankings.jsonl"
+                    rankings = [json.loads(line) for line in rankings_path.read_text(encoding="utf-8").splitlines()]
+                    decisions = read_decisions(root)
+            finally:
+                os.chdir(original_cwd)
+
+        self.assertEqual(status, 0)
+        self.assertEqual(decisions[0]["decision"], "blocked")
+        self.assertIn("regime_blocks_new_buy", decisions[0]["blocked_reasons"])
+        self.assertEqual(rankings[0]["symbol"], "NVDA")
+        self.assertEqual(rankings[0]["blocked_reasons"], ["regime_blocks_new_buy"])
+        self.assertTrue(rankings[0]["advisory_overlay"]["block_buy"])
+        self.assertEqual(rankings[0]["advisory_overlay"]["components"]["regime"]["regime"], "risk_off")
 
     def test_intraday_runs_active_shadow_experiment_in_isolated_ledger(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

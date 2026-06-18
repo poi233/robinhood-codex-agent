@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import sqlite3
 from pathlib import Path
 from typing import Any
@@ -28,6 +29,22 @@ def _connect(agent_root: Path) -> sqlite3.Connection | None:
 
 def _rows_as_dicts(rows: list[sqlite3.Row]) -> list[dict[str, Any]]:
     return [dict(row) for row in rows]
+
+
+def _read_jsonl_or_empty(path: Path) -> list[dict[str, Any]]:
+    if not path.exists():
+        return []
+    rows: list[dict[str, Any]] = []
+    for line in path.read_text(encoding="utf-8").splitlines():
+        if not line.strip():
+            continue
+        try:
+            payload = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(payload, dict):
+            rows.append(payload)
+    return rows
 
 
 def list_run_dates(agent_root: Path) -> list[str]:
@@ -443,3 +460,44 @@ def regime_state(agent_root: Path, run_date: str) -> dict[str, Any]:
 def factor_alpha(agent_root: Path, run_date: str) -> dict[str, Any]:
     """Read-only: the H2 factor_alpha.json for a run date (empty if premarket hasn't produced it)."""
     return _read_json_or_empty(build_runtime_paths(agent_root, run_date=run_date).factor_alpha_path)
+
+
+def advisory_overlay_summary(agent_root: Path, run_date: str) -> list[dict[str, Any]]:
+    """Read-only: per-symbol M-stage overlay impact from intraday_rankings.jsonl."""
+    paths = build_runtime_paths(agent_root, run_date=run_date)
+    rows: list[dict[str, Any]] = []
+    for row in _read_jsonl_or_empty(paths.intraday_rankings_log_path):
+        overlay = row.get("advisory_overlay") if isinstance(row.get("advisory_overlay"), dict) else {}
+        components = overlay.get("components") if isinstance(overlay.get("components"), dict) else {}
+        factor = components.get("factor_alpha") if isinstance(components.get("factor_alpha"), dict) else {}
+        ai = components.get("ai") if isinstance(components.get("ai"), dict) else {}
+        regime = components.get("regime") if isinstance(components.get("regime"), dict) else {}
+        portfolio = components.get("portfolio") if isinstance(components.get("portfolio"), dict) else {}
+        ai_layers = []
+        for layer, payload in ai.items():
+            if not isinstance(payload, dict):
+                continue
+            direction = payload.get("direction") or "?"
+            confidence = payload.get("confidence")
+            ai_layers.append(f"{layer}:{direction}@{confidence}" if confidence is not None else f"{layer}:{direction}")
+        blocked = overlay.get("blocked_reasons") or []
+        portfolio_bits = []
+        if portfolio.get("position_weight") is not None:
+            portfolio_bits.append(f"position_weight={portfolio.get('position_weight')}")
+        if portfolio.get("theme"):
+            portfolio_bits.append(f"theme={portfolio.get('theme')}")
+        rows.append({
+            "timestamp": row.get("timestamp"),
+            "symbol": row.get("symbol"),
+            "base_trade_readiness_score": row.get("base_trade_readiness_score"),
+            "advisory_rank_delta": row.get("advisory_rank_delta", overlay.get("rank_delta")),
+            "final_trade_readiness_score": row.get("trade_readiness_score"),
+            "size_multiplier": overlay.get("size_multiplier"),
+            "block_buy": bool(overlay.get("block_buy", False)),
+            "blocked_reasons": ", ".join(str(reason) for reason in blocked),
+            "factor_alpha_score": factor.get("score"),
+            "ai_layers": ", ".join(ai_layers),
+            "regime": str(regime.get("regime") or ""),
+            "portfolio": ", ".join(portfolio_bits),
+        })
+    return rows

@@ -33,7 +33,7 @@ def _seed(root: Path) -> None:
     write_json(run / "planner" / "candidate_scores.json", {"symbols": {"NVDA": {"score": 66.0, "score_status": "scored", "components": {"technical": 70.0, "catalyst": 55.0, "dsa": 60.0, "kronos": 65.0, "quote": 50.0}}}})
     write_json(run / "planner" / "premarket_diagnostics.json", {"theme_diagnostics": {"watchlist": {"dominant_theme": "ai_semiconductor", "max_theme_pct": 70.0, "theme_distribution": {"ai_semiconductor": {"pct": 70.0}}}}})
     (logs / "decisions.jsonl").write_text(json.dumps({"timestamp": f"{rd}T09:31:00", "decision": "would_trade", "proposed_order": {"symbol": "NVDA", "side": "buy", "setup_type": "breakout", "confidence": 0.8}, "blocked_reasons": []}) + "\n", encoding="utf-8")
-    (logs / "intraday_rankings.jsonl").write_text(json.dumps({"timestamp": f"{rd}T09:31:00", "run_date": rd, "symbol": "NVDA", "trade_readiness_score": 72.5, "price_setup_score": 70.0, "candidate_score": 66.0, "technical_score": 70.0, "research_score": 60.0, "catalyst_score": 55.0, "liquidity_score": 80.0}) + "\n", encoding="utf-8")
+    (logs / "intraday_rankings.jsonl").write_text(json.dumps({"timestamp": f"{rd}T09:31:00", "run_date": rd, "symbol": "NVDA", "base_trade_readiness_score": 70.5, "advisory_rank_delta": 2.0, "trade_readiness_score": 72.5, "price_setup_score": 70.0, "candidate_score": 66.0, "technical_score": 70.0, "research_score": 60.0, "catalyst_score": 55.0, "liquidity_score": 80.0, "advisory_overlay": {"rank_delta": 2.0, "size_multiplier": 1.0, "block_buy": False, "blocked_reasons": [], "components": {"factor_alpha": {"score": 82.0}, "ai": {"kronos": {"direction": "long", "confidence": 0.8}}, "regime": {"regime": "neutral"}, "portfolio": {"position_weight": 0.04}}}}) + "\n", encoding="utf-8")
     paper = run / "paper"
     paper.mkdir(parents=True, exist_ok=True)
     (paper / "orders.jsonl").write_text(json.dumps({"order_id": "o1", "symbol": "NVDA", "side": "buy", "quantity": 1, "limit_price": 100.0, "notional": 100.0, "status": "filled", "fill_price": 100.0, "reason_codes": ["breakout"], "timestamp": f"{rd}T09:31:05"}) + "\n", encoding="utf-8")
@@ -92,11 +92,12 @@ def test_dashboard_renders_all_tabs_without_error(tmp_path, monkeypatch):
     app = AppTest.from_file(str(APP_PATH), default_timeout=60)
     app.run()
     assert not app.exception, app.exception
-    assert len(app.tabs) == 9
+    assert len(app.tabs) == 10
     headers = [h.value for h in app.header]
     assert any("Strategy Comparison" in h for h in headers)
     assert any("Calibration" in h for h in headers)
     assert any("Today" in h for h in headers)
+    assert any("Decision Overlay" in h for h in headers)
 
 
 def test_dashboard_ignores_current_working_directory(tmp_path, monkeypatch):
@@ -106,4 +107,4 @@ def test_dashboard_ignores_current_working_directory(tmp_path, monkeypatch):
     app = AppTest.from_file(str(APP_PATH), default_timeout=60)
     app.run()
     assert not app.exception, app.exception
-    assert len(app.tabs) == 9
+    assert len(app.tabs) == 10
