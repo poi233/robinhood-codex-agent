@@ -1,7 +1,7 @@
 # 项目状态总表 — 做了什么 / 没做什么
 
 > 最后更新：2026-06-18
-> 范围：`src/trading_agent/` + 配置 + 编排 + 入口 + 测试（601 passed）
+> 范围：`src/trading_agent/` + 配置 + 编排 + 入口 + 测试（608 passed）
 > 用途：**单一权威的"现状"文档**，按子系统逐块说明已实现与未实现。未来要做的事另见
 > [`roadmap.md`](./roadmap.md)。
 >
@@ -416,5 +416,6 @@
 - **N 数据存储强化（空数据期红利，2026-06-18）**：✅ N1 `analytics.db` schema 漂移修复（orders 补 E4
   spread/slippage + setup levels；decisions 补 per_candidate_blocks/advisory_overlay/thesis_tags；
   intraday_rankings 补 base/rank_delta/overlay；新增 factor_alpha/regime_state/portfolio_target 表）+
-  ✅ N2 索引 + ✅ N3 `analytics validate`（只读扫 JSONL 报告坏行/缺字段，接进夜间批）已完成；剩 N4 数据
-  保留/归档（后期）。db 是 drop+recreate 派生视图、无需 migration。详见 roadmap N 阶段。
+  ✅ N2 索引 + ✅ N3 `analytics validate`（只读扫 JSONL 报告坏行/缺字段，接进夜间批）+ ✅ N4 `analytics
+  retention`（对超保留窗旧 run 只 prune market_feed 大快照、保留分析输入；默认 dry-run、`--apply` 才删）
+  **全部完成**。db 是 drop+recreate 派生视图、无需 migration。详见 roadmap N 阶段。

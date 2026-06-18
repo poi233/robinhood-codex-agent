@@ -221,6 +221,7 @@ actually improved outcomes before any further promotion.
 | `analytics trend [--since --until --output]` | I3: aggregate `history/*/nightly_summary.json` into per-metric time series → `trend.json`. |
 | `analytics nightly-health` | L4 → `nightly_health.json`: report freshness + the last nightly run's failed steps. Surfaced as a 🟢/🔴 banner on the dashboard Trends tab. |
 | `analytics validate [--since --until]` | N3 → `validate_report.{json,md}`: read-only scan of run JSONL for malformed lines + rows missing key fields (per source + per run). Modifies nothing; `status=ok` when clean. |
+| `analytics retention [--keep-days N] [--apply]` | N4 → `retention_report.{json,md}`: prune big premarket input snapshots (`market_feed/`) from runs older than `--keep-days` (default 60), keeping all analysis inputs. **Dry-run unless `--apply`.** |
 | `analytics thesis [--since --until]` | K3 → `thesis_attribution.{json,md}`: per-thesis (theme/DSA tags) win rate + mean forward return — "which theses actually make money". |
 | `dashboard` | Read-only Streamlit UI (`localhost:8501`): **11 tabs** — Today / Candidates / Decisions / Decision Overlay / Paper / Strategy Comparison / Calibration / Self-Growth / Themes / Trends / **Thesis**. |
 
@@ -270,6 +271,12 @@ sqlite3 runtime/analytics/analytics.db \
 
 > Schema changes need **no migration** — just re-run `analytics build` (the DB is recreated from the
 > JSON). The DB lives under git-ignored `runtime/`, so it is per-machine and safe to delete/rebuild.
+
+**Disk growth** — over months, `runtime/state/runs/*` grows (mostly the per-day `market_feed/` OHLCV
++ chart snapshots). `analytics retention --keep-days 60` reports how much old-run `market_feed/` data
+could be reclaimed; add `--apply` to actually prune it. It only removes those regenerable input
+snapshots — the small analysis inputs (scores/decisions/orders) are always kept, so calibration and
+replay still run on pruned runs.
 
 ### Self-growth (paper/shadow only — proposes, never auto-applies)
 Diagnoses the system, proposes **bounded** experiments, runs challenger strategies in **shadow

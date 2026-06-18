@@ -63,6 +63,9 @@ def build_parser() -> argparse.ArgumentParser:
     analytics_validate_parser = analytics_subparsers.add_parser("validate", help="Write runtime/analytics/validate_report.{json,md} (N3: read-only scan for malformed JSONL lines + rows missing key fields; local-only, modifies nothing).")
     analytics_validate_parser.add_argument("--since", metavar="YYYY-MM-DD", default=None)
     analytics_validate_parser.add_argument("--until", metavar="YYYY-MM-DD", default=None)
+    analytics_retention_parser = analytics_subparsers.add_parser("retention", help="Write runtime/analytics/retention_report.{json,md} (N4: prune big premarket input snapshots (market_feed) from runs older than --keep-days; DRY-RUN unless --apply).")
+    analytics_retention_parser.add_argument("--keep-days", type=int, default=60, help="Keep runs within this many days fully intact (default 60).")
+    analytics_retention_parser.add_argument("--apply", action="store_true", help="Actually delete the prunable artifacts. Without this flag it is a dry-run (report only).")
 
     subparsers.add_parser("dashboard", help="Launch the read-only Streamlit dashboard at http://localhost:8501.")
 
@@ -491,6 +494,23 @@ def _run_analytics_validate(agent_root: Path, *, since: str | None, until: str |
     return 0
 
 
+def _run_analytics_retention(agent_root: Path, *, keep_days: int, apply: bool) -> int:
+    from trading_agent.analytics.retention import write_retention_report
+
+    out, report = write_retention_report(agent_root, keep_days=keep_days, apply=apply)
+    reclaim_mb = report["total_reclaim_bytes"] / (1024 * 1024)
+    mode = "APPLIED" if apply else "dry-run"
+    msg = (f"Wrote {out}  ({mode}: {report['prune_run_count']} prunable runs, "
+           f"{reclaim_mb:.1f} MB reclaimable")
+    if apply and "applied" in report:
+        applied_mb = report["applied"]["reclaimed_bytes"] / (1024 * 1024)
+        msg += f"; removed {report['applied']['removed_dirs']} dirs, {applied_mb:.1f} MB freed"
+    print(msg + ")")
+    if not apply and report["prune_run_count"]:
+        print("  (dry-run: pass --apply to actually delete)")
+    return 0
+
+
 def _run_analytics_thesis(agent_root: Path, *, since: str | None, until: str | None) -> int:
     from trading_agent.replay.thesis import write_thesis_attribution
 
@@ -648,6 +668,8 @@ def main(argv: list[str] | None = None) -> int:
         return _run_analytics_thesis(agent_root, since=args.since, until=args.until)
     if args.command == "analytics" and args.analytics_command == "validate":
         return _run_analytics_validate(agent_root, since=args.since, until=args.until)
+    if args.command == "analytics" and args.analytics_command == "retention":
+        return _run_analytics_retention(agent_root, keep_days=args.keep_days, apply=args.apply)
     if args.command == "dashboard":
         return _run_dashboard(agent_root)
     if args.command == "growth" and args.growth_command == "observe":
