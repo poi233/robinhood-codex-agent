@@ -38,6 +38,21 @@ def _seed(root: Path) -> None:
     paper.mkdir(parents=True, exist_ok=True)
     (paper / "orders.jsonl").write_text(json.dumps({"order_id": "o1", "symbol": "NVDA", "side": "buy", "quantity": 1, "limit_price": 100.0, "notional": 100.0, "status": "filled", "fill_price": 100.0, "reason_codes": ["breakout"], "timestamp": f"{rd}T09:31:05"}) + "\n", encoding="utf-8")
     (paper / "equity_curve.jsonl").write_text(json.dumps({"timestamp": f"{rd}T13:00:00", "date": rd, "event": "day_end", "cash": 900.0, "positions_market_value": 100.0, "total_equity": 1005.0, "realized_pnl": 5.0}) + "\n", encoding="utf-8")
+    # K线复盘: daily OHLCV for NVDA/SPY + an isolated challenger ledger (different buy point).
+    import datetime as _dt
+    _bars = []
+    _d0 = _dt.date(2026, 5, 1)
+    for _i in range(40):
+        _day = (_d0 + _dt.timedelta(days=_i)).isoformat()
+        _base = 90.0 + _i * 0.4
+        _bars.append({"timestamp": f"{_day}T00:00:00", "open": round(_base, 2), "high": round(_base + 2, 2),
+                      "low": round(_base - 2, 2), "close": round(_base + 0.5, 2), "volume": 1_000_000 + _i * 5000})
+    _bars.append({"timestamp": f"{rd}T00:00:00", "open": 99.0, "high": 103.0, "low": 98.0, "close": 102.0, "volume": 2_000_000})
+    for _sym in ("NVDA", "SPY"):
+        write_json(run / "market_feed" / "ohlcv" / _sym / "daily.json", _bars)
+    chal = run / "experiments" / "challenger_v1" / "paper"
+    chal.mkdir(parents=True, exist_ok=True)
+    (chal / "orders.jsonl").write_text(json.dumps({"order_id": "c1o1", "symbol": "NVDA", "side": "buy", "quantity": 1, "limit_price": 96.0, "notional": 96.0, "status": "filled", "fill_price": 96.0, "reason_codes": ["pullback"], "timestamp": f"{rd}T09:35:00"}) + "\n", encoding="utf-8")
     write_json(root / "runtime" / "analytics" / "experiment_report.json", {"champion": {"fill_rate_pct": 100.0, "no_trade_rate_pct": 0.0, "run_date_count": 1}, "challengers": [{"challenger_strategy_id": "c1", "status": "active_shadow", "metrics": {"shadow_days": 1, "total_evaluations": 1, "would_trade": 1, "no_trade_rate_pct": 0.0}, "recommendation": {"recommend_promote": False, "blocking_reasons": ["min_shadow_days_not_met: 1 < 10"]}}]})
     write_json(root / "runtime" / "analytics" / "calibration_report.json", {
         "generated_at": "x", "run_date_count": 1, "sample_size": 1, "horizons": [1],
@@ -93,11 +108,12 @@ def test_dashboard_renders_all_tabs_without_error(tmp_path, monkeypatch):
     app = AppTest.from_file(str(APP_PATH), default_timeout=60)
     app.run()
     assert not app.exception, app.exception
-    assert len(app.tabs) == 5
+    assert len(app.tabs) == 6
     headers = [h.value for h in app.header]
     assert any("今日驾驶舱" in h for h in headers)
     assert any("选股与决策" in h for h in headers)
     assert any("业绩与对比" in h for h in headers)
+    assert any("K线复盘" in h for h in headers)
     assert any("校准与归因" in h for h in headers)
     assert any("成长与趋势" in h for h in headers)
 
@@ -110,4 +126,4 @@ def test_dashboard_ignores_current_working_directory(tmp_path, monkeypatch):
     app = AppTest.from_file(str(APP_PATH), default_timeout=60)
     app.run()
     assert not app.exception, app.exception
-    assert len(app.tabs) == 5
+    assert len(app.tabs) == 6

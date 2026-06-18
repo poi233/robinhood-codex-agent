@@ -576,6 +576,54 @@ def proposals_and_queue_view(proposals: list[dict[str, Any]], queue: list[dict[s
     ui.pretty_table(queue) if queue else st.info("尚未排队任何实验。")
 
 
+# ============================================================
+# 📉 K线复盘
+# ============================================================
+
+def kline_view(symbol: str, ohlcv: list[dict[str, Any]],
+               trades_by_strategy: dict[str, list[dict[str, Any]]],
+               *, selected_strategies: list[str] | None = None) -> None:
+    """日K + 均线 + 各策略买卖点 + 成交量 + MACD；下方按策略列出成交明细。"""
+    if not ohlcv:
+        st.info(f"{symbol} 暂无本地日线（market_feed 在 premarket 采集 OHLCV 后即可绘制 K 线）。")
+        return
+    try:
+        from trading_agent.dashboard import kline
+    except Exception:
+        st.warning("绘制 K 线需要 plotly。安装：`pip install -e \".[dashboard]\"`（含 plotly）。")
+        return
+
+    fig = kline.build_kline_figure(symbol, ohlcv, trades_by_strategy,
+                                   selected_strategies=selected_strategies)
+    st.plotly_chart(fig, use_container_width=True, config={"scrollZoom": True, "displaylogo": False})
+
+    strategies = selected_strategies if selected_strategies is not None else list(trades_by_strategy.keys())
+    shown = [s for s in strategies if trades_by_strategy.get(s)]
+    if not shown:
+        st.caption("所选策略在该标的上暂无成交（买卖点为空）。")
+        return
+    st.markdown("**各策略在该标的的成交明细 / 对比**")
+    for strat in shown:
+        trades = trades_by_strategy.get(strat) or []
+        buys = [t for t in trades if t.get("side") == "buy" and t.get("price") is not None]
+        avg_buy = round(sum(float(t["price"]) for t in buys) / len(buys), 2) if buys else None
+        last_close = float(ohlcv[-1].get("close") or 0)
+        pl = ((last_close / avg_buy - 1) * 100) if avg_buy else None
+        pl_vd = ui.verdict(pl, good=0.0, warn=0.0, higher_is_better=True,
+                           labels=("浮盈", "持平", "浮亏")) if pl is not None else None
+        head = f"{strat} — {len(trades)} 笔成交"
+        if avg_buy is not None:
+            head += f" · 均买价 ${avg_buy} · 现价 ${last_close:g}"
+        if pl_vd is not None:
+            head += f" · 浮动 {pl:+.2f}% {pl_vd.emoji}{pl_vd.label}"
+        st.markdown(head)
+        ui.pretty_table(
+            [{"date": t["date"], "side": t["side"], "price": t["price"],
+              "quantity": t["quantity"], "reason": t["reason"]} for t in trades],
+            rename={"date": "日期", "side": "方向", "price": "成交价", "quantity": "数量", "reason": "理由"},
+        )
+
+
 def trends_view(history_dates: list, snapshot: dict, trend: dict) -> None:
     """I4：数据新鲜度 + 按日快照回看 + 夜间快照趋势线。"""
     if history_dates:

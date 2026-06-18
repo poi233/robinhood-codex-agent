@@ -618,3 +618,88 @@ def thesis_trend(agent_root: Path) -> dict[str, Any]:
                 "count": row.get("count"),
             })
     return series
+
+
+# --- K线复盘 (candlestick review) — all read-only ------------------------
+
+def _ohlcv_root(agent_root: Path) -> Path | None:
+    """The latest run's market_feed ohlcv/ dir (a ~1y daily history per symbol)."""
+    latest = list_run_dates(agent_root)
+    if not latest:
+        return None
+    return build_runtime_paths(agent_root, run_date=latest[0]).market_feed_dir / "ohlcv"
+
+
+def available_kline_symbols(agent_root: Path) -> list[str]:
+    """Symbols that have local daily OHLCV (so a candlestick chart can be drawn)."""
+    root = _ohlcv_root(agent_root)
+    if root is None or not root.exists():
+        return []
+    return sorted(d.name for d in root.iterdir() if d.is_dir() and (d / "daily.json").exists())
+
+
+def ohlcv_daily(agent_root: Path, symbol: str) -> list[dict[str, Any]]:
+    """Read-only daily OHLCV rows ({timestamp, open, high, low, close, volume}) for one symbol,
+    oldest first. Empty when the symbol has no local market_feed history."""
+    root = _ohlcv_root(agent_root)
+    if root is None:
+        return []
+    path = root / symbol / "daily.json"
+    if not path.exists():
+        return []
+    try:
+        rows = read_json(path)
+    except Exception:
+        return []
+    if not isinstance(rows, list):
+        return []
+    return sorted((r for r in rows if isinstance(r, dict)), key=lambda r: str(r.get("timestamp") or ""))
+
+
+def _filled_trades(rows: list[dict[str, Any]], symbol: str) -> list[dict[str, Any]]:
+    trades: list[dict[str, Any]] = []
+    for row in rows:
+        if str(row.get("symbol") or "").upper() != symbol.upper():
+            continue
+        if str(row.get("status") or "").lower() != "filled":
+            continue
+        price = row.get("fill_price")
+        if price is None:
+            price = row.get("limit_price")
+        reasons = row.get("reason_codes") or []
+        trades.append({
+            "date": str(row.get("timestamp") or "")[:10],
+            "timestamp": row.get("timestamp"),
+            "side": str(row.get("side") or "").lower(),
+            "price": price,
+            "quantity": row.get("quantity"),
+            "reason": "、".join(str(r) for r in reasons) if isinstance(reasons, list) else str(reasons),
+        })
+    return trades
+
+
+def trades_for_symbol(agent_root: Path, symbol: str) -> dict[str, list[dict[str, Any]]]:
+    """Per-strategy filled trades for one symbol across all run dates.
+
+    Read-only. Returns {strategy_label: [{date, timestamp, side, price, quantity, reason}, ...]}.
+    The champion ledger lives at ``<run>/paper/orders.jsonl``; each challenger's isolated G9
+    ledger lives at ``<run>/experiments/<strategy_id>/paper/orders.jsonl``. Champion is keyed by
+    "champion"; challengers by their strategy_id, so the chart can overlay how different strategies
+    traded the same stock.
+    """
+    result: dict[str, list[dict[str, Any]]] = {}
+    for run_date in reversed(list_run_dates(agent_root)):  # oldest first
+        paths = build_runtime_paths(agent_root, run_date=run_date)
+        champ = _filled_trades(_read_jsonl_or_empty(paths.paper_orders_log_path), symbol)
+        if champ:
+            result.setdefault("champion", []).extend(champ)
+        exp_root = paths.run_state_dir / "experiments"
+        if exp_root.exists():
+            for sid_dir in sorted(d for d in exp_root.iterdir() if d.is_dir()):
+                trades = _filled_trades(
+                    _read_jsonl_or_empty(sid_dir / "paper" / "orders.jsonl"), symbol
+                )
+                if trades:
+                    result.setdefault(sid_dir.name, []).extend(trades)
+    return result
+

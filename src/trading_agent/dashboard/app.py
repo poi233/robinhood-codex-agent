@@ -49,8 +49,8 @@ with st.sidebar:
     st.caption(f"共 {len(run_dates)} 个运行日")
     st.caption("所有视图均为只读。")
 
-cockpit_tab, picks_tab, perf_tab, calib_tab, growth_tab = st.tabs(
-    ["📊 今日驾驶舱", "🎯 选股与决策", "💰 业绩与对比", "🔬 校准与归因", "🌱 成长与趋势"]
+cockpit_tab, picks_tab, perf_tab, kline_tab, calib_tab, growth_tab = st.tabs(
+    ["📊 今日驾驶舱", "🎯 选股与决策", "💰 业绩与对比", "📉 K线复盘", "🔬 校准与归因", "🌱 成长与趋势"]
 )
 
 # ── 📊 今日驾驶舱 ──────────────────────────────────────────
@@ -115,6 +115,28 @@ with perf_tab:
 
     st.subheader(f"订单（运行日 {selected_run_date}）")
     charts.orders_table_view(queries.orders_table(AGENT_ROOT, selected_run_date))
+
+# ── 📉 K线复盘 ─────────────────────────────────────────────
+with kline_tab:
+    st.header("K线复盘")
+    ui.guidance_box(
+        what="每只股票的日K线，叠加你在它上面的买/卖点；不同策略用不同颜色，看清各策略怎么交易同一只票。",
+        how="▲=买入 ▼=卖出，按策略着色（champion 蓝、挑战者各异）；下方表格给每个策略的均买价与当前浮动盈亏。",
+        action="对比 champion 与挑战者的买卖点：若挑战者在更好的位置进出且浮盈更高，是它值得 shadow 验证的信号。",
+    )
+    _kline_symbols = queries.available_kline_symbols(AGENT_ROOT)
+    if not _kline_symbols:
+        st.info("暂无本地日线数据（market_feed 在 premarket 采集 OHLCV 后生成）。先跑 premarket 流程。")
+    else:
+        _sym = st.selectbox("选择标的", _kline_symbols, index=0)
+        _trades = queries.trades_for_symbol(AGENT_ROOT, _sym)
+        _strats = list(_trades.keys())
+        _picked = st.multiselect(
+            "叠加的策略（默认全部）", _strats, default=_strats,
+            help="champion = 实际纸面账本；其余为各挑战者隔离账本（experiments/<id>）。",
+        ) if _strats else []
+        charts.kline_view(_sym, queries.ohlcv_daily(AGENT_ROOT, _sym), _trades,
+                          selected_strategies=_picked if _strats else None)
 
 # ── 🔬 校准与归因 ──────────────────────────────────────────
 with calib_tab:
