@@ -36,3 +36,11 @@ PATH=/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin
 # 13:40 PT — postmarket + 30 minutes. Never trades, never approves/promotes.
 # Disable with ENABLE_NIGHTLY_ANALYSIS=0 in runtime.env.local.
 40 13 * * 1-5 __REPO_ROOT__/src/scripts/entrypoints/run_nightly_analysis.sh
+
+# Weekly Serenity-skill stock screener (O1): discover pool-external supply-chain bottleneck
+# stocks (Codex + serenity-supply-chain skill) + factor-validate + auto-update the universe
+# ADD-ONLY (never delete) + re-rank, rate-limited (SCREEN_MAX_ADDS_PER_WEEK) and capped
+# (UNIVERSE_MAX). Sunday 14:00 PT, post-close, before Monday premarket. Runs on a weekend on
+# purpose. Selection layer only — never trades. DEFAULT report-only: set ENABLE_WEEKLY_SCREENER=1
+# in runtime.env.local to let it auto-write the universe (no manual confirmation needed).
+0 14 * * 0 __REPO_ROOT__/src/scripts/entrypoints/run_weekly_screen.sh

@@ -80,6 +80,16 @@ python3 -m trading_agent growth observe
    ```
    看：哪个分数桶最有效（桶单调吗）、哪个分量 IC 最高、哪个 setup 最容易成交/最赚、benchmark 对照。
    **注意**：样本 < 15 个 run date 时数字噪声很大，别据此调权重——E1 报告头部也会提醒。
+4. **每周选股进货（O1 screener）**：周日盘后 cron 自动跑 `screen`（Serenity 卡点法发现池外票 + 因子严门槛
+   验证）。默认只产报告——先人工看 `runtime/screener/<date>/universe_change.md`（加了谁/为什么/因子分/谁被降级）。
+   想让它**自动改 universe（只增不删 + 重排，无需确认）**就在 `runtime.env.local` 设 `ENABLE_WEEKLY_SCREENER=1`。
+   ```bash
+   python3 -m trading_agent screen            # 跟随 flag（默认只报告）
+   python3 -m trading_agent screen --apply    # 强制自动写 universe（手动试一次时用）
+   python3 -m trading_agent screen --dry-run  # 强制只报告
+   ```
+   只动选股层（universe / 排名 / tier），绝不碰仓位/风险；新票仍要过每天的打分→risk_overlay→价格/仓位 gate
+   才会被真正交易。
 
 ---
 

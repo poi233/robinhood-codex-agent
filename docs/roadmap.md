@@ -145,7 +145,7 @@
 | | ~~N3~~ | build 数据校验 + `analytics validate` | 用户新增（2026-06-18） | ✅ **已完成（2026-06-18）**：`analytics validate` 只读扫 decisions/orders/equity/rankings 的 JSONL，报告坏 JSON 行 + 缺关键字段行（per-source + per-run），写 `validate_report.{json,md}`；接进夜间批（build 之后）；改不动任何数据 |
 | | ~~N4~~ | 数据保留 / 归档策略 | 用户新增（2026-06-18） | ✅ **已完成（2026-06-18）**：`analytics retention [--keep-days N] [--apply]`——对超过保留窗的旧 run 只 prune `market_feed/`（大输入快照，分析不读），保留全部分析输入小 JSON；默认 dry-run、`--apply` 才删；写 `retention_report.{json,md}` |
 | **O 选股层升级（每周自动发现 + 每日动态选）** | O0 | vendor Serenity 供应链 skill + 接入安装/校验脚本 | 用户新增（2026-06-19） | ✅ **已完成（2026-06-19）**：`muxuuu/serenity-skill`（MIT，~2.5k★）vendor 进 `.agents/skills/serenity-supply-chain/`，加进 `install_repo_skills.sh`/`verify_repo_skills.sh` 的 SKILLS 列表 |
-| | O1 | **每周 cron 自动改 universe**（Serenity 发现 + 因子验证 → 自动增改标的与排名） | 用户新增（2026-06-19） | 🟡 **进行中（2026-06-19，`ENABLE_WEEKLY_SCREENER` 默认 0）**：自动 **只增不删 + 重排**，无需人工确认。✅ **step 1 骨架已建**（`screen` 命令 + `screener/` 包 + 5 个参数进 runtime.env/doctor + status 报告；flag 关时只产报告、零改动）。待建：Codex discover prompt（step 3）+ 因子验证（step 2）+ auto-apply writer（step 4）+ 周度 cron（step 5） |
+| | O1 | **每周 cron 自动改 universe**（Serenity 发现 + 因子验证 → 自动增改标的与排名） | 用户新增（2026-06-19） | 🟢 **代码完成（2026-06-19，`ENABLE_WEEKLY_SCREENER` 默认 0）**：自动 **只增不删 + 重排**，无需人工确认。step 1 骨架 + step 2 因子严门槛 + step 3 Codex 发现 + step 4 auto-apply writer（限速/cap 降级/只写 meta 分数/备份/审计）+ step 5 周度 cron + 文档 全部落地；27 个 screener 单测通过。flag 关时只产报告、零改动；翻 1 即 auto-apply。等观察几周报告质量后人工翻默认 |
 | | O2 | 每日 premarket 动态选 active（pin 锚 ∪ 全 universe 预排 top-N） | 用户新增（2026-06-19） | 🟡 **规划中（2026-06-19，`ENABLE_DYNAMIC_ACTIVE` 默认 0）**：贵分析输入由写死 `active_watchlist.txt` 改为每日动态预排；flag 关时＝现状 |
 
 > **新旧编号对照**：R1→E1（增 benchmark returns）、R2→E2、R3→A3、R4→D2、R5→D3、R6→D4、R7→F2；
@@ -325,7 +325,11 @@ fail-closed（不写半成品、不删东西）；✅ `CODEX_EXEC_DRY_RUN=1` 可
   + `write_audit`（`universe_change.{json,md}`）。`pipeline.run_screen` 接通：discover → validate 并集 → plan →
   apply（仅 will_apply 且有变更）或只报告，全程 fail-closed。13 个新单测（含只增不删、限速、cap 降级保护、append
   不重排、降级仍在文件、apply 模式空盘不建文件）。
-- ⏳ step 5 周度 cron + README/playbook — 待建。
+- ✅ **step 5 · 周度 cron + 文档（2026-06-19）**：`src/scripts/entrypoints/run_weekly_screen.sh`（不加 weekday
+  guard，周日跑）+ `cron.example` 周日 14:00 PT 一条 + README（新增「Weekly selection layer」命令表 + Schedule
+  段）+ playbook「每周的动作」加 O1 条目。
+- 🟢 **O1 代码全部完成（2026-06-19）**：`ENABLE_WEEKLY_SCREENER` 默认 0（report-only），翻 1 即 auto-apply。
+  全套 27 个 screener 单测通过。等积累几周观察 `universe_change.md` 质量后，由人工把 flag 翻 1。
 
 ## O2 — 每日 premarket 动态选 active（+ 少量 pin）（🟡 规划中）
 

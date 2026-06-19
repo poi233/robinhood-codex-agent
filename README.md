@@ -208,6 +208,11 @@ actually improved outcomes before any further promotion.
 | `postmarket` | Paper day-end ledger + performance summary + Codex review. |
 | `dsa` | Standalone DSA signal scan (also runs inside premarket). |
 
+### Weekly selection layer
+| Command | What it does |
+|---|---|
+| `screen [--dry-run\|--apply]` | **O1 weekly screener.** Discovers pool-external supply-chain bottleneck stocks (Codex + the vendored `serenity-supply-chain` skill), factor-validates them (strict liquidity/data/trend gate), then — when `ENABLE_WEEKLY_SCREENER=1` (or `--apply`) — auto-updates `universe.txt`/`universe_meta.json` **add-only** (never deletes) + re-ranks, rate-limited (`SCREEN_MAX_ADDS_PER_WEEK`) and capped (`UNIVERSE_MAX`, over-cap demotes lowest-ranked to `tier:passive`). Backs up + writes `runtime/screener/<date>/universe_change.{json,md}`. Default report-only; `--dry-run` forces report-only. **Selection layer only — never touches sizing/risk/orders.** |
+
 ### Inspect & analyze (all read-only)
 | Command | What it does |
 |---|---|
@@ -401,7 +406,8 @@ ALLOW_OUTSIDE_MARKET_TEST=1 ./src/scripts/entrypoints/run_all_paper_once.sh   # 
 
 Scheduled (America/Los_Angeles) via `cron.example` / `launchd/*.plist.example`: `05:30` premarket ·
 `06:45`–`12:55` intraday (cadence per active [frequency preset](#frequency-presets)) · `13:10`
-postmarket · `13:40` nightly analysis (postmarket + 30 minutes, weekdays). For launchd, the
+postmarket · `13:40` nightly analysis (postmarket + 30 minutes, weekdays) · `Sun 14:00` weekly
+`screen` (O1 selection-layer screener; report-only until `ENABLE_WEEKLY_SCREENER=1`). For launchd, the
 installer derives the nightly time from the postmarket plist; if you change postmarket, re-run
 `src/scripts/launchd/install_launchd_jobs.sh install` so nightly follows it.
 
