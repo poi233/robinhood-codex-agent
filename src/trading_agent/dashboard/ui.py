@@ -251,27 +251,37 @@ section[data-testid="stSidebar"] {{
   font-size: .78rem;
 }}
 div[data-baseweb="tab-list"] {{
-  gap: 10px;
+  gap: 8px;
+  padding: 0 0 14px;
   border-bottom: 1px solid rgba(148,163,184,0.15);
-  margin-bottom: 18px;
+  margin-bottom: 22px;
 }}
 button[data-baseweb="tab"] {{
+  flex: 0 0 58px;
+  width: 58px;
+  min-width: 58px;
   height: 36px;
-  padding: 0 12px;
-  border-radius: 6px 6px 0 0;
+  padding: 0;
+  justify-content: center;
+  border-radius: 7px;
   color: #94a3b8;
-  background: rgba(15,23,42,0.30);
-  border: 1px solid transparent;
-  border-bottom: 0;
+  background: rgba(15,23,42,0.48);
+  border: 1px solid rgba(148,163,184,0.08);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.02);
 }}
 button[data-baseweb="tab"][aria-selected="true"] {{
   color: #e7eefb;
-  background: rgba(22,28,40,0.92);
+  background: rgba(22,28,40,0.96);
   border-color: rgba(59,130,246,0.35);
+  box-shadow: inset 0 -2px 0 {ACCENT}, 0 0 0 1px rgba(59,130,246,0.10);
 }}
 button[data-baseweb="tab"] p {{
   font-size: .86rem;
   font-weight: 700;
+  line-height: 1;
+  margin: 0;
+  width: 100%;
+  text-align: center;
 }}
 span[data-testid="stIconMaterial"] {{
   display: none !important;
