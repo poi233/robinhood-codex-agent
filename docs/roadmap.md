@@ -309,7 +309,11 @@ fail-closed（不写半成品、不删东西）；✅ `CODEX_EXEC_DRY_RUN=1` 可
   `runtime/screener/<date>/` + `pipeline.py::run_screen` 写 `status.json`）；`screen` CLI（`--dry-run`/`--apply`，
   `--dry-run` 优先）；`runtime.env` 加 `ENABLE_WEEKLY_SCREENER`/`SCREEN_MAX_ADDS_PER_WEEK`/`UNIVERSE_MAX`/
   `SCREEN_MIN_DOLLAR_VOL`/`SCREEN_REQUIRE_UPTREND` + `doctor` 回显。骨架**绝不碰 universe**（含 apply 模式，单测锁定）。
-- ⏳ step 2 因子验证 · step 3 Codex 发现 · step 4 auto-apply writer · step 5 周度 cron — 待建。
+- ✅ **step 2 · 因子验证层（2026-06-19）**：`screener/factor_gate.py`——`evaluate_candidate` 复用
+  `pct_return`/`sma` 算 20/60d 动量 + vs-SPY 相对强弱 + SMA50/200 趋势 + 20d 平均成交额，给透明 `factor_score`；
+  **严格 fail-closed 门槛**（数据不足 → 流动性 < `SCREEN_MIN_DOLLAR_VOL` → 非上升趋势，依序）；`validate_candidates`
+  用注入的 downloader（默认 yfinance）一次拉全量、下载失败即全部 `no_data` 不抛错。纯函数，14 个离线单测。
+- ⏳ step 3 Codex 发现 · step 4 auto-apply writer · step 5 周度 cron — 待建。
 
 ## O2 — 每日 premarket 动态选 active（+ 少量 pin）（🟡 规划中）
 
