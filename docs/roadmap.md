@@ -318,7 +318,14 @@ fail-closed（不写半成品、不删东西）；✅ `CODEX_EXEC_DRY_RUN=1` 可
   `screener/discover.py::run_discovery`——用 `runtime_overrides` 注入 `DISCOVERED_PATH`/`EXISTING_UNIVERSE_SYMBOLS`/
   limit（不改公共 runtime block），读回时 fail-closed（缺/坏文件→空、剔除已有 universe/重复/空白、缺 codex
   binary 不抛错）。5 个离线单测（注入 fake prompt runner）。
-- ⏳ step 4 auto-apply writer · step 5 周度 cron — 待建。
+- ✅ **step 4 · auto-apply writer + 全流程接线（2026-06-19）**：`screener/universe_update.py`——纯函数
+  `plan_universe_update`（只增 + 限速取 top-N、全集 `screen_score/screen_rank` 重排、超 `UNIVERSE_MAX` 把最低
+  排名的**非保护 watch** 票降 passive；保护集 = active_watchlist pins ∪ benchmark，新增票永不被降）+
+  `apply_universe_update`（先备份 → `universe.txt` **只 append 不重排** → `universe_meta.json` 写新条目/分数/降级）
+  + `write_audit`（`universe_change.{json,md}`）。`pipeline.run_screen` 接通：discover → validate 并集 → plan →
+  apply（仅 will_apply 且有变更）或只报告，全程 fail-closed。13 个新单测（含只增不删、限速、cap 降级保护、append
+  不重排、降级仍在文件、apply 模式空盘不建文件）。
+- ⏳ step 5 周度 cron + README/playbook — 待建。
 
 ## O2 — 每日 premarket 动态选 active（+ 少量 pin）（🟡 规划中）
 

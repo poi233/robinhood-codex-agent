@@ -40,39 +40,38 @@ def test_config_bad_ints_fall_back_to_defaults():
 
 
 def test_resolve_will_apply_precedence():
-    # dry-run always wins
-    assert _resolve_will_apply(enabled=True, dry_run=True, apply=True) is False
-    # explicit --apply forces writing even when flag is off
-    assert _resolve_will_apply(enabled=False, dry_run=False, apply=True) is True
-    # no overrides → follow the flag
-    assert _resolve_will_apply(enabled=True, dry_run=False, apply=None) is True
+    assert _resolve_will_apply(enabled=True, dry_run=True, apply=True) is False  # dry-run wins
+    assert _resolve_will_apply(enabled=False, dry_run=False, apply=True) is True  # --apply forces
+    assert _resolve_will_apply(enabled=True, dry_run=False, apply=None) is True  # follow flag
     assert _resolve_will_apply(enabled=False, dry_run=False, apply=None) is False
 
 
-def test_skeleton_writes_status_report_only_by_default(tmp_path, monkeypatch):
+def test_pipeline_offline_no_universe_makes_no_change(tmp_path, monkeypatch):
+    """No universe.txt + no codex → empty discovery, empty plan, no writes (fail-closed)."""
     monkeypatch.setenv("RUN_DATE_PT", "2026-06-21")
     monkeypatch.delenv("ENABLE_WEEKLY_SCREENER", raising=False)
 
     rc = run_screen(tmp_path)
     assert rc == 0
 
-    status_path = screener_run_dir(tmp_path) / "status.json"
-    assert status_path.exists()
-    status = json.loads(status_path.read_text(encoding="utf-8"))
-    assert status["stage"] == "skeleton"
-    assert status["enabled_flag"] is False
-    assert status["will_apply"] is False
-    assert status["config"]["universe_max"] == 120
+    status = json.loads((screener_run_dir(tmp_path) / "status.json").read_text(encoding="utf-8"))
+    assert status["stage"] == "complete"
+    assert status["applied"] is False
+    assert status["added"] == []
+    assert status["discovered_count"] == 0
+    # audit is always written
+    assert (screener_run_dir(tmp_path) / "universe_change.md").exists()
 
 
-def test_skeleton_never_creates_or_touches_universe_files(tmp_path, monkeypatch):
+def test_pipeline_apply_mode_offline_still_writes_no_universe(tmp_path, monkeypatch):
+    """Even with --apply, an empty plan (nothing discovered) must not create universe files."""
     monkeypatch.setenv("RUN_DATE_PT", "2026-06-21")
     monkeypatch.setenv("ENABLE_WEEKLY_SCREENER", "1")
 
     run_screen(tmp_path, apply=True)
 
-    # The skeleton must not write any universe config, even in apply mode.
     assert not (tmp_path / "src" / "config" / "universe.txt").exists()
     assert not (tmp_path / "src" / "config" / "universe_meta.json").exists()
     status = json.loads((screener_run_dir(tmp_path) / "status.json").read_text(encoding="utf-8"))
     assert status["will_apply"] is True
+    assert status["applied"] is False  # nothing to apply
