@@ -21,6 +21,7 @@ SKILLS=(
   brooks-trading-range-price-action
   equity-fundamentals-analysis
   trading-research-casebook-maintenance
+  serenity-supply-chain
 )
 
 for target in "${TARGETS[@]}"; do

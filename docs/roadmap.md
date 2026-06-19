@@ -1,6 +1,6 @@
 # 未来工作清单（Roadmap · 全局合并版）
 
-> 最后更新：2026-06-18
+> 最后更新：2026-06-19
 > 配套：现状见 [`project-status.md`](./project-status.md)；token 优化详细设计见
 > [`design-prompt-token-optimization.md`](./design-prompt-token-optimization.md)；
 > 自成长平台 G0–G2 详细实现计划见
@@ -62,6 +62,8 @@
 | H4 shadow re-score | `ENABLE_SHADOW_RESCORE` | shadow runner 的 challenger 重打分路径 | 🟡 **多权重 re-score 已建（2026-06-17，默认 0）**：challenger 可重配多分量权重重打分（E2 shadow 验证路径）；analyzer/setup/factor 纳入打分的「贵路径」待后续 |
 | H6 evidence-based proposals | `ENABLE_EVIDENCE_PROPOSALS` | growth propose 的证据校验 | ✅ **gate 已建（2026-06-17，默认 0）**：开时 proposal 必须带 calibration/weight evidence 才生成；更多 evidence 类型增量加后翻默认 |
 | M1–M5 intraday advisory overlay | `ENABLE_INTRADAY_ADVISORY_OVERLAY` | intraday 排序/仓位/风控 overlay | 🟡 **M1–M5 核心已完成（2026-06-18，默认 0）**：loader/normalizer + H2/H3 rank_delta 排序 + K1/K2 风控/仓位收紧 + rankings/order/email/dashboard audit + forward-return/growth evidence + overlay mutation 安全白名单已建；自动 proposal rule 仍待；flag 关时 champion 完全保持旧行为 |
+| O1 每周 Serenity 自动选股 | `ENABLE_WEEKLY_SCREENER` | 周度 cron 自动写 `universe.txt` + `universe_meta.json` | 🟡 **规划中（2026-06-19，默认 0）**：Codex + vendored `serenity-supply-chain` skill 发现池外上游瓶颈股 → 因子验证 → **自动增改 universe（只增不删 + 重排，无需人工确认）**。flag 关时 cron 只产报告不改 config；翻默认门槛=auto-apply 路径有「只增不删」单测护栏 + 备份/回滚 + 落审计 |
+| O2 每日动态选 active | `ENABLE_DYNAMIC_ACTIVE` | premarket 贵分析层（Kronos/technical/market_feed）的 active 集来源 | 🟡 **规划中（2026-06-19，默认 0）**：active 集由写死 `active_watchlist.txt` 改为「pin 锚 ∪ 全 universe 便宜预排 top-N」。flag 关时＝完全现状（仍读 active_watchlist.txt） |
 
 > 注：纯手动命令（`analytics calibrate`、`growth observe/propose`）和 shadow-only 路径**天然隔离**（不在热
 > 路径、不动 champion），可以不强制 flag；**强制 flag 的是会接进 premarket/intraday 热路径的模块**。
@@ -142,6 +144,9 @@
 | | ~~N2~~ | analytics.db 索引 | 用户新增（2026-06-18） | ✅ **已完成（2026-06-18）**：`INDEX_DDL` 给 candidates/decisions/orders/intraday_rankings/paper_equity/blocked_reasons/factor_alpha 常用过滤列建索引，随表重建 |
 | | ~~N3~~ | build 数据校验 + `analytics validate` | 用户新增（2026-06-18） | ✅ **已完成（2026-06-18）**：`analytics validate` 只读扫 decisions/orders/equity/rankings 的 JSONL，报告坏 JSON 行 + 缺关键字段行（per-source + per-run），写 `validate_report.{json,md}`；接进夜间批（build 之后）；改不动任何数据 |
 | | ~~N4~~ | 数据保留 / 归档策略 | 用户新增（2026-06-18） | ✅ **已完成（2026-06-18）**：`analytics retention [--keep-days N] [--apply]`——对超过保留窗的旧 run 只 prune `market_feed/`（大输入快照，分析不读），保留全部分析输入小 JSON；默认 dry-run、`--apply` 才删；写 `retention_report.{json,md}` |
+| **O 选股层升级（每周自动发现 + 每日动态选）** | O0 | vendor Serenity 供应链 skill + 接入安装/校验脚本 | 用户新增（2026-06-19） | ✅ **已完成（2026-06-19）**：`muxuuu/serenity-skill`（MIT，~2.5k★）vendor 进 `.agents/skills/serenity-supply-chain/`，加进 `install_repo_skills.sh`/`verify_repo_skills.sh` 的 SKILLS 列表 |
+| | O1 | **每周 cron 自动改 universe**（Serenity 发现 + 因子验证 → 自动增改标的与排名） | 用户新增（2026-06-19） | 🟡 **规划中（2026-06-19，`ENABLE_WEEKLY_SCREENER` 默认 0）**：自动 **只增不删 + 重排**，无需人工确认；`screen` 命令 + Codex discover prompt + 因子验证 + auto-apply writer + 周度 cron 待建 |
+| | O2 | 每日 premarket 动态选 active（pin 锚 ∪ 全 universe 预排 top-N） | 用户新增（2026-06-19） | 🟡 **规划中（2026-06-19，`ENABLE_DYNAMIC_ACTIVE` 默认 0）**：贵分析输入由写死 `active_watchlist.txt` 改为每日动态预排；flag 关时＝现状 |
 
 > **新旧编号对照**：R1→E1（增 benchmark returns）、R2→E2、R3→A3、R4→D2、R5→D3、R6→D4、R7→F2；
 > token 优化设计→D1；docx 的 run_manifest→B1、registry→B2、analytics.db→B3、changelog→B4、
@@ -206,6 +211,108 @@
 > 2026-06-16 的旧焦点已被 2026-06-17 收口轮覆盖，不再在本文重复保留。核心纪律仍是：冻结 baseline
 > → 一次一个实验 → 只用数据 promote（≥10 shadow 日、fill rate / drawdown / forward return 不劣于
 > champion、无 safety violation、人工 approve）。
+
+---
+
+# O 阶段 · 选股层升级（每周自动发现 + 每日动态选 active · 🟡 规划中 2026-06-19）
+
+> **背景（用户 2026-06-19）**：现在的"选股"分两层但都**手工静态**——`universe.txt`（~88，最大候选池）和
+> `active_watchlist.txt`（≤30，跑贵分析的精选池）都是人工编辑的纯文本，playbook 写明 active watchlist 是
+> "每月手工更新"。每天的 AI/因子精筛（DSA + Kronos + technical + factor + 5 分量打分 → risk_overlay →
+> daily_plan）只在这个**固定池子里排序**，没有任何自动流程去回答"池子里该不该换、池外有没有更值得看的票"。
+>
+> **用户的两层诉求**：
+> 1. **每周**从更大的市场自动找到好的标的，放进 universe（供每天 premarket review）；
+> 2. **每天** premarket 从 universe 里挑"最需要 review"的标的做贵分析。
+>
+> **用户的关键决策（2026-06-19）**：
+> - 发现来源＝**Codex AI 搜索**（结合主题/新闻发现池外新票，再用因子验证），用 GitHub 上的 **Serenity
+>   供应链卡点 skill**（`muxuuu/serenity-skill`）当发现大脑。
+> - 每日 active 选择＝**动态选 + 少量 pin**（保留 SPY/QQQ/NVDA 等长期锚，其余名额每日由预排动态填）。
+> - **每周由 cron 自动改 universe，只增加标的 + 改排名（不删除），无需人工确认。** ← 明确要求 auto-apply，
+>   覆盖仓库默认的"propose, never auto-apply"哲学。
+
+## 安全定位（为什么 auto-apply 在这里可接受）
+
+O 阶段全程只动**选股层（universe / 排名 / active 选择）**，这正是自成长白名单里**允许改动**的维度
+（`watchlist`），**绝不触碰**仓位/风险维度（`TRADING_MODE` / `RISK_TIER` / `KILL_SWITCH` /
+`per_trade_risk_pct` / `max_daily_risk_pct` / `max_single_stock_weight` / 真实下单——这些永久禁改）。
+
+把 auto-apply 的爆炸半径限制住的三道护栏：
+1. **只增不删 + 只重排**：cron 永不删除现有标的，最坏情况只是多了一只低排名的 `watch` 候选；不会让正在
+   持仓/观察的票凭空消失。
+2. **下游闸门不变**：universe 只是"允许被看"的最大集合。新加的票要真正被交易，仍要过每天的
+   candidate_scoring → risk_overlay（regime / 集中度 / tradable 闸）→ price/size gate → 兜底硬止损。
+   选股层放宽 ≠ 放宽风控。
+3. **可回滚 + 审计**：每次 auto-apply 前备份旧 `universe.txt`/`universe_meta.json`，把"加了哪些、为什么、
+   因子分多少、排名怎么变"落到 `runtime/screener/<date>/` 审计，随时可人工回退。
+
+> O0/O1 是**周度独立命令**（不在 premarket/intraday 运行时热路径），但因为 O1 会自动改选股输入，按仓库约定
+> 仍用 `ENABLE_WEEKLY_SCREENER`（默认 0）门控：关时 cron 只产报告、不改 config；做完 + 测试 + 护栏齐备后才
+> 翻默认（或人工开）。O2 直接接 premarket 热路径 → `ENABLE_DYNAMIC_ACTIVE`（默认 0），关时一字不变＝现状。
+
+## O0 — vendor Serenity 供应链 skill + 接入安装脚本 — ✅ 已完成（2026-06-19）
+
+- `muxuuu/serenity-skill`（MIT，~2.5k★，含 `SKILL.md` + `references/scripts/agents/evals`）vendor 进
+  `.agents/skills/serenity-supply-chain/`；脚本（`serenity_scorecard.py` 纯本地 JSON→打分、`validate_skill.py`
+  仅 re/sys/pathlib）已审无网络/子进程/写盘副作用。
+- 加进 `src/scripts/skills/install_repo_skills.sh` 与 `verify_repo_skills.sh` 的 `SKILLS` 列表，安装后
+  premarket/weekly 跑的 Codex（`codex exec`，workspace-write 沙箱）可加载它。
+
+## O1 — 每周 cron 自动发现 + 自动改 universe（🟡 规划中）
+
+**目标**：每周一次，从大市场自动发现池外上游瓶颈股，因子验证后**自动**写进 `universe.txt` +
+`universe_meta.json`（只增 + 重排，不删），无需人工确认。
+
+**具体步骤**：
+1. **CLI `screen`**（`cli.py` + 新建 `src/trading_agent/screener/`）。
+2. **Codex 发现**（新 prompt `src/prompts/screener/discover.txt`）：点名用 `serenity-supply-chain` skill 的
+   卡点方法，从主题/新闻逆向映射供应链找池外候选（排除已在 universe 的），输出
+   `runtime/screener/<date>/discovered.json`（每只带 theme / thesis / 证据 / 初判）。用 `runtime_overrides`
+   把输出路径注入 prompt（不改 `runtime_block.py` 公共代码）。
+3. **因子验证**（复用 `signals/dsa_metrics.py::build_dsa_metrics`，喂候选列表而非 universe）：批量拉 OHLCV
+   算动量/相对强弱/趋势/量能/ATR，**fail-closed** 滤掉流动性差/数据缺失/趋势破位的，给每只 `factor_score`。
+4. **auto-apply writer**（`ENABLE_WEEKLY_SCREENER=1` 时）：
+   - 备份旧 `universe.txt` / `universe_meta.json` 到 `runtime/screener/<date>/backup/`；
+   - **只增**通过验证的新票（写 universe.txt + 补 `universe_meta.json` `tier:"watch"` + theme/liquidity）；
+   - **重排**：把因子分写进 `universe_meta.json`（如 `screen_rank` / `screen_score`）供 O2 每日预排消费；
+   - **绝不删除**任何现有标的；
+   - 落 `runtime/screener/<date>/universe_change.{json,md}`（加了谁、为什么、排名变化）做审计。
+   - flag 关时：同样跑发现+验证，但**只写报告不碰 config**（dry-run 形态）。
+5. **周度调度**：`cron.example` 加一条（如周日盘后 `0 14 * * 0`）；launchd 同理可加一个 weekly 模板。
+
+**涉及文件**：新增 `src/trading_agent/screener/`（discover 调度 + factor 验证 + writer）、
+`src/prompts/screener/discover.txt`、`tests/trading_agent/screener/*`；改动 `cli.py`、`cron.example`、
+`config/runtime.env`（加 `ENABLE_WEEKLY_SCREENER` + doctor 回显）、README/playbook。
+
+**验收**：✅ `screen` flag 关时只产报告、universe 零改动；✅ flag 开时只增不删（单测断言旧标的全部保留）+
+重排 + 备份 + 审计；✅ Codex/网络不可用或因子数据不足时 fail-closed（不写半成品、不删东西）；✅
+`CODEX_EXEC_DRY_RUN=1` 可离线跑通骨架。
+
+## O2 — 每日 premarket 动态选 active（+ 少量 pin）（🟡 规划中）
+
+**目标**：贵分析（Kronos / technical / market_feed）的输入从写死的 `active_watchlist.txt` 改为**每日从全
+universe 动态选**最该 review 的一批。
+
+**具体步骤**：
+1. premarket 开头用便宜信号对全 universe 预排：复用 `build_dsa_metrics`（已在 premarket 算）+ O1 写进
+   `universe_meta.json` 的 `screen_score`，合成 `review_priority`。
+2. `active_watchlist.txt` 语义改为 **pin 锚名单**（始终纳入，如 SPY/QQQ/NVDA）；当天 active 集 =
+   pins ∪ 预排 top-N（补到 `ACTIVE_MAX`，默认 30）。
+3. 把 `orchestration/premarket.py` 里 `active_symbols` 的来源（约 line 189/257/293）换成这个动态集；落
+   `runtime/state/runs/<date>/planner/active_selection.json` 留痕（谁因为什么被选）。
+4. `ENABLE_DYNAMIC_ACTIVE`（默认 0）+ `ACTIVE_MAX`（默认 30）；**flag 关时仍读 `active_watchlist.txt`＝完全现状**，零回归。
+
+**涉及文件**：`orchestration/premarket.py`、`data/universe.py`（pin/动态选 helper）、`core/context.py`
+（`active_selection.json` 路径）、`cli.py`（doctor 回显 flag）、`config/runtime.env`、对应测试。
+
+**验收**：✅ flag 关时 premarket 既有测试逐字全绿、active 集＝`active_watchlist.txt`；✅ flag 开时 active 集 =
+pins ∪ top-N、写 `active_selection.json`、benchmark（SPY 等）仍在 market_feed；✅ universe/数据缺失时
+fail-closed 退回 pin 锚。
+
+> **建议实施顺序**：O0（✅ 已完成）→ O1（周度、独立、低耦合）→ O2（动每日热路径，带 flag 默认关）。
+> **后续可增量**：把 O1 的 thesis/证据接进 K3 Thesis Tracker 做"发现来源命中率"归因；universe 体检报告进
+> dashboard；O1 发现的票自动补 `universe_meta` 的 `supply_chain`/`risk_tags`。
 
 ---
 

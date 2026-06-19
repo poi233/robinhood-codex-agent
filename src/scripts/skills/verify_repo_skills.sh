@@ -9,6 +9,7 @@ SKILLS=(
   brooks-trading-range-price-action
   equity-fundamentals-analysis
   trading-research-casebook-maintenance
+  serenity-supply-chain
 )
 
 TARGETS=("$HOME/.agents/skills" "$HOME/.codex/skills")
