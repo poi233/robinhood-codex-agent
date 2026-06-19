@@ -587,6 +587,115 @@ def equity_with_benchmark(agent_root: Path, *, benchmark: str = "SPY") -> dict[s
     return out
 
 
+def _challenger_dirs(agent_root: Path, run_date: str) -> list[Path]:
+    exp = build_runtime_paths(agent_root, run_date=run_date).run_state_dir / "experiments"
+    if not exp.exists():
+        return []
+    return sorted(p for p in exp.iterdir() if p.is_dir())
+
+
+def strategy_equity_curves(agent_root: Path) -> dict[str, list[dict[str, Any]]]:
+    """Per-strategy paper equity curve (champion + each challenger), oldest first.
+
+    Read-only. Champion comes from the main paper ledger; each challenger from its isolated
+    G9 ledger ``experiments/<id>/paper/equity_curve.jsonl``. For the "换成这个策略会怎样" replay.
+    Returns {strategy_label: [{timestamp, total_equity}, ...]}.
+    """
+    out: dict[str, list[dict[str, Any]]] = {}
+    champ = [{"timestamp": r.get("timestamp"), "total_equity": r.get("total_equity")}
+             for r in equity_timeseries(agent_root) if r.get("total_equity") is not None]
+    if champ:
+        out["champion"] = champ
+    for run_date in reversed(list_run_dates(agent_root)):  # oldest first
+        for dd in _challenger_dirs(agent_root, run_date):
+            rows = _read_jsonl_or_empty(dd / "paper" / "equity_curve.jsonl")
+            pts = [{"timestamp": r.get("timestamp"), "total_equity": r.get("total_equity")}
+                   for r in rows if r.get("total_equity") is not None]
+            if pts:
+                out.setdefault(dd.name, []).extend(pts)
+    for key in out:
+        out[key] = sorted(out[key], key=lambda r: str(r.get("timestamp") or ""))
+    return out
+
+
+def strategy_behavior(agent_root: Path, run_date: str) -> dict[str, Any]:
+    """Side-by-side decision behavior of every strategy on one run date.
+
+    Read-only. Aligns champion decisions (from the decisions table) with each challenger's
+    ``shadow_decisions.jsonl`` by decision index within the day, flags where they diverge
+    (different decision or symbol), and summarizes each challenger vs champion. Answers
+    "同一天各策略 trade / no-trade、为什么、分歧在哪".
+    """
+    by_strategy: dict[str, list[dict[str, Any]]] = {}
+    champ = [{"timestamp": d.get("timestamp"), "decision": d.get("decision"),
+              "symbol": d.get("symbol"), "side": d.get("side"),
+              "blocked_reasons": d.get("blocked_reasons")}
+             for d in decisions_timeline(agent_root, run_date)]
+    by_strategy["champion"] = champ
+    for dd in _challenger_dirs(agent_root, run_date):
+        rows = _read_jsonl_or_empty(dd / "shadow_decisions.jsonl")
+        by_strategy[dd.name] = [{"timestamp": r.get("timestamp"), "decision": r.get("decision"),
+                                 "symbol": r.get("symbol"), "side": r.get("side"),
+                                 "blocked_reasons": r.get("blocked_reasons")} for r in rows]
+
+    strategies = list(by_strategy.keys())
+    n = max((len(v) for v in by_strategy.values()), default=0)
+    rows: list[dict[str, Any]] = []
+    for i in range(n):
+        cells = {s: (by_strategy[s][i] if i < len(by_strategy[s]) else None) for s in strategies}
+        keys = {(c.get("decision"), c.get("symbol")) for c in cells.values() if c}
+        rows.append({"index": i + 1, "cells": cells, "diverge": len(keys) > 1})
+
+    summary: dict[str, Any] = {}
+    for s in strategies:
+        if s == "champion":
+            continue
+        sl = by_strategy[s]
+        diverge = sum(
+            1 for i in range(min(len(champ), len(sl)))
+            if (champ[i].get("decision"), champ[i].get("symbol")) != (sl[i].get("decision"), sl[i].get("symbol"))
+        )
+        summary[s] = {"decisions": len(sl),
+                      "would_trade": sum(1 for r in sl if r.get("decision") == "would_trade"),
+                      "diverge_vs_champion": diverge}
+    return {
+        "strategies": strategies, "rows": rows, "summary": summary,
+        "champion_would_trade": sum(1 for r in champ if r.get("decision") == "would_trade"),
+    }
+
+
+def decisions_for_symbol(agent_root: Path, symbol: str) -> dict[str, list[dict[str, Any]]]:
+    """Per-strategy decisions that referenced one symbol, across all run dates (read-only).
+
+    Champion decisions come from the decisions table; challenger ones from each
+    ``shadow_decisions.jsonl`` filtered to the symbol. Shows how each strategy decided on a
+    specific stock (would_trade / no_trade + blocked reasons), even when no fill resulted.
+    """
+    out: dict[str, list[dict[str, Any]]] = {}
+    connection = _connect(agent_root)
+    if connection is not None:
+        try:
+            rows = connection.execute(
+                "SELECT run_date, timestamp, decision, side, blocked_reasons, confidence, setup_type "
+                "FROM decisions WHERE symbol = ? ORDER BY timestamp ASC", (symbol,)
+            ).fetchall()
+            champ = _rows_as_dicts(rows)
+        finally:
+            connection.close()
+        if champ:
+            out["champion"] = champ
+    for run_date in reversed(list_run_dates(agent_root)):
+        for dd in _challenger_dirs(agent_root, run_date):
+            rows = [r for r in _read_jsonl_or_empty(dd / "shadow_decisions.jsonl")
+                    if str(r.get("symbol") or "").upper() == symbol.upper()]
+            if rows:
+                out.setdefault(dd.name, []).extend(
+                    {"run_date": r.get("run_date"), "timestamp": r.get("timestamp"),
+                     "decision": r.get("decision"), "side": r.get("side"),
+                     "blocked_reasons": r.get("blocked_reasons")} for r in rows)
+    return out
+
+
 def thesis_attribution(agent_root: Path) -> dict[str, Any]:
     """Read-only: K3 thesis_attribution.json (per-thesis win rate / mean return)."""
     from trading_agent.replay.thesis import default_thesis_path

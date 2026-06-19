@@ -113,6 +113,14 @@ with perf_tab:
     charts.strategy_comparison_view(queries.strategy_comparison(AGENT_ROOT))
     charts.champion_vs_challengers_view(queries.champion_vs_challengers(AGENT_ROOT))
 
+    st.divider()
+    st.subheader("策略权益重放（换成各策略会怎样）")
+    charts.strategy_equity_replay_view(queries.strategy_equity_curves(AGENT_ROOT))
+
+    st.divider()
+    st.subheader(f"策略行为对比（运行日 {selected_run_date} · 各策略 trade/no-trade 与分歧）")
+    charts.strategy_behavior_view(queries.strategy_behavior(AGENT_ROOT, selected_run_date))
+
     st.subheader(f"订单（运行日 {selected_run_date}）")
     charts.orders_table_view(queries.orders_table(AGENT_ROOT, selected_run_date))
 
@@ -137,6 +145,8 @@ with kline_tab:
         ) if _strats else []
         charts.kline_view(_sym, queries.ohlcv_daily(AGENT_ROOT, _sym), _trades,
                           selected_strategies=_picked if _strats else None)
+        st.divider()
+        charts.symbol_behavior_view(queries.decisions_for_symbol(AGENT_ROOT, _sym))
 
 # ── 🔬 校准与归因 ──────────────────────────────────────────
 with calib_tab:

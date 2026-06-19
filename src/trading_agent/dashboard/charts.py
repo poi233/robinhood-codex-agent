@@ -365,6 +365,94 @@ def champion_vs_challengers_view(report: dict[str, Any]) -> None:
     })
 
 
+def _norm_reasons(value: Any) -> str:
+    """blocked_reasons may be a JSON string (champion, from DB) or a list (challenger)."""
+    if value is None:
+        return ""
+    if isinstance(value, str):
+        try:
+            value = json.loads(value)
+        except Exception:
+            return value
+    if isinstance(value, list):
+        return "、".join(str(v) for v in value)
+    return str(value)
+
+
+def _behavior_cell(cell: dict[str, Any] | None) -> str:
+    if not cell:
+        return "—"
+    dec = str(cell.get("decision") or "")
+    if dec == "would_trade":
+        return f"✅ 买 {cell.get('symbol') or ''} {cell.get('side') or ''}".strip()
+    reasons = _norm_reasons(cell.get("blocked_reasons"))
+    return f"⛔ {dec or 'no_trade'}" + (f"（{reasons}）" if reasons else "")
+
+
+def strategy_equity_replay_view(curves: dict[str, list[dict[str, Any]]]) -> None:
+    """各策略权益曲线重放（归一化到 100）+ 收益/最大回撤对比 —— "换成这个策略会怎样"。"""
+    curves = {k: v for k, v in (curves or {}).items() if v}
+    if not curves:
+        st.info("暂无各策略权益数据。champion 来自纸面账本；挑战者来自 experiments/<id> 隔离账本。")
+        return
+    frames = []
+    summary = []
+    best_ret = None
+    for strat, pts in curves.items():
+        vals = [float(p["total_equity"]) for p in pts if p.get("total_equity") is not None]
+        if not vals:
+            continue
+        start = vals[0]
+        ser = {str(p["timestamp"]): (float(p["total_equity"]) / start * 100 if start else None)
+               for p in pts if p.get("total_equity") is not None}
+        frames.append(pd.Series(ser, name=strat))
+        ret = (vals[-1] / start - 1) * 100 if start else None
+        peak = float("-inf"); mdd = 0.0
+        for v in vals:
+            peak = max(peak, v)
+            if peak > 0:
+                mdd = min(mdd, (v / peak - 1) * 100)
+        summary.append({"strategy": strat, "return_pct": round(ret, 2) if ret is not None else None,
+                        "max_drawdown_pct": round(mdd, 2)})
+        if ret is not None and (best_ret is None or ret > best_ret):
+            best_ret = ret
+    if frames:
+        df = pd.concat(frames, axis=1).sort_index().ffill()
+        st.caption("归一化净值（每个策略起点=100；越高=该策略在同一段行情里赚得越多）")
+        st.line_chart(df, use_container_width=True)
+    if summary:
+        enriched = [{"推荐": "⭐" if (s["return_pct"] == best_ret and len(summary) > 1) else "", **s}
+                    for s in summary]
+        ui.pretty_table(enriched, rename={"strategy": "策略", "return_pct": "累计收益%",
+                                          "max_drawdown_pct": "最大回撤%"})
+
+
+def strategy_behavior_view(payload: dict[str, Any]) -> None:
+    """同一运行日各策略决策行为并排 + 分歧高亮。"""
+    rows = payload.get("rows") or []
+    strategies = payload.get("strategies") or []
+    if not rows:
+        st.info("该运行日无决策记录（champion 决策 + 挑战者 shadow_decisions 都为空）。")
+        return
+    summary = payload.get("summary") or {}
+    if summary:
+        cols = st.columns(min(len(summary), 4))
+        for i, (strat, s) in enumerate(summary.items()):
+            div = s.get("diverge_vs_champion", 0)
+            vd = ui.verdict(div, good=0, warn=max(1, len(rows) // 3), higher_is_better=False,
+                            labels=("与冠军高度一致", "部分分歧", "分歧很大"))
+            ui.kpi_card(cols[i % len(cols)], strat, f"{div} 处分歧", vd=vd,
+                        note=f"出手 {s.get('would_trade', 0)} / {s.get('decisions', 0)} 次 "
+                             f"· 冠军出手 {payload.get('champion_would_trade', 0)} 次")
+    st.caption("每行 = 当天第 N 次决策；⚠️ = 各策略决策不一致。✅买 / ⛔不交易（原因）。")
+    flat = []
+    for r in rows:
+        cells = r.get("cells") or {}
+        flat.append({"#": r.get("index"), "分歧": "⚠️" if r.get("diverge") else "",
+                     **{s: _behavior_cell(cells.get(s)) for s in strategies}})
+    ui.pretty_table(flat)
+
+
 # ============================================================
 # 🔬 校准与归因
 # ============================================================
@@ -635,6 +723,23 @@ def kline_view(symbol: str, ohlcv: list[dict[str, Any]],
             rename={"date": "日期", "side": "方向", "price": "成交价", "quantity": "数量",
                     "setup_type": "形态", "stop_price": "止损", "target_1": "目标1",
                     "reward_risk": "R:R", "slippage_bps": "滑点bps", "reason": "理由"},
+        )
+
+
+def symbol_behavior_view(decisions_by_strategy: dict[str, list[dict[str, Any]]]) -> None:
+    """各策略对该标的的决策行为（含未成交的 would_trade / 被拦截的尝试）。"""
+    data = {k: v for k, v in (decisions_by_strategy or {}).items() if v}
+    if not data:
+        st.caption("各策略对该标的暂无决策记录（除了上面已成交的买卖点）。")
+        return
+    st.markdown("**各策略对该标的的决策行为**（不止成交：含 would_trade 尝试与被拦截原因）")
+    for strat, rows in data.items():
+        wt = sum(1 for r in rows if str(r.get("decision")) == "would_trade")
+        st.markdown(f"**{strat}** — {len(rows)} 次涉及该标的的决策 · 其中出手 {wt} 次")
+        ui.pretty_table(
+            [{"run_date": r.get("run_date"), "decision": r.get("decision"), "side": r.get("side"),
+              "blocked_reasons": _norm_reasons(r.get("blocked_reasons"))} for r in rows],
+            rename={"run_date": "运行日", "decision": "决策", "side": "方向", "blocked_reasons": "拦截原因"},
         )
 
 

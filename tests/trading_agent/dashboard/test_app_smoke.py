@@ -56,6 +56,9 @@ def _seed(root: Path) -> None:
     chal = run / "experiments" / "challenger_v1" / "paper"
     chal.mkdir(parents=True, exist_ok=True)
     (chal / "orders.jsonl").write_text(json.dumps({"order_id": "c1o1", "symbol": "NVDA", "side": "buy", "quantity": 1, "limit_price": 96.0, "notional": 96.0, "status": "filled", "fill_price": 96.0, "reason_codes": ["pullback"], "setup_type": "pullback", "stop_price": 92.0, "target_1": 106.0, "reward_risk": 2.5, "confidence": 0.7, "slippage_bps": 3.0, "timestamp": f"{rd}T09:35:00"}) + "\n", encoding="utf-8")
+    (chal / "equity_curve.jsonl").write_text(json.dumps({"timestamp": f"{rd}T13:00:00", "date": rd, "event": "day_end", "total_equity": 998.0, "realized_pnl": -2.0}) + "\n", encoding="utf-8")
+    # challenger shadow decision (diverges from champion: no_trade vs would_trade) for behavior comparison
+    (run / "experiments" / "challenger_v1" / "shadow_decisions.jsonl").write_text(json.dumps({"timestamp": f"{rd}T09:31:00", "run_date": rd, "experiment_id": "exp1", "challenger_strategy_id": "challenger_v1", "decision": "no_trade", "symbol": "NVDA", "side": None, "blocked_reasons": ["reward_risk_too_low"]}) + "\n", encoding="utf-8")
     write_json(root / "runtime" / "analytics" / "experiment_report.json", {"champion": {"fill_rate_pct": 100.0, "no_trade_rate_pct": 0.0, "run_date_count": 1}, "challengers": [{"challenger_strategy_id": "c1", "status": "active_shadow", "metrics": {"shadow_days": 1, "total_evaluations": 1, "would_trade": 1, "no_trade_rate_pct": 0.0}, "recommendation": {"recommend_promote": False, "blocking_reasons": ["min_shadow_days_not_met: 1 < 10"]}}]})
     write_json(root / "runtime" / "analytics" / "calibration_report.json", {
         "generated_at": "x", "run_date_count": 1, "sample_size": 1, "horizons": [1],
