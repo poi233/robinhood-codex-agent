@@ -674,6 +674,13 @@ def _filled_trades(rows: list[dict[str, Any]], symbol: str) -> list[dict[str, An
             "price": price,
             "quantity": row.get("quantity"),
             "reason": "、".join(str(r) for r in reasons) if isinstance(reasons, list) else str(reasons),
+            "setup_type": row.get("setup_type"),
+            "stop_price": row.get("stop_price"),
+            "target_1": row.get("target_1"),
+            "target_2": row.get("target_2"),
+            "reward_risk": row.get("reward_risk"),
+            "confidence": row.get("confidence"),
+            "slippage_bps": row.get("slippage_bps"),
         })
     return trades
 

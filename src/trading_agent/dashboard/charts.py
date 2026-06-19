@@ -593,34 +593,48 @@ def kline_view(symbol: str, ohlcv: list[dict[str, Any]],
         st.warning("绘制 K 线需要 plotly。安装：`pip install -e \".[dashboard]\"`（含 plotly）。")
         return
 
+    last_close = float(ohlcv[-1].get("close") or 0) if ohlcv else None
+    strategies = selected_strategies if selected_strategies is not None else list(trades_by_strategy.keys())
+    shown = [s for s in strategies if trades_by_strategy.get(s)]
+
+    # Per-strategy performance cards (round-trip realized P&L / win rate / avg R / open MTM).
+    if shown:
+        st.markdown("**各策略在该标的的表现对比**")
+        cols = st.columns(min(len(shown), 4))
+        for i, strat in enumerate(shown):
+            s = kline.summarize_strategy_trades(trades_by_strategy.get(strat) or [], last_close)
+            realized = s.get("realized_pnl")
+            vd = ui.verdict(realized, good=0.0, warn=0.0, higher_is_better=True,
+                            labels=("已实现盈利", "持平", "已实现亏损")) if realized is not None else None
+            wr = f"胜率 {s['win_rate']}%" if s.get("win_rate") is not None else "无完整回合"
+            avg_r = f" · 均 {s['avg_r']}R" if s.get("avg_r") is not None else ""
+            unreal = s.get("unrealized_pnl")
+            note = f"{wr}{avg_r}"
+            if s.get("open_qty"):
+                note += f" · 持仓 {s['open_qty']:g}" + (f"（浮动 {unreal:+.2f}）" if unreal is not None else "")
+            ui.kpi_card(cols[i % len(cols)], f"{strat}",
+                        ui.fmt_currency(realized) if realized is not None else "—",
+                        vd=vd, note=f"{s['round_trips']} 回合 / {s['trades']} 成交 · {note}")
+
     fig = kline.build_kline_figure(symbol, ohlcv, trades_by_strategy,
                                    selected_strategies=selected_strategies)
     st.plotly_chart(fig, use_container_width=True, config={"scrollZoom": True, "displaylogo": False})
 
-    strategies = selected_strategies if selected_strategies is not None else list(trades_by_strategy.keys())
-    shown = [s for s in strategies if trades_by_strategy.get(s)]
     if not shown:
         st.caption("所选策略在该标的上暂无成交（买卖点为空）。")
         return
-    st.markdown("**各策略在该标的的成交明细 / 对比**")
+    st.markdown("**成交明细（含交易计划：止损 / 目标 / R:R）**")
     for strat in shown:
         trades = trades_by_strategy.get(strat) or []
-        buys = [t for t in trades if t.get("side") == "buy" and t.get("price") is not None]
-        avg_buy = round(sum(float(t["price"]) for t in buys) / len(buys), 2) if buys else None
-        last_close = float(ohlcv[-1].get("close") or 0)
-        pl = ((last_close / avg_buy - 1) * 100) if avg_buy else None
-        pl_vd = ui.verdict(pl, good=0.0, warn=0.0, higher_is_better=True,
-                           labels=("浮盈", "持平", "浮亏")) if pl is not None else None
-        head = f"{strat} — {len(trades)} 笔成交"
-        if avg_buy is not None:
-            head += f" · 均买价 ${avg_buy} · 现价 ${last_close:g}"
-        if pl_vd is not None:
-            head += f" · 浮动 {pl:+.2f}% {pl_vd.emoji}{pl_vd.label}"
-        st.markdown(head)
+        st.markdown(f"**{strat}** — {len(trades)} 笔成交")
         ui.pretty_table(
-            [{"date": t["date"], "side": t["side"], "price": t["price"],
-              "quantity": t["quantity"], "reason": t["reason"]} for t in trades],
-            rename={"date": "日期", "side": "方向", "price": "成交价", "quantity": "数量", "reason": "理由"},
+            [{"date": t["date"], "side": t["side"], "price": t["price"], "quantity": t["quantity"],
+              "setup_type": t.get("setup_type"), "stop_price": t.get("stop_price"),
+              "target_1": t.get("target_1"), "reward_risk": t.get("reward_risk"),
+              "slippage_bps": t.get("slippage_bps"), "reason": t["reason"]} for t in trades],
+            rename={"date": "日期", "side": "方向", "price": "成交价", "quantity": "数量",
+                    "setup_type": "形态", "stop_price": "止损", "target_1": "目标1",
+                    "reward_risk": "R:R", "slippage_bps": "滑点bps", "reason": "理由"},
         )
 
 

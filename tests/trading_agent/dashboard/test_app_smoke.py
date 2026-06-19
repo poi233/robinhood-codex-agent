@@ -36,7 +36,10 @@ def _seed(root: Path) -> None:
     (logs / "intraday_rankings.jsonl").write_text(json.dumps({"timestamp": f"{rd}T09:31:00", "run_date": rd, "symbol": "NVDA", "base_trade_readiness_score": 70.5, "advisory_rank_delta": 2.0, "trade_readiness_score": 72.5, "price_setup_score": 70.0, "candidate_score": 66.0, "technical_score": 70.0, "research_score": 60.0, "catalyst_score": 55.0, "liquidity_score": 80.0, "advisory_overlay": {"rank_delta": 2.0, "size_multiplier": 1.0, "block_buy": False, "blocked_reasons": [], "components": {"factor_alpha": {"score": 82.0}, "ai": {"kronos": {"direction": "long", "confidence": 0.8}}, "regime": {"regime": "neutral"}, "portfolio": {"position_weight": 0.04}}}}) + "\n", encoding="utf-8")
     paper = run / "paper"
     paper.mkdir(parents=True, exist_ok=True)
-    (paper / "orders.jsonl").write_text(json.dumps({"order_id": "o1", "symbol": "NVDA", "side": "buy", "quantity": 1, "limit_price": 100.0, "notional": 100.0, "status": "filled", "fill_price": 100.0, "reason_codes": ["breakout"], "timestamp": f"{rd}T09:31:05"}) + "\n", encoding="utf-8")
+    (paper / "orders.jsonl").write_text(
+        json.dumps({"order_id": "o1", "symbol": "NVDA", "side": "buy", "quantity": 2, "limit_price": 100.0, "notional": 200.0, "status": "filled", "fill_price": 100.0, "reason_codes": ["breakout"], "setup_type": "breakout", "stop_price": 96.0, "target_1": 108.0, "target_2": 114.0, "reward_risk": 2.0, "confidence": 0.8, "slippage_bps": 4.0, "timestamp": f"{rd}T09:31:05"}) + "\n"
+        + json.dumps({"order_id": "o2", "symbol": "NVDA", "side": "sell", "quantity": 2, "limit_price": 102.0, "notional": 204.0, "status": "filled", "fill_price": 102.0, "reason_codes": ["target_1"], "setup_type": "breakout", "timestamp": f"{rd}T12:31:05"}) + "\n",
+        encoding="utf-8")
     (paper / "equity_curve.jsonl").write_text(json.dumps({"timestamp": f"{rd}T13:00:00", "date": rd, "event": "day_end", "cash": 900.0, "positions_market_value": 100.0, "total_equity": 1005.0, "realized_pnl": 5.0}) + "\n", encoding="utf-8")
     # K线复盘: daily OHLCV for NVDA/SPY + an isolated challenger ledger (different buy point).
     import datetime as _dt
@@ -52,7 +55,7 @@ def _seed(root: Path) -> None:
         write_json(run / "market_feed" / "ohlcv" / _sym / "daily.json", _bars)
     chal = run / "experiments" / "challenger_v1" / "paper"
     chal.mkdir(parents=True, exist_ok=True)
-    (chal / "orders.jsonl").write_text(json.dumps({"order_id": "c1o1", "symbol": "NVDA", "side": "buy", "quantity": 1, "limit_price": 96.0, "notional": 96.0, "status": "filled", "fill_price": 96.0, "reason_codes": ["pullback"], "timestamp": f"{rd}T09:35:00"}) + "\n", encoding="utf-8")
+    (chal / "orders.jsonl").write_text(json.dumps({"order_id": "c1o1", "symbol": "NVDA", "side": "buy", "quantity": 1, "limit_price": 96.0, "notional": 96.0, "status": "filled", "fill_price": 96.0, "reason_codes": ["pullback"], "setup_type": "pullback", "stop_price": 92.0, "target_1": 106.0, "reward_risk": 2.5, "confidence": 0.7, "slippage_bps": 3.0, "timestamp": f"{rd}T09:35:00"}) + "\n", encoding="utf-8")
     write_json(root / "runtime" / "analytics" / "experiment_report.json", {"champion": {"fill_rate_pct": 100.0, "no_trade_rate_pct": 0.0, "run_date_count": 1}, "challengers": [{"challenger_strategy_id": "c1", "status": "active_shadow", "metrics": {"shadow_days": 1, "total_evaluations": 1, "would_trade": 1, "no_trade_rate_pct": 0.0}, "recommendation": {"recommend_promote": False, "blocking_reasons": ["min_shadow_days_not_met: 1 < 10"]}}]})
     write_json(root / "runtime" / "analytics" / "calibration_report.json", {
         "generated_at": "x", "run_date_count": 1, "sample_size": 1, "horizons": [1],
