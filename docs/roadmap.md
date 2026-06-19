@@ -313,7 +313,12 @@ fail-closed（不写半成品、不删东西）；✅ `CODEX_EXEC_DRY_RUN=1` 可
   `pct_return`/`sma` 算 20/60d 动量 + vs-SPY 相对强弱 + SMA50/200 趋势 + 20d 平均成交额，给透明 `factor_score`；
   **严格 fail-closed 门槛**（数据不足 → 流动性 < `SCREEN_MIN_DOLLAR_VOL` → 非上升趋势，依序）；`validate_candidates`
   用注入的 downloader（默认 yfinance）一次拉全量、下载失败即全部 `no_data` 不抛错。纯函数，14 个离线单测。
-- ⏳ step 3 Codex 发现 · step 4 auto-apply writer · step 5 周度 cron — 待建。
+- ✅ **step 3 · Codex 发现（2026-06-19）**：`src/prompts/screener/discover.txt`（点名 `serenity-supply-chain`
+  skill 卡点法找池外上游瓶颈股，硬约束 long 美股/ETF、排除已有 universe、只写 `discovered.json`）+
+  `screener/discover.py::run_discovery`——用 `runtime_overrides` 注入 `DISCOVERED_PATH`/`EXISTING_UNIVERSE_SYMBOLS`/
+  limit（不改公共 runtime block），读回时 fail-closed（缺/坏文件→空、剔除已有 universe/重复/空白、缺 codex
+  binary 不抛错）。5 个离线单测（注入 fake prompt runner）。
+- ⏳ step 4 auto-apply writer · step 5 周度 cron — 待建。
 
 ## O2 — 每日 premarket 动态选 active（+ 少量 pin）（🟡 规划中）
 
