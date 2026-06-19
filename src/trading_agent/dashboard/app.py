@@ -94,12 +94,16 @@ with st.sidebar:
     show_detail = st.toggle("展开研究明细", value=False)
     st.caption("只读。默认显示关键摘要。")
 
-cockpit_tab, picks_tab, perf_tab, kline_tab, calib_tab, growth_tab = st.tabs(
-    ["总览", "选股", "业绩", "日线", "校准", "成长"]
+active_page = st.segmented_control(
+    "页面",
+    ["总览", "选股", "业绩", "日线", "校准", "成长"],
+    default="总览",
+    key="dashboard_page",
+    label_visibility="collapsed",
 )
 
 # ── 今日驾驶舱 ──────────────────────────────────────────
-with cockpit_tab:
+if active_page == "总览":
     ui.page_header(PAGE_BRIEFS["cockpit"], run_date=selected_run_date, show_help=show_help)
     _overview_delta = queries.overview_with_delta(AGENT_ROOT, selected_run_date)
     _completeness = queries.data_completeness(AGENT_ROOT, selected_run_date)
@@ -121,7 +125,7 @@ with cockpit_tab:
         charts.orders_table_view(queries.orders_table(AGENT_ROOT, selected_run_date))
 
 # ── 选股与决策 ──────────────────────────────────────────
-with picks_tab:
+elif active_page == "选股":
     ui.page_header(PAGE_BRIEFS["picks"], run_date=selected_run_date, show_help=show_help)
     charts.candidates_with_rankings_view(queries.candidates_with_rankings(AGENT_ROOT, selected_run_date))
     charts.replay_summary_view(queries.replay_summary(AGENT_ROOT))
@@ -140,7 +144,7 @@ with picks_tab:
         charts.blocked_reason_trend_view(queries.blocked_reason_trend(AGENT_ROOT))
 
 # ── 业绩与对比 ──────────────────────────────────────────
-with perf_tab:
+elif active_page == "业绩":
     ui.page_header(PAGE_BRIEFS["performance"], show_help=show_help)
     charts.equity_curve_view(queries.equity_with_benchmark(AGENT_ROOT))
 
@@ -156,7 +160,7 @@ with perf_tab:
         charts.orders_table_view(queries.orders_table(AGENT_ROOT, selected_run_date))
 
 # ── K线复盘 ─────────────────────────────────────────────
-with kline_tab:
+elif active_page == "日线":
     ui.page_header(PAGE_BRIEFS["kline"], show_help=show_help)
     _kline_symbols = queries.available_kline_symbols(AGENT_ROOT)
     if not _kline_symbols:
@@ -181,7 +185,7 @@ with kline_tab:
             charts.symbol_behavior_view(queries.decisions_for_symbol(AGENT_ROOT, _sym))
 
 # ── 校准与归因 ──────────────────────────────────────────
-with calib_tab:
+elif active_page == "校准":
     ui.page_header(PAGE_BRIEFS["calibration"], show_help=show_help)
     charts.calibration_view(queries.calibration_report(AGENT_ROOT))
     with ui.detail_expander("成交、AI、逻辑和主题细节", show_detail=show_detail):
@@ -199,7 +203,7 @@ with calib_tab:
         charts.theme_diagnostics_view(queries.theme_diagnostics(AGENT_ROOT, selected_run_date))
 
 # ── 成长与趋势 ──────────────────────────────────────────
-with growth_tab:
+elif active_page == "成长":
     ui.page_header(PAGE_BRIEFS["growth"], show_help=show_help)
     charts.growth_observations_view(queries.growth_observations(AGENT_ROOT))
     with ui.detail_expander("提案、实验队列与趋势", show_detail=show_detail):

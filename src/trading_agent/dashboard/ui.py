@@ -283,6 +283,44 @@ button[data-baseweb="tab"] p {{
   width: 100%;
   text-align: center;
 }}
+div[data-testid="stButtonGroup"] {{
+  border-bottom: 1px solid rgba(148,163,184,0.15);
+  margin-bottom: 22px;
+  padding-bottom: 14px;
+}}
+div[data-testid="stButtonGroup"] > label {{
+  display: none !important;
+}}
+div[data-testid="stButtonGroup"] div[role="radiogroup"] {{
+  display: flex;
+  gap: 8px;
+}}
+div[data-testid="stButtonGroup"] button[data-testid^="stBaseButton-segmented_control"] {{
+  width: 54px;
+  min-width: 54px;
+  height: 36px;
+  justify-content: center;
+  padding: 0;
+  border-radius: 7px;
+  color: #94a3b8;
+  background: rgba(15,23,42,0.48);
+  border: 1px solid rgba(148,163,184,0.08);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.02);
+}}
+div[data-testid="stButtonGroup"] button[data-testid="stBaseButton-segmented_controlActive"] {{
+  color: #e7eefb;
+  background: rgba(22,28,40,0.96);
+  border-color: rgba(59,130,246,0.35);
+  box-shadow: inset 0 -2px 0 {ACCENT}, 0 0 0 1px rgba(59,130,246,0.10);
+}}
+div[data-testid="stButtonGroup"] button[data-testid^="stBaseButton-segmented_control"] p {{
+  font-size: .86rem;
+  font-weight: 700;
+  line-height: 1;
+  margin: 0;
+  width: 100%;
+  text-align: center;
+}}
 span[data-testid="stIconMaterial"] {{
   display: none !important;
 }}
@@ -565,9 +603,7 @@ div[data-testid="stDataFrame"] {{
 def inject_theme() -> None:
     """注入一次性 CSS + 启用统一的 Altair 深色图表主题。幂等。"""
 
-    if not st.session_state.get("_c4_theme_injected"):
-        st.markdown(_CSS, unsafe_allow_html=True)
-        st.session_state["_c4_theme_injected"] = True
+    st.markdown(_CSS, unsafe_allow_html=True)
     _enable_altair_theme()
 
 
