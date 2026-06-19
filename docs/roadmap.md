@@ -291,8 +291,19 @@ champion 买点/challenger 买点/成交量/MACD（DIF/DEA/柱）共 9 条 trace
 - `queries.trades_for_symbol` 透传 `setup_type/stop/target/reward_risk/slippage_bps`，明细表展示完整交易计划。
 - 测试 seed 补 stop/target + 一笔卖出（成一个闭合回合），图实测 21 条 trace；33 dashboard 测试通过。
 
-> **后续可增量**：按某挑战者重放「如果用它会怎样」的整段权益对比、intraday 分钟级 K 线（需分钟 OHLCV 采集）、
-> 画扇形/斐波那契等手绘工具、把 entry/stop/target 也接 technical_levels（非成交票也显示计划）。
+**跨策略行为对比 + 权益重放（2026-06-18，同日，按用户「不同策略的行为 / 动态看信息」要求）**：
+- **策略行为对比**（业绩与对比 + K线复盘两处）：`queries.strategy_behavior` 把 champion 决策（decisions 表）与各挑战者
+  `shadow_decisions.jsonl` 按当天决策序号对齐，并排出 trade/no-trade 表 + ⚠️ 分歧高亮 + 每挑战者「与冠军分歧处数 /
+  出手次数」汇总卡；`queries.decisions_for_symbol` 在 K线复盘给「各策略对该标的的决策」（含未成交的 would_trade /
+  被拦截原因）。直接回答「同一天各策略为什么出手/空仓、分歧在哪」。
+- **挑战者权益重放**（业绩与对比）：`queries.strategy_equity_curves` 取 champion（主账本）+ 各挑战者
+  （`experiments/<id>/paper/equity_curve.jsonl`）权益，归一化到 100 叠加成曲线 + 累计收益/最大回撤对比表（⭐标最优）——
+  「换成这个策略整段会怎样」。
+- 三个新 query + 三个新 chart view（`strategy_equity_replay_view` / `strategy_behavior_view` / `symbol_behavior_view`），
+  全只读；smoke seed 补挑战者 equity_curve + 一条与冠军分歧的 shadow_decision；33 dashboard 测试通过。
+
+> **后续可增量**：intraday 分钟级 K 线（需分钟 OHLCV 采集）、画扇形/斐波那契等手绘工具、把 entry/stop/target 接
+> technical_levels（非成交票也显示计划）、行为分歧的全局热力图（哪些票分歧最多）。
 
 ---
 
