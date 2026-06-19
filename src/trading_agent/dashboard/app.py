@@ -95,7 +95,7 @@ with st.sidebar:
     st.caption("只读。默认显示关键摘要。")
 
 cockpit_tab, picks_tab, perf_tab, kline_tab, calib_tab, growth_tab = st.tabs(
-    ["今日驾驶舱", "选股决策", "业绩对比", "K线复盘", "校准归因", "成长趋势"]
+    ["总览", "选股", "业绩", "日线", "校准", "成长"]
 )
 
 # ── 今日驾驶舱 ──────────────────────────────────────────
