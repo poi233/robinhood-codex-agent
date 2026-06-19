@@ -69,6 +69,22 @@ def build_parser() -> argparse.ArgumentParser:
 
     subparsers.add_parser("dashboard", help="Launch the read-only Streamlit dashboard at http://localhost:8501.")
 
+    screen_parser = subparsers.add_parser(
+        "screen",
+        help="O1 weekly Serenity-skill stock screener: discover pool-external bottleneck stocks "
+        "→ factor-validate → auto-update universe (add-only + re-rank). Gated by ENABLE_WEEKLY_SCREENER.",
+    )
+    screen_parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Force report-only: never write universe.txt/universe_meta.json, even if ENABLE_WEEKLY_SCREENER=1.",
+    )
+    screen_parser.add_argument(
+        "--apply",
+        action="store_true",
+        help="Force auto-apply (write the universe) even if ENABLE_WEEKLY_SCREENER=0. --dry-run wins if both given.",
+    )
+
     growth_parser = subparsers.add_parser("growth", help="Self-growth diagnostics (paper-only, read-only).")
     growth_subparsers = growth_parser.add_subparsers(dest="growth_command", required=True)
     growth_observe_parser = growth_subparsers.add_parser("observe", help="Write runtime/analytics/growth_observations.json.")
@@ -241,6 +257,13 @@ def _run_doctor(agent_root: Path) -> int:
         f"  ENABLE_SHADOW_RESCORE     = {env.get('ENABLE_SHADOW_RESCORE', '0')}",
         f"  ENABLE_INTRADAY_ADVISORY_OVERLAY = {env.get('ENABLE_INTRADAY_ADVISORY_OVERLAY', '0')}",
         f"  ENABLE_REGIME_VIX_FETCH   = {env.get('ENABLE_REGIME_VIX_FETCH', '1')}",
+        "",
+        "  --- Selection Layer (weekly screener · O1) ---",
+        f"  ENABLE_WEEKLY_SCREENER    = {env.get('ENABLE_WEEKLY_SCREENER', '0')}",
+        f"  SCREEN_MAX_ADDS_PER_WEEK  = {env.get('SCREEN_MAX_ADDS_PER_WEEK', '5')}",
+        f"  UNIVERSE_MAX              = {env.get('UNIVERSE_MAX', '120')}",
+        f"  SCREEN_MIN_DOLLAR_VOL     = {env.get('SCREEN_MIN_DOLLAR_VOL', '20000000')}",
+        f"  SCREEN_REQUIRE_UPTREND    = {env.get('SCREEN_REQUIRE_UPTREND', '1')}",
         "",
         "  --- Notifications ---",
         f"  ENABLE_TRADE_EMAIL        = {env.get('ENABLE_TRADE_EMAIL_NOTIFICATIONS', '1')}",
@@ -672,6 +695,10 @@ def main(argv: list[str] | None = None) -> int:
         return _run_analytics_retention(agent_root, keep_days=args.keep_days, apply=args.apply)
     if args.command == "dashboard":
         return _run_dashboard(agent_root)
+    if args.command == "screen":
+        from trading_agent.screener.pipeline import run_screen
+
+        return run_screen(agent_root, dry_run=args.dry_run, apply=True if args.apply else None)
     if args.command == "growth" and args.growth_command == "observe":
         return _run_growth_observe(agent_root, since=args.since, until=args.until)
     if args.command == "growth" and args.growth_command == "propose":
