@@ -9,6 +9,8 @@ deltas, benchmark comparisons and a "what / how / action" guidance box in one li
 """
 from __future__ import annotations
 
+import json
+from html import escape
 from dataclasses import dataclass
 from typing import Any, Iterable, Mapping
 
@@ -30,23 +32,24 @@ NEUTRAL = "#8a99b3"  # 灰 — 中性 / 无数据
 ACCENT = "#3b82f6"  # 主题强调蓝
 CARD_BG = "#161b27"
 CARD_BORDER = "#222a3a"
+PANEL_BG = "#101824"
 
 
 @dataclass(frozen=True)
 class Verdict:
-    """好坏判定结果：颜色 + emoji + 中文标签。"""
+    """好坏判定结果：颜色 + 中文标签。"""
 
     level: str          # "good" | "warn" | "bad" | "neutral"
     color: str
-    emoji: str
+    marker: str
     label: str
 
 
 _VERDICT_PRESETS: dict[str, Verdict] = {
-    "good": Verdict("good", GOOD, "🟢", "良好"),
-    "warn": Verdict("warn", WARN, "🟡", "一般"),
-    "bad": Verdict("bad", BAD, "🔴", "偏差"),
-    "neutral": Verdict("neutral", NEUTRAL, "⚪", "无数据"),
+    "good": Verdict("good", GOOD, "", "良好"),
+    "warn": Verdict("warn", WARN, "", "一般"),
+    "bad": Verdict("bad", BAD, "", "偏差"),
+    "neutral": Verdict("neutral", NEUTRAL, "", "无数据"),
 }
 
 
@@ -58,7 +61,7 @@ def verdict(
     higher_is_better: bool = True,
     labels: tuple[str, str, str] | None = None,
 ) -> Verdict:
-    """把一个数值按阈值映射成 🟢良好 / 🟡一般 / 🔴偏差。
+    """把一个数值按阈值映射成良好 / 一般 / 偏差。
 
     ``higher_is_better`` 控制方向（如填单率越高越好；空仓率越低越好）。
     当 ``value`` 缺失时返回中性灰，绝不报错。
@@ -79,7 +82,7 @@ def verdict(
     base = _VERDICT_PRESETS[level]
     if labels:
         idx = {"good": 0, "warn": 1, "bad": 2}[level]
-        return Verdict(base.level, base.color, base.emoji, labels[idx])
+        return Verdict(base.level, base.color, base.marker, labels[idx])
     return base
 
 
@@ -176,33 +179,274 @@ def delta_vs_prev(
 
 _CSS = f"""
 <style>
+.stApp {{
+  background:
+    radial-gradient(circle at 18% 0%, rgba(22,199,132,0.10), transparent 28%),
+    radial-gradient(circle at 82% 6%, rgba(59,130,246,0.12), transparent 30%),
+    linear-gradient(180deg, #070b12 0%, #0b111b 45%, #070b12 100%);
+}}
+header[data-testid="stHeader"] {{ background: transparent; }}
+div[data-testid="stToolbar"] {{ opacity: .45; }}
+section[data-testid="stSidebar"] {{
+  background: linear-gradient(180deg, #101722 0%, #0b111b 100%);
+  border-right: 1px solid rgba(148,163,184,0.12);
+}}
+.block-container {{
+  padding-top: 2.1rem;
+  max-width: 1180px;
+}}
+.terminal-title {{
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  margin: 2px 0 12px;
+  padding-left: 14px;
+  border-left: 3px solid {GOOD};
+}}
+.terminal-title h1 {{
+  font-size: 2.05rem;
+  line-height: 1.05;
+  margin: 0;
+  letter-spacing: 0;
+}}
+.terminal-subtitle {{
+  color: {NEUTRAL};
+  font-size: .78rem;
+}}
+div[data-baseweb="tab-list"] {{
+  gap: 8px;
+  border-bottom: 1px solid rgba(148,163,184,0.15);
+}}
+button[data-baseweb="tab"] {{
+  height: 36px;
+  padding: 0 12px;
+  border-radius: 6px 6px 0 0;
+  color: #94a3b8;
+  background: rgba(15,23,42,0.30);
+  border: 1px solid transparent;
+  border-bottom: 0;
+}}
+button[data-baseweb="tab"][aria-selected="true"] {{
+  color: #e7eefb;
+  background: rgba(22,28,40,0.92);
+  border-color: rgba(59,130,246,0.35);
+}}
+button[data-baseweb="tab"] p {{
+  font-size: .86rem;
+  font-weight: 700;
+}}
+div[data-testid="stAlert"] {{
+  border-radius: 8px;
+  border: 1px solid rgba(148,163,184,0.16);
+  background: rgba(17,24,39,0.82);
+  box-shadow: inset 3px 0 0 rgba(148,163,184,0.28);
+}}
+div[data-testid="stAlert"] svg {{
+  display: none;
+}}
+.hero-panel {{
+  position: relative;
+  overflow: hidden;
+  border: 1px solid rgba(94,234,212,0.22);
+  background:
+    radial-gradient(circle at 7% 18%, rgba(22,199,132,0.20), transparent 22%),
+    linear-gradient(110deg, rgba(16,24,36,0.98), rgba(18,31,45,0.95) 58%, rgba(13,20,31,0.98));
+  border-radius: 10px;
+  padding: 20px 22px 16px;
+  box-shadow: 0 18px 60px rgba(0,0,0,0.35);
+  margin-bottom: 12px;
+}}
+.hero-panel::after {{
+  content: "";
+  position: absolute;
+  inset: -40% -18% auto auto;
+  width: 420px;
+  height: 260px;
+  background: linear-gradient(135deg, rgba(59,130,246,0.16), rgba(22,199,132,0.06));
+  transform: rotate(14deg);
+  pointer-events: none;
+}}
+.hero-grid {{
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: 138px minmax(0, 1fr);
+  gap: 20px;
+  align-items: center;
+}}
+.score-ring {{
+  width: 112px;
+  height: 112px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  background:
+    radial-gradient(circle at center, #111a27 58%, transparent 59%),
+    conic-gradient({GOOD} calc(var(--score) * 1%), rgba(148,163,184,0.18) 0);
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,0.04), 0 0 36px rgba(22,199,132,0.15);
+}}
+.score-ring span {{
+  font-size: 2rem;
+  font-weight: 800;
+  color: #f7fbff;
+}}
+.score-ring small {{
+  display: block;
+  margin-top: -6px;
+  font-size: .58rem;
+  color: {NEUTRAL};
+  text-align: center;
+}}
+.hero-kicker {{
+  color: {GOOD};
+  font-size: .74rem;
+  font-weight: 700;
+  margin-bottom: 6px;
+}}
+.hero-headline {{
+  font-size: 1.36rem;
+  font-weight: 800;
+  line-height: 1.25;
+  color: #f8fbff;
+  margin-bottom: 7px;
+}}
+.hero-copy {{
+  color: #b9c5d6;
+  max-width: 760px;
+  font-size: .86rem;
+  line-height: 1.55;
+}}
+.hero-metrics {{
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 16px;
+}}
+.hero-metric {{
+  background: rgba(255,255,255,0.055);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 7px;
+  padding: 9px 11px;
+}}
+.hero-metric .label {{
+  color: {NEUTRAL};
+  font-size: .68rem;
+  margin-bottom: 2px;
+}}
+.hero-metric .value {{
+  font-size: 1rem;
+  font-weight: 800;
+  color: #f8fbff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}}
+.card-strip {{
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 9px;
+  margin: 10px 0 10px;
+}}
+.pick-card {{
+  border: 1px solid rgba(148,163,184,0.15);
+  border-top: 3px solid {ACCENT};
+  border-radius: 8px;
+  background: linear-gradient(180deg, rgba(20,28,42,0.96), rgba(13,19,29,0.98));
+  padding: 10px 11px;
+  min-height: 95px;
+}}
+.pick-card.good {{ border-top-color: {GOOD}; }}
+.pick-card.warn {{ border-top-color: {WARN}; }}
+.pick-symbol {{
+  font-size: 1.05rem;
+  font-weight: 850;
+  color: #f8fbff;
+  margin-bottom: 4px;
+}}
+.pick-score {{
+  color: {GOOD};
+  font-weight: 800;
+  font-size: .94rem;
+}}
+.pick-meta {{
+  color: {NEUTRAL};
+  font-size: .68rem;
+  line-height: 1.35;
+  margin-top: 5px;
+}}
+.section-band {{
+  margin: 14px 0 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  border: 1px solid rgba(148,163,184,0.14);
+  border-left: 3px solid {ACCENT};
+  border-radius: 8px;
+  padding: 10px 13px;
+  background: linear-gradient(90deg, rgba(20,28,42,0.92), rgba(10,15,24,0.70));
+}}
+.section-band h3 {{
+  margin: 0;
+  font-size: .98rem;
+}}
+.section-band span {{
+  color: {NEUTRAL};
+  font-size: .72rem;
+  text-align: right;
+}}
 .kpi-card {{
   background: {CARD_BG};
   border: 1px solid {CARD_BORDER};
   border-left: 4px solid {NEUTRAL};
-  border-radius: 12px;
-  padding: 14px 16px;
-  margin-bottom: 8px;
+  border-radius: 8px;
+  padding: 9px 12px;
+  margin-bottom: 6px;
   box-shadow: 0 1px 3px rgba(0,0,0,0.35);
 }}
 .kpi-card.good {{ border-left-color: {GOOD}; }}
 .kpi-card.warn {{ border-left-color: {WARN}; }}
 .kpi-card.bad  {{ border-left-color: {BAD}; }}
-.kpi-label {{ font-size: 0.78rem; color: {NEUTRAL}; letter-spacing: .02em; }}
-.kpi-value {{ font-size: 1.7rem; font-weight: 700; line-height: 1.25; margin-top: 2px; }}
-.kpi-sub {{ font-size: 0.78rem; margin-top: 3px; }}
+.kpi-label {{ font-size: 0.72rem; color: {NEUTRAL}; letter-spacing: .02em; }}
+.kpi-value {{
+  font-size: 1.26rem;
+  font-weight: 700;
+  line-height: 1.18;
+  margin-top: 2px;
+  overflow-wrap: anywhere;
+}}
+.kpi-sub {{ font-size: 0.7rem; margin-top: 2px; }}
 .kpi-up   {{ color: {GOOD}; }}
 .kpi-down {{ color: {BAD}; }}
 .kpi-flat {{ color: {NEUTRAL}; }}
 .guidance-box {{
   background: rgba(59,130,246,0.07);
   border: 1px solid rgba(59,130,246,0.25);
-  border-radius: 10px;
+  border-radius: 8px;
   padding: 10px 14px;
   margin-bottom: 12px;
   font-size: 0.86rem;
 }}
 .guidance-box b {{ color: {ACCENT}; }}
+section.main h1 {{ margin-bottom: 0.15rem; }}
+section.main h2 {{ margin-top: 0.55rem; margin-bottom: 0.35rem; }}
+section.main h3 {{ margin-top: 0.45rem; margin-bottom: 0.25rem; }}
+div[data-testid="stVerticalBlock"] {{ gap: 0.55rem; }}
+div[data-testid="stDataFrame"] {{
+  border: 1px solid rgba(148,163,184,0.14);
+  border-radius: 8px;
+  overflow: hidden;
+}}
+@media (max-width: 900px) {{
+  .hero-grid {{ grid-template-columns: 1fr; }}
+  .hero-metrics {{ grid-template-columns: repeat(2, minmax(0, 1fr)); }}
+  .card-strip {{ grid-template-columns: repeat(2, minmax(0, 1fr)); }}
+  .section-band {{ align-items: flex-start; flex-direction: column; }}
+  .section-band span {{ text-align: left; }}
+}}
 </style>
 """
 
@@ -268,7 +512,7 @@ def kpi_card(
     level = vd.level if vd and vd.level != "neutral" else ""
     sub_parts: list[str] = []
     if vd is not None:
-        sub_parts.append(f"<span style='color:{vd.color}'>{vd.emoji} {vd.label}</span>")
+        sub_parts.append(f"<span style='color:{vd.color}'>{vd.label}</span>")
     if delta is not None:
         cls = "kpi-up" if delta.good else "kpi-down" if delta.good is False else "kpi-flat"
         sub_parts.append(f"<span class='{cls}'>{delta.text}</span>")
@@ -296,6 +540,82 @@ def guidance_box(what: str, how: str, action: str) -> None:
         f"</div>",
         unsafe_allow_html=True,
     )
+
+
+def guidance_expander(label: str, *, what: str, how: str, action: str) -> None:
+    with st.expander(label):
+        guidance_box(what=what, how=how, action=action)
+
+
+def app_title(title: str, subtitle: str) -> None:
+    st.markdown(
+        f"<div class='terminal-title'><h1>{escape(title)}</h1>"
+        f"<div class='terminal-subtitle'>{escape(subtitle)}</div></div>",
+        unsafe_allow_html=True,
+    )
+
+
+def section_band(title: str, caption: str = "") -> None:
+    st.markdown(
+        f"<div class='section-band'><h3>{escape(title)}</h3><span>{escape(caption)}</span></div>",
+        unsafe_allow_html=True,
+    )
+
+
+def hero_panel(
+    *,
+    kicker: str,
+    headline: str,
+    copy: str,
+    score: int | float,
+    score_label: str,
+    metrics: list[tuple[str, str]],
+) -> None:
+    score_clamped = max(0, min(100, int(round(float(score)))))
+    metric_html = "".join(
+        "<div class='hero-metric'>"
+        f"<div class='label'>{escape(label)}</div>"
+        f"<div class='value'>{escape(value)}</div>"
+        "</div>"
+        for label, value in metrics[:4]
+    )
+    st.markdown(
+        "<div class='hero-panel'>"
+        "<div class='hero-grid'>"
+        f"<div class='score-ring' style='--score:{score_clamped}'><div><span>{score_clamped}</span><small>{escape(score_label)}</small></div></div>"
+        "<div>"
+        f"<div class='hero-kicker'>{escape(kicker)}</div>"
+        f"<div class='hero-headline'>{escape(headline)}</div>"
+        f"<div class='hero-copy'>{escape(copy)}</div>"
+        "</div>"
+        "</div>"
+        f"<div class='hero-metrics'>{metric_html}</div>"
+        "</div>",
+        unsafe_allow_html=True,
+    )
+
+
+def pick_cards(rows: list[Mapping[str, Any]], *, limit: int = 5) -> None:
+    cards = []
+    for row in rows[:limit]:
+        score = row.get("candidate_score")
+        try:
+            score_value = float(score)
+        except (TypeError, ValueError):
+            score_value = 0.0
+        tone = "good" if row.get("is_tradable") else "warn"
+        status = display_value(row.get("score_status") or "")
+        readiness = fmt_number(row.get("trade_readiness_score")) if row.get("trade_readiness_score") is not None else "—"
+        cards.append(
+            f"<div class='pick-card {tone}'>"
+            f"<div class='pick-symbol'>{escape(str(row.get('symbol') or '—'))}</div>"
+            f"<div class='pick-score'>{score_value:.2f}</div>"
+            f"<div class='pick-meta'>{escape(status)}<br>交易就绪 {escape(readiness)} · {'可交易' if row.get('is_tradable') else '观察'}</div>"
+            "</div>"
+        )
+    if not cards:
+        return
+    st.markdown(f"<div class='card-strip'>{''.join(cards)}</div>", unsafe_allow_html=True)
 
 
 def vs_benchmark(strategy_value: float | None, bench_value: float | None, *, label: str = "vs SPY") -> str:
@@ -364,11 +684,99 @@ COLUMN_LABELS: Mapping[str, str] = {
     "thesis": "投资逻辑",
     "win_rate_pct": "胜率%",
     "mean_return_pct": "平均收益%",
+    "category": "类别",
+    "artifact": "数据项",
+    "metric": "指标",
+    "value": "内容",
+    "date_start": "开始日",
+    "date_end": "结束日",
+    "orders_total": "订单数",
+    "total_orders": "总订单数",
+    "orders_filled": "已成交订单",
+    "total_evaluations": "评估次数",
+    "would_trade": "可交易次数",
+    "shadow_days": "影子天数",
+    "evaluations": "评估数",
+    "recommend_promote": "建议升级",
+    "blocking_reasons": "阻塞原因",
+    "module": "模块",
+    "severity": "级别",
+    "message": "说明",
+    "mutation": "变更",
+    "validation_status": "验证状态",
+    "proposal_id": "提案ID",
+    "status": "状态",
+    "proposal_count": "提案数",
+    "active_shadow_count": "活跃影子数",
+    "calibration_sample_size": "校准样本数",
+    "run_date_count": "运行日数",
+    "champion_fill_rate_pct": "冠军成交率%",
 }
 
 
 def label_of(field: str) -> str:
     return COLUMN_LABELS.get(field, field)
+
+
+VALUE_LABELS: Mapping[str, str] = {
+    "blocked": "不交易",
+    "would_trade": "可交易",
+    "no_trade": "不交易",
+    "premarket_plan": "盘前计划",
+    "postmarket_summary": "盘后总结",
+    "dsa_signals_generated": "DSA信号生成",
+    "outside_entry_zone": "不在入场区",
+    "no_trade_zone": "禁止交易区",
+    "chase_blocked": "追高拦截",
+    "insufficient_data": "数据不足",
+    "scored": "已评分",
+    "ok": "正常",
+}
+
+
+def display_value(value: Any) -> str:
+    text = str(value)
+    label = VALUE_LABELS.get(text)
+    return f"{label}（{text}）" if label else text
+
+
+def _format_cell(value: Any) -> Any:
+    if value is None:
+        return "—"
+    try:
+        if pd.isna(value):
+            return "—"
+    except (TypeError, ValueError):
+        pass
+    if isinstance(value, bool):
+        return "是" if value else "否"
+    if isinstance(value, (int, float)):
+        return value
+    if isinstance(value, str):
+        stripped = value.strip()
+        if not stripped:
+            return "—"
+        if stripped[:1] in "[{":
+            try:
+                return _format_cell(json.loads(stripped))
+            except json.JSONDecodeError:
+                return display_value(value)
+        return display_value(value)
+    if isinstance(value, list):
+        if not value:
+            return "—"
+        return "、".join(str(_format_cell(item)) for item in value)
+    if isinstance(value, dict):
+        if not value:
+            return "—"
+        parts = []
+        for key, item in value.items():
+            formatted = _format_cell(item)
+            if formatted == "—":
+                continue
+            parts.append(f"{label_of(str(key))}: {formatted}")
+        return "；".join(parts) if parts else "—"
+    return str(value)
 
 
 def pretty_table(
@@ -391,5 +799,8 @@ def pretty_table(
         if keep:
             df = df[keep]
     mapping = {col: (rename.get(col) if rename and col in rename else label_of(col)) for col in df.columns}
+    df = df.map(_format_cell) if hasattr(df, "map") else df.applymap(_format_cell)
+    for col in df.select_dtypes(include=["object"]).columns:
+        df[col] = df[col].astype(str)
     df = df.rename(columns=mapping)
     st.dataframe(df, use_container_width=True, hide_index=True)

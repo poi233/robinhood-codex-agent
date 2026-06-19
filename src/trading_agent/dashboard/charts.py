@@ -14,9 +14,17 @@ from trading_agent.dashboard import ui
 
 def _bar(items: list[tuple[str, float]], *, x_title: str, y_title: str, x_label: str | None = None,
          y_label: str | None = None) -> None:
-    if not items:
+    cleaned = [(label, value) for label, value in items if value is not None]
+    if not cleaned:
         return
-    frame = pd.DataFrame(items, columns=[y_title, x_title])
+    values = [float(value) for _, value in cleaned]
+    if len(cleaned) < 2 or len({round(value, 8) for value in values}) <= 1:
+        ui.pretty_table(
+            [{y_title: label, x_title: value} for label, value in cleaned],
+            rename={y_title: y_label or y_title, x_title: x_label or x_title},
+        )
+        return
+    frame = pd.DataFrame(cleaned, columns=[y_title, x_title])
     chart = (
         alt.Chart(frame)
         .mark_bar(cornerRadiusEnd=3)
@@ -31,16 +39,128 @@ def _bar(items: list[tuple[str, float]], *, x_title: str, y_title: str, x_label:
     st.altair_chart(chart, use_container_width=True)
 
 
-_PLAN_STATE_ICON = {"trade_ready": "🟢", "observe_only": "🟡", "no_trade": "🔴", "normal": "🟢"}
+def _line_chart_or_table(df: pd.DataFrame, *, caption: str) -> None:
+    if df.empty or len(df.index) < 2:
+        st.caption(f"{caption}：数据点不足，暂不绘制趋势图。")
+        ui.pretty_table(df.reset_index())
+        return
+    numeric = df.select_dtypes(include="number")
+    if numeric.empty or all(numeric[col].dropna().nunique() <= 1 for col in numeric.columns):
+        st.caption(f"{caption}：数值尚无变化，暂不绘制空趋势图。")
+        ui.pretty_table(df.reset_index())
+        return
+    st.line_chart(df, use_container_width=True)
+
+
+_PLAN_STATE_LABEL = {"trade_ready": "可交易", "observe_only": "只观察", "no_trade": "不交易", "normal": "正常"}
+_MARKET_REGIME_LABEL = {
+    "normal": "正常",
+    "bull": "多头",
+    "neutral": "中性",
+    "risk_off": "避险",
+    "panic": "恐慌",
+    "unknown": "未知",
+}
 
 
 def plan_state_badge(plan_state: str | None) -> str:
-    icon = _PLAN_STATE_ICON.get(str(plan_state or "").lower(), "⚪")
-    return f"{icon} {plan_state or '—'}"
+    raw = str(plan_state or "").lower()
+    label = _PLAN_STATE_LABEL.get(raw)
+    if not plan_state:
+        return "—"
+    return f"{label}（{plan_state}）" if label else str(plan_state)
+
+
+def market_regime_badge(regime: str | None) -> str:
+    raw = str(regime or "").lower()
+    label = _MARKET_REGIME_LABEL.get(raw)
+    if not regime:
+        return "—"
+    return f"{label}（{regime}）" if label else str(regime)
+
+
+def pnl_verdict(value: Any) -> ui.Verdict | None:
+    if value is None:
+        return None
+    try:
+        pnl = float(value)
+    except (TypeError, ValueError):
+        return None
+    if pnl > 0:
+        return ui.Verdict("good", ui.GOOD, "", "盈利")
+    if pnl < 0:
+        return ui.Verdict("bad", ui.BAD, "", "亏损")
+    return ui.Verdict("neutral", ui.NEUTRAL, "", "持平")
+
+
+def return_verdict(value: Any) -> ui.Verdict | None:
+    if value is None:
+        return None
+    try:
+        ret = float(value)
+    except (TypeError, ValueError):
+        return None
+    if ret > 0:
+        return ui.Verdict("good", ui.GOOD, "", "正收益")
+    if ret < 0:
+        return ui.Verdict("bad", ui.BAD, "", "负收益")
+    return ui.Verdict("neutral", ui.NEUTRAL, "", "持平")
+
+
+def _latest_trading_decision(decisions: list[dict[str, Any]]) -> dict[str, Any] | None:
+    trading_decisions = [
+        row for row in decisions
+        if str(row.get("decision") or "") in {"would_trade", "blocked", "no_trade"}
+    ]
+    return trading_decisions[-1] if trading_decisions else None
+
+
+def cockpit_hero(
+    overview_delta: dict[str, Any],
+    completeness: dict[str, Any],
+    regime_payload: dict[str, Any],
+    decisions: list[dict[str, Any]],
+) -> None:
+    curr = overview_delta.get("curr") or {}
+    latest = _latest_trading_decision(decisions)
+    plan = str(curr.get("plan_state") or "")
+    regime = str(curr.get("market_regime") or regime_payload.get("regime") or "")
+    completeness_pct = float(completeness.get("pct") or 0)
+    tradable = int(curr.get("tradable_count") or 0)
+    score = completeness_pct
+    if plan == "trade_ready":
+        score = min(100, score + 6)
+    if latest and latest.get("decision") == "blocked":
+        score = max(0, score - 12)
+
+    if latest and latest.get("decision") == "blocked":
+        reasons = _norm_reasons(latest.get("blocked_reasons")) or "等待更好入场区"
+        headline = "系统准备完毕，但执行层仍在等价格确认"
+        copy = f"盘中最新结论是不交易；主要拦截为 {reasons}。当前适合盯入场区，不适合追价。"
+    elif latest and latest.get("decision") == "would_trade":
+        headline = "出现可交易信号，按计划检查订单约束"
+        copy = f"最新可交易标的为 {latest.get('symbol') or '—'}，方向 {latest.get('side') or '—'}。"
+    else:
+        headline = "盘前计划已生成，等待盘中决策"
+        copy = "关键运行产物已就绪；盘中执行会继续检查价格区间、追高和风险约束。"
+
+    ui.hero_panel(
+        kicker=f"{market_regime_badge(regime)} · {plan_state_badge(plan)}",
+        headline=headline,
+        copy=copy,
+        score=score,
+        score_label="运行评分",
+        metrics=[
+            ("账户权益", ui.fmt_currency(curr.get("total_equity"))),
+            ("观察 / 可交易", f"{curr.get('watchlist_count', 0)} / {tradable}"),
+            ("最高评分", ui.fmt_number(curr.get("top_score"))),
+            ("数据完整度", ui.fmt_pct(completeness_pct)),
+        ],
+    )
 
 
 # ============================================================
-# 📊 今日驾驶舱
+# 今日驾驶舱
 # ============================================================
 
 def regime_banner(payload: dict) -> None:
@@ -48,12 +168,11 @@ def regime_banner(payload: dict) -> None:
     if not payload or not payload.get("regime"):
         return
     regime = payload["regime"]
-    emoji = {"bull": "🟢", "neutral": "⚪", "risk_off": "🟠", "panic": "🔴", "unknown": "⚫"}.get(regime, "")
     label = {"bull": "多头", "neutral": "中性", "risk_off": "避险", "panic": "恐慌",
              "unknown": "未知"}.get(regime, regime)
     applied = payload.get("applied_multiplier")
     reasons = "、".join(payload.get("reasons") or []) or "无"
-    line = (f"{emoji} **市场状态：{label}（{regime}）** · 仓位乘子（只降不升）：{applied}× · 依据：{reasons}"
+    line = (f"**市场状态：{label}（{regime}）** · 仓位乘子（只降不升）：{applied}× · 依据：{reasons}"
             "　（advisory，尚未接入实际 sizing）")
     if regime in {"risk_off", "panic"}:
         st.warning(line)
@@ -68,9 +187,9 @@ def nightly_health_banner(health: dict) -> None:
         return
     last = health.get("last_nightly_run_date") or "?"
     if health.get("status") == "ok":
-        st.success(f"🟢 夜间分析正常 · 最近运行 {last} · 所有预期报告新鲜")
+        st.success(f"夜间分析正常 · 最近运行 {last} · 所有预期报告新鲜")
         return
-    parts = [f"🔴 夜间分析需关注 · 最近运行 {last}"]
+    parts = [f"夜间分析需关注 · 最近运行 {last}"]
     if health.get("failed_steps"):
         parts.append("失败步骤：" + "、".join(health["failed_steps"]))
     if health.get("stale_reports"):
@@ -85,7 +204,7 @@ def kpi_overview(overview_delta: dict[str, Any]) -> None:
 
     row1 = st.columns(4)
     ui.kpi_card(row1[0], "计划状态", plan_state_badge(curr.get("plan_state")))
-    ui.kpi_card(row1[1], "市场状态", curr.get("market_regime") or "—")
+    ui.kpi_card(row1[1], "市场状态", market_regime_badge(curr.get("market_regime")))
     ui.kpi_card(
         row1[2], "观察 / 可交易",
         f"{curr.get('watchlist_count', 0)} / {curr.get('tradable_count', 0)}",
@@ -105,8 +224,7 @@ def kpi_overview(overview_delta: dict[str, Any]) -> None:
         delta=ui.delta_vs_prev(equity, prev.get("total_equity")),
     )
     pnl = curr.get("today_pnl")
-    pnl_vd = ui.verdict(pnl, good=0.0, warn=0.0, higher_is_better=True,
-                        labels=("盈利", "持平", "亏损")) if pnl is not None else None
+    pnl_vd = pnl_verdict(pnl)
     ui.kpi_card(row2[1], "当日已实现盈亏", ui.fmt_currency(pnl), vd=pnl_vd)
     ui.kpi_card(
         row2[2], "待成交订单", str(curr.get("pending_order_count", 0)),
@@ -116,15 +234,41 @@ def kpi_overview(overview_delta: dict[str, Any]) -> None:
     ui.kpi_card(row2[3], "对比基准日", str(prev_label), note="上一交易日（同比口径）")
 
 
-def today_decision(decisions: list[dict[str, Any]]) -> None:
-    st.subheader("今天为什么交易 / 不交易")
-    if not decisions:
-        st.info("该运行日尚无盘中决策记录。")
+def data_completeness_view(payload: dict[str, Any]) -> None:
+    present = payload.get("present")
+    total = payload.get("total")
+    pct = payload.get("pct")
+    if not total:
+        st.info("暂无数据完整度信息。")
         return
-    latest = decisions[-1]
+    missing = payload.get("missing") or []
+    cols = st.columns(3)
+    vd = ui.verdict_for("coverage_pct", pct)
+    ui.kpi_card(cols[0], "数据完整度", ui.fmt_pct(pct), vd=vd, note=f"{present}/{total} 项就绪")
+    ui.kpi_card(cols[1], "新闻 / 日线", f"{payload.get('news_count', 0)} / {payload.get('ohlcv_count', 0)}")
+    ui.kpi_card(cols[2], "缺失项", str(len(missing)), vd=ui.verdict(len(missing), good=0, warn=2, higher_is_better=False,
+                                                     labels=("齐全", "少量缺口", "缺口较多")))
+    if missing:
+        st.warning("缺失数据：" + "、".join(f"{row['category']}:{row['artifact']}" for row in missing))
+    with st.expander("完整数据项"):
+        ui.pretty_table(payload.get("rows") or [])
+
+
+def today_decision(decisions: list[dict[str, Any]]) -> None:
+    trading_decisions = [
+        row for row in decisions
+        if str(row.get("decision") or "") in {"would_trade", "blocked", "no_trade"}
+    ]
+    if not trading_decisions:
+        st.info("该运行日尚无盘中决策记录。")
+        if decisions:
+            with st.expander("非交易流程事件"):
+                ui.pretty_table(decisions)
+        return
+    latest = trading_decisions[-1]
     verdict = str(latest.get("decision") or "—")
     if verdict == "would_trade":
-        st.success(f"✅ **可交易** — {latest.get('symbol') or ''} {latest.get('side') or ''} "
+        st.success(f"**可交易** — {latest.get('symbol') or ''} {latest.get('side') or ''} "
                    f"（{latest.get('setup_type') or ''}）")
     else:
         reasons = latest.get("blocked_reasons")
@@ -132,8 +276,9 @@ def today_decision(decisions: list[dict[str, Any]]) -> None:
             reasons = "、".join(json.loads(reasons)) if isinstance(reasons, str) else "、".join(reasons or [])
         except Exception:
             pass
-        st.warning(f"⛔ **{verdict}** — 拦截原因：{reasons or '无'}")
-    ui.pretty_table(decisions)
+        st.warning(f"**不交易** — {reasons or '无'}")
+    with st.expander("盘中决策明细"):
+        ui.pretty_table(trading_decisions)
 
 
 def orders_table_view(rows: list[dict[str, Any]]) -> None:
@@ -151,8 +296,11 @@ def portfolio_target_view(payload: dict) -> None:
     t = payload.get("targets") or {}
     sector_cap = t.get("sector_cap")
     sector_cap_str = f" · 行业 ≤ {sector_cap * 100:.0f}%" if sector_cap else ""
-    st.caption(f"总权益：${payload.get('total_equity', 0):,.0f}　·　现金："
-               f"{payload.get('cash_weight', 0) * 100:.0f}%（目标 ≥ {t.get('cash_target', 0) * 100:.0f}%）"
+    total_equity = payload.get("total_equity")
+    cash_weight = payload.get("cash_weight")
+    cash_label = f"{cash_weight * 100:.0f}%" if isinstance(cash_weight, (int, float)) else "—"
+    st.caption(f"总权益：{ui.fmt_currency(total_equity, digits=0)}　·　现金："
+               f"{cash_label}（目标 ≥ {t.get('cash_target', 0) * 100:.0f}%）"
                f"　·　上限：单仓 ≤ {t.get('max_position_size', 0) * 100:.0f}% · "
                f"主题 ≤ {t.get('theme_cap', 0) * 100:.0f}%{sector_cap_str}")
     breaches = payload.get("breaches") or {}
@@ -166,16 +314,18 @@ def portfolio_target_view(payload: dict) -> None:
     if breaches.get("overexposed_sectors"):
         msgs.append("行业过度集中：" + "、".join(breaches["overexposed_sectors"]))
     if msgs:
-        st.warning("⚠️ " + "　·　".join(msgs) + "　（advisory，只能收紧、绝不加买入）")
+        st.warning("　·　".join(msgs) + "　（advisory，只能收紧、绝不加买入）")
     else:
-        st.success("🟢 现金与集中度均在目标范围内")
+        st.success("现金与集中度均在目标范围内")
     if payload.get("theme_exposure"):
         st.caption("主题敞口")
-        st.bar_chart({k: v for k, v in payload["theme_exposure"].items()})
+        _bar([(k, float(v or 0)) for k, v in payload["theme_exposure"].items()],
+             x_title="weight", y_title="theme", x_label="权重", y_label="主题")
     sector_exposure = {k: v for k, v in (payload.get("sector_exposure") or {}).items() if k != "unknown"}
     if sector_exposure:
         st.caption("行业敞口")
-        st.bar_chart(sector_exposure)
+        _bar([(k, float(v or 0)) for k, v in sector_exposure.items()],
+             x_title="weight", y_title="sector", x_label="权重", y_label="行业")
     if payload.get("position_weights"):
         st.caption("个股权重")
         ui.pretty_table([{"symbol": s, "weight": w} for s, w in payload["position_weights"].items()],
@@ -183,16 +333,30 @@ def portfolio_target_view(payload: dict) -> None:
 
 
 # ============================================================
-# 🎯 选股与决策
+# 选股与决策
 # ============================================================
 
 def candidates_with_rankings_view(rows: list[dict[str, Any]]) -> None:
     if not rows:
         st.info("该运行日无评分候选。")
         return
-    _bar([(row["symbol"], float(row.get("candidate_score") or 0)) for row in rows],
-         x_title="candidate_score", y_title="symbol", x_label="综合评分", y_label="标的")
-    ui.pretty_table(rows)
+    top = rows[:8]
+    cols = st.columns(3)
+    tradable = sum(1 for row in rows if row.get("is_tradable"))
+    watchlist = sum(1 for row in rows if row.get("is_watchlist"))
+    best = top[0] if top else {}
+    ui.kpi_card(cols[0], "候选数", str(len(rows)), note=f"观察 {watchlist} / 可交易 {tradable}")
+    ui.kpi_card(cols[1], "最高评分", ui.fmt_number(best.get("candidate_score")), note=str(best.get("symbol") or "—"))
+    ui.kpi_card(cols[2], "Top 可交易", "、".join(str(r.get("symbol")) for r in top if r.get("is_tradable")) or "—")
+    ui.pick_cards(top, limit=5)
+    ui.pretty_table(
+        top,
+        columns=["symbol", "candidate_score", "score_status", "is_watchlist", "is_tradable", "trade_readiness_score"],
+    )
+    with st.expander("完整候选排名与图表"):
+        _bar([(row["symbol"], float(row.get("candidate_score") or 0)) for row in rows],
+             x_title="candidate_score", y_title="symbol", x_label="综合评分", y_label="标的")
+        ui.pretty_table(rows)
 
 
 def factor_view(payload: dict) -> None:
@@ -205,8 +369,8 @@ def factor_view(payload: dict) -> None:
     if cov:
         cov_pct = cov.get("coverage_pct", 0)
         vd = ui.verdict_for("coverage_pct", cov_pct)
-        bench_ok = "✅" if cov.get("benchmark_available") else "⚠️ 缺失/过短"
-        st.markdown(f"**数据覆盖** {vd.emoji} {vd.label} — 有日线的标的："
+        bench_ok = "可用" if cov.get("benchmark_available") else "缺失/过短"
+        st.markdown(f"**数据覆盖** {vd.label} — 有日线的标的："
                     f"{cov.get('with_daily_bars', 0)}/{cov.get('active_symbols', 0)}（{cov_pct}%）"
                     f"　·　基准 {cov.get('benchmark', '?')} bar 数：{cov.get('benchmark_bar_count', 0)} {bench_ok}")
         if cov.get("missing_symbols"):
@@ -221,9 +385,11 @@ def factor_view(payload: dict) -> None:
             **(data.get("factor_components") or {}),
         })
     rows.sort(key=lambda r: (r["factor_alpha_score"] is not None, r["factor_alpha_score"] or 0), reverse=True)
-    _bar([(r["symbol"], float(r["factor_alpha_score"] or 0)) for r in rows],
-         x_title="factor_alpha_score", y_title="symbol", x_label="因子α分", y_label="标的")
-    ui.pretty_table(rows)
+    ui.pretty_table(rows[:8], columns=["symbol", "factor_alpha_score", "coverage", "risk_flags"])
+    with st.expander("完整因子明细与图表"):
+        _bar([(r["symbol"], float(r["factor_alpha_score"] or 0)) for r in rows],
+             x_title="factor_alpha_score", y_title="symbol", x_label="因子α分", y_label="标的")
+        ui.pretty_table(rows)
 
 
 def advisory_overlay_view(rows: list[dict[str, Any]]) -> None:
@@ -272,8 +438,14 @@ def replay_summary_view(report: dict[str, Any]) -> None:
     reason_counts = blocked.get("reason_counts") or {}
     if reason_counts:
         st.markdown("**最常见拦截原因**")
-        _bar([(reason, float(count or 0)) for reason, count in reason_counts.items()],
-             x_title="count", y_title="reason", x_label="次数", y_label="原因")
+        reason_rows = [
+            {"reason": reason, "count": count}
+            for reason, count in sorted(reason_counts.items(), key=lambda item: item[1], reverse=True)
+        ]
+        ui.pretty_table(reason_rows[:5])
+        with st.expander("拦截原因图表"):
+            _bar([(reason, float(count or 0)) for reason, count in reason_counts.items()],
+                 x_title="count", y_title="reason", x_label="次数", y_label="原因")
     by_symbol = fill_rate.get("by_symbol") or {}
     if by_symbol:
         st.markdown("**各标的成交率**")
@@ -281,7 +453,7 @@ def replay_summary_view(report: dict[str, Any]) -> None:
 
 
 # ============================================================
-# 💰 业绩与对比
+# 业绩与对比
 # ============================================================
 
 def equity_curve_view(payload: dict[str, Any]) -> None:
@@ -294,8 +466,7 @@ def equity_curve_view(payload: dict[str, Any]) -> None:
     strat_ret = payload.get("strategy_return_pct")
     bench_ret = payload.get("benchmark_return_pct")
     cols = st.columns(3)
-    strat_vd = ui.verdict(strat_ret, good=0.0, warn=0.0, higher_is_better=True,
-                          labels=("正收益", "持平", "负收益")) if strat_ret is not None else None
+    strat_vd = return_verdict(strat_ret)
     ui.kpi_card(cols[0], "策略累计收益", ui.fmt_pct(strat_ret), vd=strat_vd)
     ui.kpi_card(cols[1], f"基准（{payload.get('benchmark', 'SPY')}）累计收益", ui.fmt_pct(bench_ret))
     alpha = (strat_ret - bench_ret) if (strat_ret is not None and bench_ret is not None) else None
@@ -310,7 +481,7 @@ def equity_curve_view(payload: dict[str, Any]) -> None:
     plot_cols = ["total_equity"] + (["benchmark_equity"] if has_bench else [])
     rename = {"total_equity": "策略权益", "benchmark_equity": f"{payload.get('benchmark', 'SPY')} 基准"}
     chart_df = df.set_index("timestamp")[plot_cols].rename(columns=rename)
-    st.line_chart(chart_df, use_container_width=True)
+    _line_chart_or_table(chart_df, caption="权益曲线")
     if not has_bench:
         st.caption("（基准曲线需要本地 market_feed 中的 SPY 日线；当前缺数据，只画策略权益）")
 
@@ -384,9 +555,10 @@ def _behavior_cell(cell: dict[str, Any] | None) -> str:
         return "—"
     dec = str(cell.get("decision") or "")
     if dec == "would_trade":
-        return f"✅ 买 {cell.get('symbol') or ''} {cell.get('side') or ''}".strip()
+        return f"买 {cell.get('symbol') or ''} {cell.get('side') or ''}".strip()
     reasons = _norm_reasons(cell.get("blocked_reasons"))
-    return f"⛔ {dec or 'no_trade'}" + (f"（{reasons}）" if reasons else "")
+    label = "不交易" if dec in {"blocked", "no_trade", ""} else dec
+    return label + (f"（{reasons}）" if reasons else "")
 
 
 def strategy_equity_replay_view(curves: dict[str, list[dict[str, Any]]]) -> None:
@@ -419,9 +591,9 @@ def strategy_equity_replay_view(curves: dict[str, list[dict[str, Any]]]) -> None
     if frames:
         df = pd.concat(frames, axis=1).sort_index().ffill()
         st.caption("归一化净值（每个策略起点=100；越高=该策略在同一段行情里赚得越多）")
-        st.line_chart(df, use_container_width=True)
+        _line_chart_or_table(df, caption="策略权益重放")
     if summary:
-        enriched = [{"推荐": "⭐" if (s["return_pct"] == best_ret and len(summary) > 1) else "", **s}
+        enriched = [{"推荐": "最佳" if (s["return_pct"] == best_ret and len(summary) > 1) else "", **s}
                     for s in summary]
         ui.pretty_table(enriched, rename={"strategy": "策略", "return_pct": "累计收益%",
                                           "max_drawdown_pct": "最大回撤%"})
@@ -444,17 +616,17 @@ def strategy_behavior_view(payload: dict[str, Any]) -> None:
             ui.kpi_card(cols[i % len(cols)], strat, f"{div} 处分歧", vd=vd,
                         note=f"出手 {s.get('would_trade', 0)} / {s.get('decisions', 0)} 次 "
                              f"· 冠军出手 {payload.get('champion_would_trade', 0)} 次")
-    st.caption("每行 = 当天第 N 次决策；⚠️ = 各策略决策不一致。✅买 / ⛔不交易（原因）。")
+    st.caption("每行 = 当天第 N 次决策；“分歧”表示各策略决策不一致。")
     flat = []
     for r in rows:
         cells = r.get("cells") or {}
-        flat.append({"#": r.get("index"), "分歧": "⚠️" if r.get("diverge") else "",
+        flat.append({"#": r.get("index"), "分歧": "是" if r.get("diverge") else "",
                      **{s: _behavior_cell(cells.get(s)) for s in strategies}})
     ui.pretty_table(flat)
 
 
 # ============================================================
-# 🔬 校准与归因
+# 校准与归因
 # ============================================================
 
 def calibration_view(report: dict) -> None:
@@ -462,27 +634,14 @@ def calibration_view(report: dict) -> None:
         st.info("暂无校准数据。运行：python3 -m trading_agent analytics calibrate "
                 "（需要网络拉 yfinance；≥15 个运行日后才有意义）。")
         return
-    st.caption(f"生成于：{report.get('generated_at', '?')}　·　运行日：{report.get('run_date_count', 0)}"
-               f"　·　样本：{report.get('sample_size', 0)}　·　horizon(天)：{report.get('horizons')}")
-    st.warning("小样本噪音大 — 桶单调性 / IC 在 15–30 个运行日后才可信。")
-
-    st.subheader("评分分桶 vs 远期收益")
-    for field, per_h in (report.get("score_buckets") or {}).items():
-        for horizon, buckets in per_h.items():
-            if not buckets:
-                continue
-            st.markdown(f"**{ui.label_of(field)} · {horizon}天**（评分越高 → 收益越高吗？）")
-            ui.pretty_table(buckets)
-            st.bar_chart({f"b{b['bucket']}": b["mean_return"] for b in buckets})
-
-    st.subheader("分量归因（Spearman IC，排序）")
-    for horizon, rows in (report.get("attribution") or {}).items():
-        st.markdown(f"**{horizon}天**")
-        ui.pretty_table(rows)
-
+    cols = st.columns(4)
+    ui.kpi_card(cols[0], "运行日", str(report.get("run_date_count", 0)))
+    ui.kpi_card(cols[1], "样本数", str(report.get("sample_size", 0)))
+    ui.kpi_card(cols[2], "Horizon", " / ".join(str(h) for h in (report.get("horizons") or [])) or "—")
+    ui.kpi_card(cols[3], "统计状态", "样本偏少" if report.get("run_date_count", 0) < 15 else "可参考")
+    if report.get("run_date_count", 0) < 15:
+        st.warning("当前只有少量运行日，IC / 胜率只适合观察方向，暂不适合调权重。")
     if report.get("ic_summary"):
-        st.subheader("多 horizon Rank IC（逐运行日均值 ± t 统计量）")
-        st.caption("均值 = 各运行日横截面 IC 的平均；|t| ≳ 2（在足够多运行日上）⇒ 信号真实、非噪音。")
         horizon_keys = [str(h) for h in (report.get("horizons") or [])]
         ic_rows = []
         for row in report["ic_summary"]:
@@ -495,26 +654,42 @@ def calibration_view(report: dict) -> None:
         if ic_rows:
             ui.pretty_table(ic_rows)
 
-    st.subheader("基准收益（alpha vs beta）")
-    bench_rows = [{"benchmark": sym, **{f"{h}天": v.get("mean_return") for h, v in per.items()}}
-                  for sym, per in (report.get("benchmarks") or {}).items()]
-    if bench_rows:
-        ui.pretty_table(bench_rows, rename={"benchmark": "基准"})
+    with st.expander("评分分桶、归因和 near-miss 明细"):
+        st.caption(f"生成于：{report.get('generated_at', '?')}")
+        st.subheader("评分分桶 vs 远期收益")
+        for field, per_h in (report.get("score_buckets") or {}).items():
+            for horizon, buckets in per_h.items():
+                if not buckets:
+                    continue
+                st.markdown(f"**{ui.label_of(field)} · {horizon}天**")
+                ui.pretty_table(buckets)
+                _bar([(f"b{b['bucket']}", float(b["mean_return"] or 0)) for b in buckets],
+                     x_title="mean_return", y_title="bucket", x_label="平均收益", y_label="桶")
 
-    st.subheader("形态结果（先到 target_1 还是先止损）")
-    if report.get("setup_outcomes"):
-        ui.pretty_table(report["setup_outcomes"])
+        st.subheader("分量归因")
+        for horizon, rows in (report.get("attribution") or {}).items():
+            st.markdown(f"**{horizon}天**")
+            ui.pretty_table(rows)
 
-    st.subheader("接近门槛 vs 已触发（门槛是否过严？）")
-    st.caption("若 near_miss 收益 ≈ 或 > cleared，降低 trade_threshold 可能正在错过赢家。")
-    near_rows = []
-    for horizon, classes in (report.get("near_miss") or {}).items():
-        for cls in ("cleared", "near_miss", "below"):
-            data = classes.get(cls) or {}
-            near_rows.append({"horizon_天": horizon, "类别": cls, "数量": data.get("count"),
-                              "平均收益": data.get("mean_return"), "命中率": data.get("hit_rate")})
-    if near_rows:
-        ui.pretty_table(near_rows)
+        st.subheader("基准收益")
+        bench_rows = [{"benchmark": sym, **{f"{h}天": v.get("mean_return") for h, v in per.items()}}
+                      for sym, per in (report.get("benchmarks") or {}).items()]
+        if bench_rows:
+            ui.pretty_table(bench_rows, rename={"benchmark": "基准"})
+
+        st.subheader("形态结果")
+        if report.get("setup_outcomes"):
+            ui.pretty_table(report["setup_outcomes"])
+
+        st.subheader("接近门槛 vs 已触发")
+        near_rows = []
+        for horizon, classes in (report.get("near_miss") or {}).items():
+            for cls in ("cleared", "near_miss", "below"):
+                data = classes.get(cls) or {}
+                near_rows.append({"horizon_天": horizon, "类别": cls, "数量": data.get("count"),
+                                  "平均收益": data.get("mean_return"), "命中率": data.get("hit_rate")})
+        if near_rows:
+            ui.pretty_table(near_rows)
 
 
 def fill_quality_view(report: dict) -> None:
@@ -525,7 +700,7 @@ def fill_quality_view(report: dict) -> None:
                f"　·　总名义额：${report.get('total_filled_notional', 0):,.0f}")
     slp = report.get("mean_realized_slippage_bps")
     vd = ui.verdict_for("slippage_bps", slp)
-    st.markdown(f"**平均实现滑点** {vd.emoji} {vd.label} — 全部：{slp}bps · "
+    st.markdown(f"**平均实现滑点** {vd.label} — 全部：{slp}bps · "
                 f"买：{report.get('mean_realized_slippage_buy_bps')}bps · "
                 f"卖：{report.get('mean_realized_slippage_sell_bps')}bps")
     st.markdown(f"**按桶滑点**（基准：{report.get('bucket_basis', '?')}）")
@@ -616,7 +791,7 @@ def thesis_trend_view(series: dict[str, Any]) -> None:
         return
     combined = pd.concat(frames, axis=1)
     st.caption("各投资逻辑胜率% 随时间变化（每条线 = 一个逻辑标签）")
-    st.line_chart(combined, use_container_width=True)
+    _line_chart_or_table(combined, caption="投资逻辑胜率趋势")
 
 
 def theme_diagnostics_view(diagnostics: dict[str, Any]) -> None:
@@ -632,29 +807,37 @@ def theme_diagnostics_view(diagnostics: dict[str, Any]) -> None:
             _bar([(theme, float(info.get("pct") if isinstance(info, dict) else info or 0))
                   for theme, info in distribution.items()],
                  x_title="pct", y_title="theme", x_label="占比%", y_label="主题")
-        st.json({k: v for k, v in payload.items() if k != "theme_distribution"})
+        details = [{"metric": k, "value": v} for k, v in payload.items() if k != "theme_distribution"]
+        if details:
+            ui.pretty_table(details, rename={"metric": "指标", "value": "内容"})
 
 
 # ============================================================
-# 🌱 成长与趋势
+# 成长与趋势
 # ============================================================
 
 def growth_observations_view(payload: dict) -> None:
     if not payload:
         st.info("暂无成长观测。运行：python3 -m trading_agent growth observe")
         return
-    st.caption(f"生成于：{payload.get('generated_at', '?')}　·　运行日：{payload.get('run_date_count', 0)}")
     glob = payload.get("global") or []
-    if glob:
-        st.markdown("**全局**")
-        ui.pretty_table(glob)
     modules = payload.get("modules") or {}
     flat = [{"module": m, **o} for m, obs in modules.items() for o in obs]
-    if flat:
-        st.markdown("**按模块**")
-        ui.pretty_table(flat)
+    cols = st.columns(3)
+    ui.kpi_card(cols[0], "运行日", str(payload.get("run_date_count", 0)))
+    ui.kpi_card(cols[1], "全局问题", str(len(glob)))
+    ui.kpi_card(cols[2], "模块问题", str(len(flat)))
     if not glob and not flat:
         st.success("未检测到问题。")
+        return
+    with st.expander("成长观测明细"):
+        st.caption(f"生成于：{payload.get('generated_at', '?')}")
+        if glob:
+            st.markdown("**全局**")
+            ui.pretty_table(glob)
+        if flat:
+            st.markdown("**按模块**")
+            ui.pretty_table(flat)
 
 
 def proposals_and_queue_view(proposals: list[dict[str, Any]], queue: list[dict[str, Any]]) -> None:
@@ -665,7 +848,7 @@ def proposals_and_queue_view(proposals: list[dict[str, Any]], queue: list[dict[s
 
 
 # ============================================================
-# 📉 K线复盘
+# K线复盘
 # ============================================================
 
 def kline_view(symbol: str, ohlcv: list[dict[str, Any]],
@@ -775,6 +958,6 @@ def trends_view(history_dates: list, snapshot: dict, trend: dict) -> None:
     for metric, points in series.items():
         if not points:
             continue
-        df = pd.DataFrame(points).set_index("date")[["value"]].rename(columns={"value": metric})
-        st.caption(metric)
-        st.line_chart(df, use_container_width=True)
+        df = pd.DataFrame(points).set_index("date")[["value"]].rename(columns={"value": ui.label_of(str(metric))})
+        st.caption(ui.label_of(str(metric)))
+        _line_chart_or_table(df, caption=ui.label_of(str(metric)))

@@ -7,7 +7,7 @@ import streamlit as st
 
 from trading_agent.dashboard import charts, queries, ui
 
-st.set_page_config(page_title="交易代理 · 只读看板", layout="wide", page_icon="📈")
+st.set_page_config(page_title="交易代理 · 只读看板", layout="wide")
 
 
 def _resolve_agent_root() -> Path:
@@ -32,11 +32,7 @@ AGENT_ROOT = _resolve_agent_root()
 
 ui.inject_theme()
 
-st.title("📈 交易代理 · 只读看板")
-st.caption(
-    "仅读取 runtime/analytics/analytics.db、runtime/state/runs/* 与成长产物；"
-    "不写入、不修改任何交易参数。"
-)
+ui.app_title("交易代理看板", "只读 · runtime/state + analytics")
 
 run_dates = queries.list_run_dates(AGENT_ROOT)
 if not run_dates:
@@ -47,91 +43,98 @@ with st.sidebar:
     st.header("筛选")
     selected_run_date = st.selectbox("运行日", run_dates, index=0)
     st.caption(f"共 {len(run_dates)} 个运行日")
-    st.caption("所有视图均为只读。")
+    show_help = st.toggle("显示说明", value=False)
+    show_detail = st.toggle("展开研究明细", value=False)
+    st.caption("只读。默认显示关键摘要。")
 
 cockpit_tab, picks_tab, perf_tab, kline_tab, calib_tab, growth_tab = st.tabs(
-    ["📊 今日驾驶舱", "🎯 选股与决策", "💰 业绩与对比", "📉 K线复盘", "🔬 校准与归因", "🌱 成长与趋势"]
+    ["今日驾驶舱", "选股决策", "业绩对比", "K线复盘", "校准归因", "成长趋势"]
 )
 
-# ── 📊 今日驾驶舱 ──────────────────────────────────────────
+# ── 今日驾驶舱 ──────────────────────────────────────────
 with cockpit_tab:
-    st.header(f"今日驾驶舱 — {selected_run_date}")
-    ui.guidance_box(
-        what="今天系统的整体状态：能不能交易、市场处于什么状态、账户权益与盈亏。",
-        how="先看两条横幅（市场状态 / 夜间健康）是否正常，再看 KPI 卡片的颜色与「vs 上一交易日」箭头。",
-        action="计划状态非 trade_ready 或出现红色横幅时，今天以观察为主；权益/盈亏走弱要回到「选股与决策」查原因。",
-    )
-    charts.regime_banner(queries.regime_state(AGENT_ROOT, selected_run_date))
-    charts.nightly_health_banner(queries.nightly_health(AGENT_ROOT))
-    charts.kpi_overview(queries.overview_with_delta(AGENT_ROOT, selected_run_date))
+    ui.section_band(f"今日驾驶舱 — {selected_run_date}", "市场状态 · 执行结论 · 数据完整度")
+    if show_help:
+        ui.guidance_box(
+            what="今天系统的整体状态：能不能交易、市场处于什么状态、账户权益与盈亏。",
+            how="先看状态横幅和 KPI 卡片；明细默认折叠。",
+            action="计划状态非 trade_ready 或出现红色横幅时，以观察为主。",
+        )
+    _overview_delta = queries.overview_with_delta(AGENT_ROOT, selected_run_date)
+    _completeness = queries.data_completeness(AGENT_ROOT, selected_run_date)
+    _regime = queries.regime_state(AGENT_ROOT, selected_run_date)
+    _decisions = queries.decisions_timeline(AGENT_ROOT, selected_run_date)
+    charts.cockpit_hero(_overview_delta, _completeness, _regime, _decisions)
 
-    charts.today_decision(queries.decisions_timeline(AGENT_ROOT, selected_run_date))
+    ui.section_band("最新决策", "盘中执行层")
+    charts.today_decision(_decisions)
 
-    st.subheader("组合集中度（K1 · advisory）")
-    charts.portfolio_target_view(queries.portfolio_target(AGENT_ROOT, selected_run_date))
+    with st.expander("运行指标与数据完整度", expanded=show_detail):
+        charts.kpi_overview(_overview_delta)
+        charts.data_completeness_view(_completeness)
 
-    st.subheader("今日订单")
-    charts.orders_table_view(queries.orders_table(AGENT_ROOT, selected_run_date))
+    with st.expander("组合与订单", expanded=show_detail):
+        st.subheader("组合集中度")
+        charts.portfolio_target_view(queries.portfolio_target(AGENT_ROOT, selected_run_date))
+        st.subheader("今日订单")
+        charts.orders_table_view(queries.orders_table(AGENT_ROOT, selected_run_date))
 
-# ── 🎯 选股与决策 ──────────────────────────────────────────
+# ── 选股与决策 ──────────────────────────────────────────
 with picks_tab:
-    st.header(f"选股与决策 — {selected_run_date}")
-    ui.guidance_box(
-        what="候选股从综合评分 → 价量因子 → 叠加 → 最终决策的完整链路，以及为什么被拦截。",
-        how="评分越高排越前；因子α分给出独立的价量视角；叠加表显示各信号如何微调最终排名。",
-        action="若高分股频繁被同一原因拦截，到「校准与归因」核对该门槛是否过严。",
-    )
-    st.subheader("候选与评分")
+    ui.section_band(f"选股与决策 — {selected_run_date}", "Top 候选 · 成交/空仓 · 拦截原因")
+    if show_help:
+        ui.guidance_box(
+            what="候选股、评分、因子和拦截原因的主链路。",
+            how="先看 Top 候选和成交/空仓摘要；研究明细默认折叠。",
+            action="高分股反复被同一原因拦截时，再展开明细定位门槛。",
+        )
     charts.candidates_with_rankings_view(queries.candidates_with_rankings(AGENT_ROOT, selected_run_date))
-
-    st.subheader("价量因子（factor_alpha）")
-    charts.factor_view(queries.factor_alpha(AGENT_ROOT, selected_run_date))
-
-    st.subheader("决策叠加（各信号如何影响最终决策）")
-    charts.advisory_overlay_view(queries.advisory_overlay_summary(AGENT_ROOT, selected_run_date))
-
-    st.subheader("决策时间线")
-    charts.decisions_timeline_table(queries.decisions_timeline(AGENT_ROOT, selected_run_date))
-
-    st.subheader("拦截原因趋势（所有运行日）")
-    charts.blocked_reason_trend_view(queries.blocked_reason_trend(AGENT_ROOT))
-
-    st.subheader("成交率 + 拦截原因（跨所有运行日）")
     charts.replay_summary_view(queries.replay_summary(AGENT_ROOT))
 
-# ── 💰 业绩与对比 ──────────────────────────────────────────
+    with st.expander("因子、叠加与决策明细", expanded=show_detail):
+        st.subheader("价量因子")
+        charts.factor_view(queries.factor_alpha(AGENT_ROOT, selected_run_date))
+
+        st.subheader("决策叠加")
+        charts.advisory_overlay_view(queries.advisory_overlay_summary(AGENT_ROOT, selected_run_date))
+
+        st.subheader("决策时间线")
+        charts.decisions_timeline_table(queries.decisions_timeline(AGENT_ROOT, selected_run_date))
+
+        st.subheader("拦截原因趋势")
+        charts.blocked_reason_trend_view(queries.blocked_reason_trend(AGENT_ROOT))
+
+# ── 业绩与对比 ──────────────────────────────────────────
 with perf_tab:
-    st.header("业绩与对比")
-    ui.guidance_box(
-        what="纸面账户权益曲线（叠加 SPY 大盘基准）与不同策略版本的横向对比。",
-        how="超额收益 (alpha) 为正即跑赢大盘；策略对比表中 ⭐ 标记累计盈亏最高的版本。",
-        action="持续跑输大盘要回到校准查信号有效性；切换策略版本前先看影子挑战者是否「建议升级」。",
-    )
-    st.subheader("权益曲线 vs 大盘基准")
+    ui.section_band("业绩与对比", "纸面权益 · 基准 · 策略版本")
+    if show_help:
+        ui.guidance_box(
+            what="纸面账户权益曲线、SPY 基准和策略版本对比。",
+            how="先看收益/alpha 卡片，再展开策略细节。",
+            action="持续跑输大盘时回到校准查信号有效性。",
+        )
     charts.equity_curve_view(queries.equity_with_benchmark(AGENT_ROOT))
 
-    charts.strategy_comparison_view(queries.strategy_comparison(AGENT_ROOT))
-    charts.champion_vs_challengers_view(queries.champion_vs_challengers(AGENT_ROOT))
+    with st.expander("策略版本与影子实验", expanded=show_detail):
+        charts.strategy_comparison_view(queries.strategy_comparison(AGENT_ROOT))
+        charts.champion_vs_challengers_view(queries.champion_vs_challengers(AGENT_ROOT))
+        st.subheader("策略权益重放")
+        charts.strategy_equity_replay_view(queries.strategy_equity_curves(AGENT_ROOT))
+        st.subheader(f"策略行为对比 — {selected_run_date}")
+        charts.strategy_behavior_view(queries.strategy_behavior(AGENT_ROOT, selected_run_date))
 
-    st.divider()
-    st.subheader("策略权益重放（换成各策略会怎样）")
-    charts.strategy_equity_replay_view(queries.strategy_equity_curves(AGENT_ROOT))
+    with st.expander("订单明细", expanded=False):
+        charts.orders_table_view(queries.orders_table(AGENT_ROOT, selected_run_date))
 
-    st.divider()
-    st.subheader(f"策略行为对比（运行日 {selected_run_date} · 各策略 trade/no-trade 与分歧）")
-    charts.strategy_behavior_view(queries.strategy_behavior(AGENT_ROOT, selected_run_date))
-
-    st.subheader(f"订单（运行日 {selected_run_date}）")
-    charts.orders_table_view(queries.orders_table(AGENT_ROOT, selected_run_date))
-
-# ── 📉 K线复盘 ─────────────────────────────────────────────
+# ── K线复盘 ─────────────────────────────────────────────
 with kline_tab:
-    st.header("K线复盘")
-    ui.guidance_box(
-        what="每只股票的日K线，叠加你在它上面的买/卖点；不同策略用不同颜色，看清各策略怎么交易同一只票。",
-        how="▲=买入 ▼=卖出，按策略着色（champion 蓝、挑战者各异）；下方表格给每个策略的均买价与当前浮动盈亏。",
-        action="对比 champion 与挑战者的买卖点：若挑战者在更好的位置进出且浮盈更高，是它值得 shadow 验证的信号。",
-    )
+    ui.section_band("K线复盘", "日 K · 均线 · 买卖点")
+    if show_help:
+        ui.guidance_box(
+            what="单标的日 K 与买卖点。",
+            how="默认只看图；策略行为表默认折叠。",
+            action="用来复盘入场区、追高拦截和实际成交位置。",
+        )
     _kline_symbols = queries.available_kline_symbols(AGENT_ROOT)
     if not _kline_symbols:
         st.info("暂无本地日线数据（market_feed 在 premarket 采集 OHLCV 后生成）。先跑 premarket 流程。")
@@ -145,57 +148,41 @@ with kline_tab:
         ) if _strats else []
         charts.kline_view(_sym, queries.ohlcv_daily(AGENT_ROOT, _sym), _trades,
                           selected_strategies=_picked if _strats else None)
-        st.divider()
-        charts.symbol_behavior_view(queries.decisions_for_symbol(AGENT_ROOT, _sym))
+        with st.expander("该标的决策行为", expanded=show_detail):
+            charts.symbol_behavior_view(queries.decisions_for_symbol(AGENT_ROOT, _sym))
 
-# ── 🔬 校准与归因 ──────────────────────────────────────────
+# ── 校准与归因 ──────────────────────────────────────────
 with calib_tab:
-    st.header("校准与归因")
-    ui.guidance_box(
-        what="用历史远期收益检验：评分/信号到底灵不灵、哪类投资逻辑与主题真正赚钱。",
-        how="评分分桶应单调（分越高收益越高）；IC 的 |t|≥2 才算信号真实；胜率红绿排序看哪类逻辑占优。",
-        action="只在 15–30 个运行日后才据此调权重；采纳建议须走 shadow 验证 + 人工 promote，绝不直接改 champion。",
-    )
-    st.subheader("评分校准（哪些分数 / 形态真有效）")
+    ui.section_band("校准与归因", "样本 · IC · 归因")
     charts.calibration_view(queries.calibration_report(AGENT_ROOT))
-    st.divider()
-    st.subheader("成交质量（纸面成交有多乐观）")
-    charts.fill_quality_view(queries.fill_quality_report(AGENT_ROOT))
-    st.divider()
-    st.subheader("AI 信号研究（置信度校准 + 方向准确率）")
-    charts.ai_signal_study_view(queries.ai_signal_study(AGENT_ROOT))
-    st.divider()
-    st.subheader("AI 分层消融（每层的边际 IC）")
-    charts.ai_ablation_view(queries.ai_ablation(AGENT_ROOT))
-    st.divider()
-    st.subheader("投资逻辑归因（哪类逻辑真赚钱）")
-    charts.thesis_attribution_view(queries.thesis_attribution(AGENT_ROOT))
-    st.subheader("各逻辑胜率趋势（按夜间快照）")
-    charts.thesis_trend_view(queries.thesis_trend(AGENT_ROOT))
-    st.divider()
-    st.subheader("主题敞口诊断")
-    charts.theme_diagnostics_view(queries.theme_diagnostics(AGENT_ROOT, selected_run_date))
+    with st.expander("成交、AI、逻辑和主题细节", expanded=show_detail):
+        st.subheader("成交质量")
+        charts.fill_quality_view(queries.fill_quality_report(AGENT_ROOT))
+        st.subheader("AI 信号研究")
+        charts.ai_signal_study_view(queries.ai_signal_study(AGENT_ROOT))
+        st.subheader("AI 分层消融")
+        charts.ai_ablation_view(queries.ai_ablation(AGENT_ROOT))
+        st.subheader("投资逻辑归因")
+        charts.thesis_attribution_view(queries.thesis_attribution(AGENT_ROOT))
+        st.subheader("各逻辑胜率趋势")
+        charts.thesis_trend_view(queries.thesis_trend(AGENT_ROOT))
+        st.subheader("主题敞口诊断")
+        charts.theme_diagnostics_view(queries.theme_diagnostics(AGENT_ROOT, selected_run_date))
 
-# ── 🌱 成长与趋势 ──────────────────────────────────────────
+# ── 成长与趋势 ──────────────────────────────────────────
 with growth_tab:
-    st.header("成长与趋势")
-    ui.guidance_box(
-        what="自成长实验室（只读）的诊断 / 提案 / 实验队列，以及各指标随时间的走向。",
-        how="成长观测给出系统自检问题；趋势线看成交率 / 空仓率 / 样本量是否朝好的方向移动。",
-        action="提案只是草稿，绝不自动启用；趋势恶化时回到对应主区定位根因。",
-    )
-    st.subheader("自成长实验室（只读）")
+    ui.section_band("成长与趋势", "观测 · 提案 · 快照")
     charts.growth_observations_view(queries.growth_observations(AGENT_ROOT))
-    charts.proposals_and_queue_view(
-        queries.proposals_overview(AGENT_ROOT),
-        queries.experiment_queue_overview(AGENT_ROOT),
-    )
-    st.divider()
-    st.subheader("趋势（夜间分析快照随时间）")
-    _history_dates = queries.analysis_history_dates(AGENT_ROOT)
-    _selected_snapshot_date = st.selectbox("分析快照日期", _history_dates) if _history_dates else None
-    charts.trends_view(
-        _history_dates,
-        queries.analysis_snapshot(AGENT_ROOT, _selected_snapshot_date) if _selected_snapshot_date else {},
-        queries.analysis_trend(AGENT_ROOT),
-    )
+    with st.expander("提案、实验队列与趋势", expanded=show_detail):
+        charts.proposals_and_queue_view(
+            queries.proposals_overview(AGENT_ROOT),
+            queries.experiment_queue_overview(AGENT_ROOT),
+        )
+        st.subheader("趋势")
+        _history_dates = queries.analysis_history_dates(AGENT_ROOT)
+        _selected_snapshot_date = st.selectbox("分析快照日期", _history_dates) if _history_dates else None
+        charts.trends_view(
+            _history_dates,
+            queries.analysis_snapshot(AGENT_ROOT, _selected_snapshot_date) if _selected_snapshot_date else {},
+            queries.analysis_trend(AGENT_ROOT),
+        )

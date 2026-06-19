@@ -3,8 +3,9 @@ from __future__ import annotations
 import json
 import sqlite3
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
+from trading_agent.analytics import loaders
 from trading_agent.analytics.build_db import default_analytics_db_path
 from trading_agent.core.context import build_runtime_paths
 from trading_agent.core.io import read_json
@@ -20,11 +21,27 @@ def _read_json_or_empty(path: Path) -> dict[str, Any]:
 
 def _connect(agent_root: Path) -> sqlite3.Connection | None:
     db_path = default_analytics_db_path(agent_root)
-    if not db_path.exists():
+    if not db_path.exists() or db_path.stat().st_size == 0:
         return None
     connection = sqlite3.connect(db_path)
     connection.row_factory = sqlite3.Row
     return connection
+
+
+def _with_connection(
+    agent_root: Path,
+    callback: Callable[[sqlite3.Connection], Any],
+    fallback: Any,
+) -> Any:
+    connection = _connect(agent_root)
+    if connection is None:
+        return fallback
+    try:
+        return callback(connection)
+    except sqlite3.Error:
+        return fallback
+    finally:
+        connection.close()
 
 
 def _rows_as_dicts(rows: list[sqlite3.Row]) -> list[dict[str, Any]]:
@@ -57,6 +74,27 @@ def latest_run_date(agent_root: Path) -> str | None:
     return dates[0] if dates else None
 
 
+def _fallback_candidates(agent_root: Path, run_date: str) -> list[dict[str, Any]]:
+    rows = loaders.load_candidates(agent_root, [run_date])
+    rows.sort(key=lambda row: (row.get("candidate_score") is not None, row.get("candidate_score") or 0), reverse=True)
+    return rows
+
+
+def _fallback_decisions(agent_root: Path, run_date: str) -> list[dict[str, Any]]:
+    return loaders.load_decisions(agent_root, [run_date])
+
+
+def _fallback_orders(agent_root: Path, run_date: str) -> list[dict[str, Any]]:
+    rows = loaders.load_orders(agent_root, [run_date])
+    rows.sort(key=lambda row: str(row.get("timestamp") or ""), reverse=True)
+    return rows
+
+
+def _fallback_equity(agent_root: Path, run_date: str | None = None) -> list[dict[str, Any]]:
+    dates = [run_date] if run_date else list(reversed(list_run_dates(agent_root)))
+    return loaders.load_paper_equity(agent_root, [d for d in dates if d])
+
+
 def overview(agent_root: Path, run_date: str) -> dict[str, Any]:
     """Top-of-page summary: plan_state/market_regime come straight from the
     run's daily_plan.json/risk_overlay.json (analytics.db doesn't carry them);
@@ -78,10 +116,7 @@ def overview(agent_root: Path, run_date: str) -> dict[str, Any]:
         "total_equity": None,
     }
 
-    connection = _connect(agent_root)
-    if connection is None:
-        return result
-    try:
+    def _fill_from_db(connection: sqlite3.Connection) -> None:
         top_score_row = connection.execute(
             "SELECT MAX(candidate_score) AS top_score FROM candidates WHERE run_date = ?", (run_date,)
         ).fetchone()
@@ -101,18 +136,40 @@ def overview(agent_root: Path, run_date: str) -> dict[str, Any]:
         if equity_row is not None:
             result["today_pnl"] = equity_row["realized_pnl"]
             result["total_equity"] = equity_row["total_equity"]
-    finally:
-        connection.close()
+
+    _with_connection(agent_root, _fill_from_db, None)
+
+    if result["top_score"] is None:
+        scores = [
+            float(row["candidate_score"])
+            for row in _fallback_candidates(agent_root, run_date)
+            if row.get("candidate_score") is not None
+        ]
+        if scores:
+            result["top_score"] = round(max(scores), 2)
+    if result["pending_order_count"] == 0:
+        result["pending_order_count"] = sum(
+            1 for row in _fallback_orders(agent_root, run_date)
+            if str(row.get("status") or "").lower() == "pending"
+        )
+    if result["today_pnl"] is None or result["total_equity"] is None:
+        equity_rows = _fallback_equity(agent_root, run_date)
+        if equity_rows:
+            latest_equity = sorted(equity_rows, key=lambda row: str(row.get("timestamp") or ""))[-1]
+            result["today_pnl"] = latest_equity.get("realized_pnl")
+            result["total_equity"] = latest_equity.get("total_equity")
+        else:
+            account = _read_json_or_empty(paths.paper_account_path)
+            result["today_pnl"] = account.get("realized_pnl")
+            cash = account.get("cash")
+            result["total_equity"] = cash if cash is not None else result["total_equity"]
 
     return result
 
 
 def candidates_table(agent_root: Path, run_date: str) -> list[dict[str, Any]]:
     """Candidates ranked by score, with watchlist/tradable flags and component scores."""
-    connection = _connect(agent_root)
-    if connection is None:
-        return []
-    try:
+    def _query(connection: sqlite3.Connection) -> list[dict[str, Any]]:
         rows = connection.execute(
             """
             SELECT symbol, candidate_score, score_status, technical_score, catalyst_score,
@@ -124,16 +181,13 @@ def candidates_table(agent_root: Path, run_date: str) -> list[dict[str, Any]]:
             (run_date,),
         ).fetchall()
         return _rows_as_dicts(rows)
-    finally:
-        connection.close()
+
+    return _with_connection(agent_root, _query, _fallback_candidates(agent_root, run_date))
 
 
 def decisions_timeline(agent_root: Path, run_date: str) -> list[dict[str, Any]]:
     """Intraday policy decisions for the day, oldest first."""
-    connection = _connect(agent_root)
-    if connection is None:
-        return []
-    try:
+    def _query(connection: sqlite3.Connection) -> list[dict[str, Any]]:
         rows = connection.execute(
             """
             SELECT timestamp, decision, symbol, side, setup_type, blocked_reasons, confidence
@@ -144,16 +198,13 @@ def decisions_timeline(agent_root: Path, run_date: str) -> list[dict[str, Any]]:
             (run_date,),
         ).fetchall()
         return _rows_as_dicts(rows)
-    finally:
-        connection.close()
+
+    return _with_connection(agent_root, _query, _fallback_decisions(agent_root, run_date))
 
 
 def orders_table(agent_root: Path, run_date: str) -> list[dict[str, Any]]:
     """Paper orders for the day, most recent first."""
-    connection = _connect(agent_root)
-    if connection is None:
-        return []
-    try:
+    def _query(connection: sqlite3.Connection) -> list[dict[str, Any]]:
         rows = connection.execute(
             """
             SELECT timestamp, order_id, symbol, side, status, quantity, limit_price, fill_price, notional, reason_codes
@@ -164,8 +215,8 @@ def orders_table(agent_root: Path, run_date: str) -> list[dict[str, Any]]:
             (run_date,),
         ).fetchall()
         return _rows_as_dicts(rows)
-    finally:
-        connection.close()
+
+    return _with_connection(agent_root, _query, _fallback_orders(agent_root, run_date))
 
 
 def replay_summary(agent_root: Path, *, since: str | None = None, until: str | None = None) -> dict[str, Any]:
@@ -184,10 +235,23 @@ def growth_observations(agent_root: Path) -> dict[str, Any]:
 
 def candidates_with_rankings(agent_root: Path, run_date: str) -> list[dict[str, Any]]:
     """Candidates joined with the latest intraday ranking scores per symbol for the day."""
-    connection = _connect(agent_root)
-    if connection is None:
-        return []
-    try:
+    def _fallback() -> list[dict[str, Any]]:
+        rows = _fallback_candidates(agent_root, run_date)
+        latest_rankings: dict[str, dict[str, Any]] = {}
+        for row in _read_jsonl_or_empty(build_runtime_paths(agent_root, run_date=run_date).intraday_rankings_log_path):
+            symbol = row.get("symbol")
+            if not symbol:
+                continue
+            current = latest_rankings.get(str(symbol))
+            if current is None or str(row.get("timestamp") or "") >= str(current.get("timestamp") or ""):
+                latest_rankings[str(symbol)] = row
+        for row in rows:
+            ranking = latest_rankings.get(str(row.get("symbol") or "")) or {}
+            row["trade_readiness_score"] = ranking.get("trade_readiness_score")
+            row["price_setup_score"] = ranking.get("price_setup_score")
+        return rows
+
+    def _query(connection: sqlite3.Connection) -> list[dict[str, Any]]:
         rows = connection.execute(
             """
             SELECT c.symbol, c.candidate_score, c.score_status,
@@ -205,23 +269,20 @@ def candidates_with_rankings(agent_root: Path, run_date: str) -> list[dict[str, 
             (run_date, run_date),
         ).fetchall()
         return _rows_as_dicts(rows)
-    finally:
-        connection.close()
+
+    return _with_connection(agent_root, _query, _fallback())
 
 
 def equity_timeseries(agent_root: Path, *, since: str | None = None, until: str | None = None) -> list[dict[str, Any]]:
     """Cross-day paper equity checkpoints, oldest first, for the equity curve chart."""
-    connection = _connect(agent_root)
-    if connection is None:
-        return []
-    try:
+    def _query(connection: sqlite3.Connection) -> list[dict[str, Any]]:
         rows = connection.execute(
             "SELECT run_date, timestamp, event, cash, positions_market_value, total_equity, realized_pnl "
             "FROM paper_equity ORDER BY timestamp ASC"
         ).fetchall()
-    finally:
-        connection.close()
-    result = _rows_as_dicts(rows)
+        return _rows_as_dicts(rows)
+
+    result = _with_connection(agent_root, _query, _fallback_equity(agent_root))
     if since is not None:
         result = [row for row in result if str(row.get("run_date") or "") >= since]
     if until is not None:
@@ -231,16 +292,20 @@ def equity_timeseries(agent_root: Path, *, since: str | None = None, until: str 
 
 def blocked_reason_trend(agent_root: Path) -> list[dict[str, Any]]:
     """Per-(run_date, reason) blocked counts across all run dates, for a stacked trend."""
-    connection = _connect(agent_root)
-    if connection is None:
-        return []
-    try:
+    def _fallback() -> list[dict[str, Any]]:
+        dates = list(reversed(list_run_dates(agent_root)))
+        decisions_rows = loaders.load_decisions(agent_root, dates)
+        rows = loaders.load_blocked_reasons(decisions_rows)
+        rows.sort(key=lambda row: (str(row.get("run_date") or ""), -(int(row.get("count") or 0))))
+        return rows
+
+    def _query(connection: sqlite3.Connection) -> list[dict[str, Any]]:
         rows = connection.execute(
             "SELECT run_date, reason, count FROM blocked_reasons ORDER BY run_date ASC, count DESC"
         ).fetchall()
         return _rows_as_dicts(rows)
-    finally:
-        connection.close()
+
+    return _with_connection(agent_root, _query, _fallback())
 
 
 def strategy_comparison(agent_root: Path) -> list[dict[str, Any]]:
@@ -443,11 +508,73 @@ def nightly_health(agent_root: Path) -> dict[str, Any]:
     return _read_json_or_empty(default_nightly_health_path(agent_root))
 
 
+def data_completeness(agent_root: Path, run_date: str) -> dict[str, Any]:
+    """Reader-facing completeness summary for the dashboard header.
+
+    This is intentionally file-based instead of DB-based: it answers "did the run
+    write the artifacts I need to inspect?" even when analytics.db has not been
+    rebuilt yet.
+    """
+    paths = build_runtime_paths(agent_root, run_date=run_date)
+    manifest = _read_json_or_empty(paths.market_feed_dir / "manifest.json")
+    news_dir = paths.market_feed_dir / "news"
+    news_count = len([p for p in news_dir.glob("*.json") if p.name != "market_summary.json"]) if news_dir.exists() else 0
+    ohlcv_dir = paths.market_feed_dir / "ohlcv"
+    ohlcv_count = len([p for p in ohlcv_dir.iterdir() if p.is_dir()]) if ohlcv_dir.exists() else 0
+
+    checks = [
+        ("计划", "日内计划", paths.daily_plan_path.exists()),
+        ("计划", "风险叠加", paths.risk_overlay_path.exists()),
+        ("计划", "候选评分", paths.candidate_scores_path.exists()),
+        ("计划", "组合目标", paths.paper_day_end_path.exists() or paths.paper_account_path.exists()),
+        ("信号", "技术信号", paths.technical_signals_path.exists()),
+        ("信号", "DSA 信号", paths.dsa_signals_path.exists()),
+        ("信号", "Kronos 信号", paths.kronos_signals_path.exists()),
+        ("信号", "AI 信号", paths.ai_signals_path.exists()),
+        ("市场", "行情摘要", bool(manifest) or (paths.market_feed_dir / "news" / "market_summary.json").exists()),
+        ("市场", "新闻", news_count > 0),
+        ("账户", "纸面账户", paths.paper_account_path.exists()),
+        ("账户", "权益曲线", paths.paper_equity_curve_path.exists()),
+        ("分析", "夜间健康", bool(nightly_health(agent_root))),
+        ("分析", "成长观测", bool(growth_observations(agent_root))),
+    ]
+    present = sum(1 for _, _, ok in checks if ok)
+    total = len(checks)
+    missing = [{"category": cat, "artifact": name} for cat, name, ok in checks if not ok]
+    return {
+        "present": present,
+        "total": total,
+        "pct": round(present / total * 100, 1) if total else None,
+        "missing": missing,
+        "news_count": news_count,
+        "ohlcv_count": ohlcv_count,
+        "market_feed_generated_at": manifest.get("generated_at") if manifest else None,
+        "rows": [
+            {"category": cat, "artifact": name, "status": "就绪" if ok else "缺失"}
+            for cat, name, ok in checks
+        ],
+    }
+
+
 def portfolio_target(agent_root: Path, run_date: str) -> dict[str, Any]:
     """Read-only: the K1 portfolio_target.json for a run date (current concentration vs target caps)."""
     from trading_agent.portfolio.target import default_portfolio_target_path
 
-    return _read_json_or_empty(default_portfolio_target_path(agent_root, run_date))
+    payload = _read_json_or_empty(default_portfolio_target_path(agent_root, run_date))
+    if not payload:
+        return payload
+    if not payload.get("total_equity"):
+        paths = build_runtime_paths(agent_root, run_date=run_date)
+        equity_rows = _fallback_equity(agent_root, run_date)
+        latest_equity = sorted(equity_rows, key=lambda row: str(row.get("timestamp") or ""))[-1] if equity_rows else {}
+        account = _read_json_or_empty(paths.paper_account_path)
+        total_equity = latest_equity.get("total_equity") or account.get("cash")
+        if total_equity is not None:
+            payload = dict(payload)
+            payload["total_equity"] = total_equity
+            if not payload.get("cash"):
+                payload["cash"] = latest_equity.get("cash") or account.get("cash")
+    return payload
 
 
 def regime_state(agent_root: Path, run_date: str) -> dict[str, Any]:
@@ -818,4 +945,3 @@ def trades_for_symbol(agent_root: Path, symbol: str) -> dict[str, list[dict[str,
                 if trades:
                     result.setdefault(sid_dir.name, []).extend(trades)
     return result
-
