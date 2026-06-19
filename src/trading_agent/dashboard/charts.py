@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 import json
+import math
 from typing import Any
 
-import altair as alt
 import pandas as pd
 import streamlit as st
 
@@ -14,29 +14,26 @@ from trading_agent.dashboard import ui
 
 def _bar(items: list[tuple[str, float]], *, x_title: str, y_title: str, x_label: str | None = None,
          y_label: str | None = None) -> None:
-    cleaned = [(label, value) for label, value in items if value is not None]
+    cleaned = []
+    for label, value in items:
+        if value is None:
+            continue
+        try:
+            finite_value = float(value)
+        except (TypeError, ValueError):
+            continue
+        if math.isfinite(finite_value):
+            cleaned.append((label, finite_value))
     if not cleaned:
         return
-    values = [float(value) for _, value in cleaned]
+    values = [value for _, value in cleaned]
     if len(cleaned) < 2 or len({round(value, 8) for value in values}) <= 1:
         ui.pretty_table(
             [{y_title: label, x_title: value} for label, value in cleaned],
             rename={y_title: y_label or y_title, x_title: x_label or x_title},
         )
         return
-    frame = pd.DataFrame(cleaned, columns=[y_title, x_title])
-    chart = (
-        alt.Chart(frame)
-        .mark_bar(cornerRadiusEnd=3)
-        .encode(
-            x=alt.X(f"{x_title}:Q", title=x_label or x_title),
-            y=alt.Y(f"{y_title}:N", title=y_label or y_title, sort="-x"),
-            tooltip=[alt.Tooltip(f"{y_title}:N", title=y_label or y_title),
-                     alt.Tooltip(f"{x_title}:Q", title=x_label or x_title)],
-        )
-        .properties(height=max(200, 28 * len(frame)))
-    )
-    st.altair_chart(chart, use_container_width=True)
+    ui.bar_list(cleaned, value_label=x_label or x_title)
 
 
 def _line_chart_or_table(df: pd.DataFrame, *, caption: str) -> None:
@@ -49,7 +46,7 @@ def _line_chart_or_table(df: pd.DataFrame, *, caption: str) -> None:
         st.caption(f"{caption}：数值尚无变化，暂不绘制空趋势图。")
         ui.pretty_table(df.reset_index())
         return
-    st.line_chart(df, use_container_width=True)
+    st.line_chart(df, width="stretch")
 
 
 _PLAN_STATE_LABEL = {"trade_ready": "可交易", "observe_only": "只观察", "no_trade": "不交易", "normal": "正常"}
@@ -202,36 +199,37 @@ def kpi_overview(overview_delta: dict[str, Any]) -> None:
     curr = overview_delta.get("curr") or {}
     prev = overview_delta.get("prev") or {}
 
-    row1 = st.columns(4)
-    ui.kpi_card(row1[0], "计划状态", plan_state_badge(curr.get("plan_state")))
-    ui.kpi_card(row1[1], "市场状态", market_regime_badge(curr.get("market_regime")))
-    ui.kpi_card(
-        row1[2], "观察 / 可交易",
-        f"{curr.get('watchlist_count', 0)} / {curr.get('tradable_count', 0)}",
-        delta=ui.delta_vs_prev(curr.get("tradable_count"), prev.get("tradable_count")),
-        note="可交易标的数 vs 上一交易日",
-    )
-    ui.kpi_card(
-        row1[3], "最高综合评分",
-        ui.fmt_number(curr.get("top_score")),
-        delta=ui.delta_vs_prev(curr.get("top_score"), prev.get("top_score")),
-    )
-
-    row2 = st.columns(4)
     equity = curr.get("total_equity")
-    ui.kpi_card(
-        row2[0], "账户权益（纸面）", ui.fmt_currency(equity),
-        delta=ui.delta_vs_prev(equity, prev.get("total_equity")),
-    )
     pnl = curr.get("today_pnl")
     pnl_vd = pnl_verdict(pnl)
-    ui.kpi_card(row2[1], "当日已实现盈亏", ui.fmt_currency(pnl), vd=pnl_vd)
-    ui.kpi_card(
-        row2[2], "待成交订单", str(curr.get("pending_order_count", 0)),
-        delta=ui.delta_vs_prev(curr.get("pending_order_count"), prev.get("pending_order_count")),
-    )
     prev_label = overview_delta.get("prev_run_date") or "无"
-    ui.kpi_card(row2[3], "对比基准日", str(prev_label), note="上一交易日（同比口径）")
+    ui.metric_row([
+        ui.MetricCard("计划状态", plan_state_badge(curr.get("plan_state"))),
+        ui.MetricCard("市场状态", market_regime_badge(curr.get("market_regime"))),
+        ui.MetricCard(
+            "观察 / 可交易",
+            f"{curr.get('watchlist_count', 0)} / {curr.get('tradable_count', 0)}",
+            delta=ui.delta_vs_prev(curr.get("tradable_count"), prev.get("tradable_count")),
+            note="可交易标的数 vs 上一交易日",
+        ),
+        ui.MetricCard(
+            "最高综合评分",
+            ui.fmt_number(curr.get("top_score")),
+            delta=ui.delta_vs_prev(curr.get("top_score"), prev.get("top_score")),
+        ),
+        ui.MetricCard(
+            "账户权益（纸面）",
+            ui.fmt_currency(equity),
+            delta=ui.delta_vs_prev(equity, prev.get("total_equity")),
+        ),
+        ui.MetricCard("当日已实现盈亏", ui.fmt_currency(pnl), vd=pnl_vd),
+        ui.MetricCard(
+            "待成交订单",
+            str(curr.get("pending_order_count", 0)),
+            delta=ui.delta_vs_prev(curr.get("pending_order_count"), prev.get("pending_order_count")),
+        ),
+        ui.MetricCard("对比基准日", str(prev_label), note="上一交易日（同比口径）"),
+    ])
 
 
 def data_completeness_view(payload: dict[str, Any]) -> None:
@@ -242,12 +240,19 @@ def data_completeness_view(payload: dict[str, Any]) -> None:
         st.info("暂无数据完整度信息。")
         return
     missing = payload.get("missing") or []
-    cols = st.columns(3)
     vd = ui.verdict_for("coverage_pct", pct)
-    ui.kpi_card(cols[0], "数据完整度", ui.fmt_pct(pct), vd=vd, note=f"{present}/{total} 项就绪")
-    ui.kpi_card(cols[1], "新闻 / 日线", f"{payload.get('news_count', 0)} / {payload.get('ohlcv_count', 0)}")
-    ui.kpi_card(cols[2], "缺失项", str(len(missing)), vd=ui.verdict(len(missing), good=0, warn=2, higher_is_better=False,
-                                                     labels=("齐全", "少量缺口", "缺口较多")))
+    ui.metric_row([
+        ui.MetricCard("数据完整度", ui.fmt_pct(pct), vd=vd, note=f"{present}/{total} 项就绪"),
+        ui.MetricCard("新闻 / 日线", f"{payload.get('news_count', 0)} / {payload.get('ohlcv_count', 0)}"),
+        ui.MetricCard(
+            "缺失项",
+            str(len(missing)),
+            vd=ui.verdict(
+                len(missing), good=0, warn=2, higher_is_better=False,
+                labels=("齐全", "少量缺口", "缺口较多"),
+            ),
+        ),
+    ])
     if missing:
         st.warning("缺失数据：" + "、".join(f"{row['category']}:{row['artifact']}" for row in missing))
     with st.expander("完整数据项"):
@@ -341,13 +346,14 @@ def candidates_with_rankings_view(rows: list[dict[str, Any]]) -> None:
         st.info("该运行日无评分候选。")
         return
     top = rows[:8]
-    cols = st.columns(3)
     tradable = sum(1 for row in rows if row.get("is_tradable"))
     watchlist = sum(1 for row in rows if row.get("is_watchlist"))
     best = top[0] if top else {}
-    ui.kpi_card(cols[0], "候选数", str(len(rows)), note=f"观察 {watchlist} / 可交易 {tradable}")
-    ui.kpi_card(cols[1], "最高评分", ui.fmt_number(best.get("candidate_score")), note=str(best.get("symbol") or "—"))
-    ui.kpi_card(cols[2], "Top 可交易", "、".join(str(r.get("symbol")) for r in top if r.get("is_tradable")) or "—")
+    ui.metric_row([
+        ui.MetricCard("候选数", str(len(rows)), note=f"观察 {watchlist} / 可交易 {tradable}"),
+        ui.MetricCard("最高评分", ui.fmt_number(best.get("candidate_score")), note=str(best.get("symbol") or "—")),
+        ui.MetricCard("Top 可交易", "、".join(str(r.get("symbol")) for r in top if r.get("is_tradable")) or "—"),
+    ])
     ui.pick_cards(top, limit=5)
     ui.pretty_table(
         top,
@@ -429,11 +435,12 @@ def replay_summary_view(report: dict[str, Any]) -> None:
 
     fr = fill_rate.get("fill_rate_pct", 0)
     nt = blocked.get("no_trade_rate_pct", 0)
-    cols = st.columns(4)
-    ui.kpi_card(cols[0], "总订单数", str(fill_rate.get("total_orders", 0)))
-    ui.kpi_card(cols[1], "成交率", ui.fmt_pct(fr), vd=ui.verdict_for("fill_rate_pct", fr))
-    ui.kpi_card(cols[2], "评估次数", str(blocked.get("total_evaluations", 0)))
-    ui.kpi_card(cols[3], "空仓率", ui.fmt_pct(nt), vd=ui.verdict_for("no_trade_rate_pct", nt))
+    ui.metric_row([
+        ui.MetricCard("总订单数", str(fill_rate.get("total_orders", 0))),
+        ui.MetricCard("成交率", ui.fmt_pct(fr), vd=ui.verdict_for("fill_rate_pct", fr)),
+        ui.MetricCard("评估次数", str(blocked.get("total_evaluations", 0))),
+        ui.MetricCard("空仓率", ui.fmt_pct(nt), vd=ui.verdict_for("no_trade_rate_pct", nt)),
+    ])
 
     reason_counts = blocked.get("reason_counts") or {}
     if reason_counts:
@@ -465,16 +472,20 @@ def equity_curve_view(payload: dict[str, Any]) -> None:
 
     strat_ret = payload.get("strategy_return_pct")
     bench_ret = payload.get("benchmark_return_pct")
-    cols = st.columns(3)
     strat_vd = return_verdict(strat_ret)
-    ui.kpi_card(cols[0], "策略累计收益", ui.fmt_pct(strat_ret), vd=strat_vd)
-    ui.kpi_card(cols[1], f"基准（{payload.get('benchmark', 'SPY')}）累计收益", ui.fmt_pct(bench_ret))
     alpha = (strat_ret - bench_ret) if (strat_ret is not None and bench_ret is not None) else None
     alpha_vd = ui.verdict(alpha, good=0.0, warn=0.0, higher_is_better=True,
                           labels=("跑赢大盘", "持平", "跑输大盘")) if alpha is not None else None
-    ui.kpi_card(cols[2], "超额收益 (alpha)",
-                f"{alpha:+.2f}%" if alpha is not None else "—", vd=alpha_vd,
-                note="策略 − 基准")
+    ui.metric_row([
+        ui.MetricCard("策略累计收益", ui.fmt_pct(strat_ret), vd=strat_vd),
+        ui.MetricCard(f"基准（{payload.get('benchmark', 'SPY')}）累计收益", ui.fmt_pct(bench_ret)),
+        ui.MetricCard(
+            "超额收益 (alpha)",
+            f"{alpha:+.2f}%" if alpha is not None else "—",
+            vd=alpha_vd,
+            note="策略 − 基准",
+        ),
+    ])
 
     df = pd.DataFrame(series)
     has_bench = "benchmark_equity" in df.columns and df["benchmark_equity"].notna().any()
@@ -496,7 +507,7 @@ def strategy_comparison_view(rows: list[dict[str, Any]]) -> None:
     best = max(rows, key=lambda r: (r.get("total_realized_pnl") or 0))
     enriched = []
     for r in rows:
-        row = {"推荐": "⭐" if (r is best and len(rows) > 1) else "", **r}
+        row = {"推荐": "最佳" if (r is best and len(rows) > 1) else "", **r}
         enriched.append(row)
     ui.pretty_table(enriched)
     _bar([(row["strategy_id"], float(row.get("fill_rate_pct") or 0)) for row in rows],
@@ -509,12 +520,19 @@ def champion_vs_challengers_view(report: dict[str, Any]) -> None:
         st.info("暂无影子实验评估。运行：python3 -m trading_agent growth evaluate")
         return
     champion = report.get("champion") or {}
-    cols = st.columns(3)
-    ui.kpi_card(cols[0], "Champion 成交率", ui.fmt_pct(champion.get("fill_rate_pct", 0)),
-                vd=ui.verdict_for("fill_rate_pct", champion.get("fill_rate_pct", 0)))
-    ui.kpi_card(cols[1], "Champion 空仓率", ui.fmt_pct(champion.get("no_trade_rate_pct", 0)),
-                vd=ui.verdict_for("no_trade_rate_pct", champion.get("no_trade_rate_pct", 0)))
-    ui.kpi_card(cols[2], "Champion 交易天数", str(champion.get("run_date_count", 0)))
+    ui.metric_row([
+        ui.MetricCard(
+            "Champion 成交率",
+            ui.fmt_pct(champion.get("fill_rate_pct", 0)),
+            vd=ui.verdict_for("fill_rate_pct", champion.get("fill_rate_pct", 0)),
+        ),
+        ui.MetricCard(
+            "Champion 空仓率",
+            ui.fmt_pct(champion.get("no_trade_rate_pct", 0)),
+            vd=ui.verdict_for("no_trade_rate_pct", champion.get("no_trade_rate_pct", 0)),
+        ),
+        ui.MetricCard("Champion 交易天数", str(champion.get("run_date_count", 0))),
+    ])
     flat = []
     for chal in report["challengers"]:
         metrics = chal.get("metrics") or {}
@@ -608,14 +626,19 @@ def strategy_behavior_view(payload: dict[str, Any]) -> None:
         return
     summary = payload.get("summary") or {}
     if summary:
-        cols = st.columns(min(len(summary), 4))
-        for i, (strat, s) in enumerate(summary.items()):
+        cards = []
+        for strat, s in summary.items():
             div = s.get("diverge_vs_champion", 0)
             vd = ui.verdict(div, good=0, warn=max(1, len(rows) // 3), higher_is_better=False,
                             labels=("与冠军高度一致", "部分分歧", "分歧很大"))
-            ui.kpi_card(cols[i % len(cols)], strat, f"{div} 处分歧", vd=vd,
-                        note=f"出手 {s.get('would_trade', 0)} / {s.get('decisions', 0)} 次 "
-                             f"· 冠军出手 {payload.get('champion_would_trade', 0)} 次")
+            cards.append(ui.MetricCard(
+                strat,
+                f"{div} 处分歧",
+                vd=vd,
+                note=f"出手 {s.get('would_trade', 0)} / {s.get('decisions', 0)} 次 "
+                     f"· 冠军出手 {payload.get('champion_would_trade', 0)} 次",
+            ))
+        ui.metric_row(cards)
     st.caption("每行 = 当天第 N 次决策；“分歧”表示各策略决策不一致。")
     flat = []
     for r in rows:
@@ -634,11 +657,12 @@ def calibration_view(report: dict) -> None:
         st.info("暂无校准数据。运行：python3 -m trading_agent analytics calibrate "
                 "（需要网络拉 yfinance；≥15 个运行日后才有意义）。")
         return
-    cols = st.columns(4)
-    ui.kpi_card(cols[0], "运行日", str(report.get("run_date_count", 0)))
-    ui.kpi_card(cols[1], "样本数", str(report.get("sample_size", 0)))
-    ui.kpi_card(cols[2], "Horizon", " / ".join(str(h) for h in (report.get("horizons") or [])) or "—")
-    ui.kpi_card(cols[3], "统计状态", "样本偏少" if report.get("run_date_count", 0) < 15 else "可参考")
+    ui.metric_row([
+        ui.MetricCard("运行日", str(report.get("run_date_count", 0))),
+        ui.MetricCard("样本数", str(report.get("sample_size", 0))),
+        ui.MetricCard("Horizon", " / ".join(str(h) for h in (report.get("horizons") or [])) or "—"),
+        ui.MetricCard("统计状态", "样本偏少" if report.get("run_date_count", 0) < 15 else "可参考"),
+    ])
     if report.get("run_date_count", 0) < 15:
         st.warning("当前只有少量运行日，IC / 胜率只适合观察方向，暂不适合调权重。")
     if report.get("ic_summary"):
@@ -823,10 +847,11 @@ def growth_observations_view(payload: dict) -> None:
     glob = payload.get("global") or []
     modules = payload.get("modules") or {}
     flat = [{"module": m, **o} for m, obs in modules.items() for o in obs]
-    cols = st.columns(3)
-    ui.kpi_card(cols[0], "运行日", str(payload.get("run_date_count", 0)))
-    ui.kpi_card(cols[1], "全局问题", str(len(glob)))
-    ui.kpi_card(cols[2], "模块问题", str(len(flat)))
+    ui.metric_row([
+        ui.MetricCard("运行日", str(payload.get("run_date_count", 0))),
+        ui.MetricCard("全局问题", str(len(glob))),
+        ui.MetricCard("模块问题", str(len(flat))),
+    ])
     if not glob and not flat:
         st.success("未检测到问题。")
         return
@@ -871,8 +896,8 @@ def kline_view(symbol: str, ohlcv: list[dict[str, Any]],
     # Per-strategy performance cards (round-trip realized P&L / win rate / avg R / open MTM).
     if shown:
         st.markdown("**各策略在该标的的表现对比**")
-        cols = st.columns(min(len(shown), 4))
-        for i, strat in enumerate(shown):
+        cards = []
+        for strat in shown:
             s = kline.summarize_strategy_trades(trades_by_strategy.get(strat) or [], last_close)
             realized = s.get("realized_pnl")
             vd = ui.verdict(realized, good=0.0, warn=0.0, higher_is_better=True,
@@ -883,13 +908,17 @@ def kline_view(symbol: str, ohlcv: list[dict[str, Any]],
             note = f"{wr}{avg_r}"
             if s.get("open_qty"):
                 note += f" · 持仓 {s['open_qty']:g}" + (f"（浮动 {unreal:+.2f}）" if unreal is not None else "")
-            ui.kpi_card(cols[i % len(cols)], f"{strat}",
-                        ui.fmt_currency(realized) if realized is not None else "—",
-                        vd=vd, note=f"{s['round_trips']} 回合 / {s['trades']} 成交 · {note}")
+            cards.append(ui.MetricCard(
+                f"{strat}",
+                ui.fmt_currency(realized) if realized is not None else "—",
+                vd=vd,
+                note=f"{s['round_trips']} 回合 / {s['trades']} 成交 · {note}",
+            ))
+        ui.metric_row(cards)
 
     fig = kline.build_kline_figure(symbol, ohlcv, trades_by_strategy,
                                    selected_strategies=selected_strategies)
-    st.plotly_chart(fig, use_container_width=True, config={"scrollZoom": True, "displaylogo": False})
+    st.plotly_chart(fig, width="stretch", config={"scrollZoom": True, "displaylogo": False})
 
     if not shown:
         st.caption("所选策略在该标的上暂无成交（买卖点为空）。")

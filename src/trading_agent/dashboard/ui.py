@@ -45,6 +45,29 @@ class Verdict:
     label: str
 
 
+@dataclass(frozen=True)
+class PageBrief:
+    """统一的页面头部配置。"""
+
+    title: str
+    caption: str
+    what: str
+    how: str
+    action: str
+    dated: bool = False
+
+
+@dataclass(frozen=True)
+class MetricCard:
+    """统一 KPI 卡片配置。"""
+
+    label: str
+    value: str
+    vd: Verdict | None = None
+    delta: Delta | None = None
+    note: str | None = None
+
+
 _VERDICT_PRESETS: dict[str, Verdict] = {
     "good": Verdict("good", GOOD, "", "良好"),
     "warn": Verdict("warn", WARN, "", "一般"),
@@ -377,6 +400,47 @@ div[data-testid="stAlert"] svg {{
   line-height: 1.35;
   margin-top: 5px;
 }}
+.bar-list {{
+  display: grid;
+  gap: 7px;
+  border: 1px solid rgba(148,163,184,0.14);
+  border-radius: 8px;
+  background: rgba(10,15,24,0.72);
+  padding: 10px 12px;
+}}
+.bar-row {{
+  display: grid;
+  grid-template-columns: minmax(72px, 150px) minmax(0, 1fr) 74px;
+  gap: 10px;
+  align-items: center;
+  min-height: 24px;
+}}
+.bar-label {{
+  color: #e7eefb;
+  font-size: .76rem;
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}}
+.bar-track {{
+  height: 8px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: rgba(148,163,184,0.16);
+}}
+.bar-fill {{
+  height: 100%;
+  width: var(--w);
+  border-radius: inherit;
+  background: linear-gradient(90deg, {ACCENT}, {GOOD});
+}}
+.bar-value {{
+  color: {NEUTRAL};
+  font-size: .72rem;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}}
 .section-band {{
   margin: 14px 0 10px;
   display: flex;
@@ -562,6 +626,33 @@ def section_band(title: str, caption: str = "") -> None:
     )
 
 
+def page_header(brief: PageBrief, *, run_date: str | None = None, show_help: bool = False) -> None:
+    title = f"{brief.title} — {run_date}" if brief.dated and run_date else brief.title
+    section_band(title, brief.caption)
+    if show_help:
+        guidance_box(what=brief.what, how=brief.how, action=brief.action)
+
+
+def detail_expander(label: str, *, show_detail: bool = False, expanded: bool = False):
+    return st.expander(label, expanded=bool(show_detail or expanded))
+
+
+def metric_row(cards: list[MetricCard], *, max_columns: int = 4) -> None:
+    if not cards:
+        return
+    count = min(max_columns, max(1, len(cards)))
+    cols = st.columns(count)
+    for index, card in enumerate(cards):
+        kpi_card(
+            cols[index % count],
+            card.label,
+            card.value,
+            vd=card.vd,
+            delta=card.delta,
+            note=card.note,
+        )
+
+
 def hero_panel(
     *,
     kicker: str,
@@ -616,6 +707,37 @@ def pick_cards(rows: list[Mapping[str, Any]], *, limit: int = 5) -> None:
     if not cards:
         return
     st.markdown(f"<div class='card-strip'>{''.join(cards)}</div>", unsafe_allow_html=True)
+
+
+def bar_list(items: list[tuple[str, float]], *, value_label: str, limit: int = 12) -> None:
+    if not items:
+        st.caption("暂无可展示明细。")
+        return
+    cleaned = [(str(label), float(value)) for label, value in items if value is not None]
+    if not cleaned:
+        st.caption("暂无可展示明细。")
+        return
+    if any(value < 0 for _, value in cleaned):
+        pretty_table([{"item": label, "value": value} for label, value in cleaned[:limit]],
+                     rename={"item": "项目", "value": value_label})
+        return
+    top = sorted(cleaned, key=lambda row: row[1], reverse=True)[:limit]
+    max_value = max((value for _, value in top), default=0.0)
+    if max_value <= 0:
+        pretty_table([{"item": label, "value": value} for label, value in top],
+                     rename={"item": "项目", "value": value_label})
+        return
+    rows = []
+    for label, value in top:
+        width = max(2.0, min(100.0, value / max_value * 100.0))
+        rows.append(
+            "<div class='bar-row'>"
+            f"<div class='bar-label'>{escape(label)}</div>"
+            f"<div class='bar-track'><div class='bar-fill' style='--w:{width:.1f}%'></div></div>"
+            f"<div class='bar-value'>{escape(fmt_number(value))}</div>"
+            "</div>"
+        )
+    st.markdown(f"<div class='bar-list'>{''.join(rows)}</div>", unsafe_allow_html=True)
 
 
 def vs_benchmark(strategy_value: float | None, bench_value: float | None, *, label: str = "vs SPY") -> str:
@@ -792,7 +914,7 @@ def pretty_table(
 
     df = rows if isinstance(rows, pd.DataFrame) else pd.DataFrame(list(rows))
     if df.empty:
-        st.dataframe(df, use_container_width=True, hide_index=True)
+        st.caption("暂无可展示明细。")
         return
     if columns:
         keep = [c for c in columns if c in df.columns]
@@ -803,4 +925,4 @@ def pretty_table(
     for col in df.select_dtypes(include=["object"]).columns:
         df[col] = df[col].astype(str)
     df = df.rename(columns=mapping)
-    st.dataframe(df, use_container_width=True, hide_index=True)
+    st.dataframe(df, width="stretch", hide_index=True)
