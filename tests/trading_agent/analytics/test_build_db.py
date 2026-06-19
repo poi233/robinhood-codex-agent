@@ -34,7 +34,7 @@ def _make_sample_run(agent_root: Path, run_date: str) -> None:
             "active_watchlist_count": 29,
             "git_commit": "deadbeef",
             "config_hash": "abc123",
-            "codex_model": "gpt-5.4-mini",
+            "codex_model": "gpt-5.5-high",
         },
     )
     _write_json(

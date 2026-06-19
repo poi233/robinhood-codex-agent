@@ -75,7 +75,7 @@ def run_codex_prompt(
         raise FileNotFoundError(
             f"missing codex executable: {codex_bin}. Set CODEX_BIN to a valid path or ensure codex is on PATH."
         )
-    model = os.environ.get("CODEX_MODEL", "gpt-5.4-mini")
+    model = os.environ.get("CODEX_MODEL", "gpt-5.5-high")
     timeout_sec = int(os.environ.get("CODEX_EXEC_TIMEOUT_SEC", "3600"))
     try:
         result = subprocess.run(
