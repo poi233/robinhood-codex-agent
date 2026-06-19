@@ -179,7 +179,7 @@ def delta_vs_prev(
     pct_points: bool = False,
     suffix: str = "",
 ) -> Delta | None:
-    """算 curr-prev 的变化，返回带方向的中文 delta（▲/▼ + 数值 vs 上一期）。
+    """算 curr-prev 的变化，返回带方向的中文 delta（上升/下降 + 数值 vs 上一期）。
 
     缺任一侧返回 None（卡片就不显示 delta）。``pct_points`` 时差值按百分点展示。
     """
@@ -192,10 +192,10 @@ def delta_vs_prev(
         return None
     if abs(diff) < 1e-9:
         return Delta("持平 vs 上一期", None)
-    arrow = "▲" if diff > 0 else "▼"
+    direction = "上升" if diff > 0 else "下降"
     magnitude = f"{abs(diff):,.1f}{'pp' if pct_points else suffix}"
     improved = (diff > 0) if higher_is_better else (diff < 0)
-    return Delta(f"{arrow} {magnitude} vs 上一期", improved)
+    return Delta(f"{direction} {magnitude} vs 上一期", improved)
 
 
 # --- One-time theming ------------------------------------------------------
@@ -215,7 +215,8 @@ section[data-testid="stSidebar"] {{
   border-right: 1px solid rgba(148,163,184,0.12);
 }}
 .block-container {{
-  padding-top: 2.1rem;
+  padding-top: 2.4rem;
+  padding-bottom: 3rem;
   max-width: 1180px;
 }}
 .terminal-title {{
@@ -223,7 +224,7 @@ section[data-testid="stSidebar"] {{
   align-items: baseline;
   justify-content: space-between;
   gap: 16px;
-  margin: 2px 0 12px;
+  margin: 2px 0 22px;
   padding-left: 14px;
   border-left: 3px solid {GOOD};
 }}
@@ -238,8 +239,9 @@ section[data-testid="stSidebar"] {{
   font-size: .78rem;
 }}
 div[data-baseweb="tab-list"] {{
-  gap: 8px;
+  gap: 10px;
   border-bottom: 1px solid rgba(148,163,184,0.15);
+  margin-bottom: 18px;
 }}
 button[data-baseweb="tab"] {{
   height: 36px;
@@ -259,6 +261,20 @@ button[data-baseweb="tab"] p {{
   font-size: .86rem;
   font-weight: 700;
 }}
+span[data-testid="stIconMaterial"] {{
+  display: none !important;
+}}
+div[data-testid="stExpander"] {{
+  margin-top: 14px;
+  margin-bottom: 14px;
+}}
+div[data-testid="stExpander"] details {{
+  border-radius: 9px;
+}}
+div[data-testid="stExpander"] summary {{
+  padding-top: 12px !important;
+  padding-bottom: 12px !important;
+}}
 div[data-testid="stAlert"] {{
   border-radius: 8px;
   border: 1px solid rgba(148,163,184,0.16);
@@ -276,9 +292,9 @@ div[data-testid="stAlert"] svg {{
     radial-gradient(circle at 7% 18%, rgba(22,199,132,0.20), transparent 22%),
     linear-gradient(110deg, rgba(16,24,36,0.98), rgba(18,31,45,0.95) 58%, rgba(13,20,31,0.98));
   border-radius: 10px;
-  padding: 20px 22px 16px;
+  padding: 24px 24px 20px;
   box-shadow: 0 18px 60px rgba(0,0,0,0.35);
-  margin-bottom: 12px;
+  margin-bottom: 24px;
 }}
 .hero-panel::after {{
   content: "";
@@ -295,7 +311,7 @@ div[data-testid="stAlert"] svg {{
   z-index: 1;
   display: grid;
   grid-template-columns: 138px minmax(0, 1fr);
-  gap: 20px;
+  gap: 24px;
   align-items: center;
 }}
 .score-ring {{
@@ -345,14 +361,14 @@ div[data-testid="stAlert"] svg {{
   z-index: 1;
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 8px;
-  margin-top: 16px;
+  gap: 12px;
+  margin-top: 20px;
 }}
 .hero-metric {{
   background: rgba(255,255,255,0.055);
   border: 1px solid rgba(255,255,255,0.08);
   border-radius: 7px;
-  padding: 9px 11px;
+  padding: 12px 13px;
 }}
 .hero-metric .label {{
   color: {NEUTRAL};
@@ -370,16 +386,16 @@ div[data-testid="stAlert"] svg {{
 .card-strip {{
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 9px;
-  margin: 10px 0 10px;
+  gap: 13px;
+  margin: 18px 0 18px;
 }}
 .pick-card {{
   border: 1px solid rgba(148,163,184,0.15);
   border-top: 3px solid {ACCENT};
   border-radius: 8px;
   background: linear-gradient(180deg, rgba(20,28,42,0.96), rgba(13,19,29,0.98));
-  padding: 10px 11px;
-  min-height: 95px;
+  padding: 13px 13px;
+  min-height: 108px;
 }}
 .pick-card.good {{ border-top-color: {GOOD}; }}
 .pick-card.warn {{ border-top-color: {WARN}; }}
@@ -402,11 +418,13 @@ div[data-testid="stAlert"] svg {{
 }}
 .bar-list {{
   display: grid;
-  gap: 7px;
+  gap: 10px;
   border: 1px solid rgba(148,163,184,0.14);
   border-radius: 8px;
   background: rgba(10,15,24,0.72);
-  padding: 10px 12px;
+  padding: 14px 15px;
+  margin-top: 12px;
+  margin-bottom: 18px;
 }}
 .bar-row {{
   display: grid;
@@ -442,7 +460,7 @@ div[data-testid="stAlert"] svg {{
   font-variant-numeric: tabular-nums;
 }}
 .section-band {{
-  margin: 14px 0 10px;
+  margin: 22px 0 18px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -450,7 +468,7 @@ div[data-testid="stAlert"] svg {{
   border: 1px solid rgba(148,163,184,0.14);
   border-left: 3px solid {ACCENT};
   border-radius: 8px;
-  padding: 10px 13px;
+  padding: 14px 16px;
   background: linear-gradient(90deg, rgba(20,28,42,0.92), rgba(10,15,24,0.70));
 }}
 .section-band h3 {{
@@ -467,8 +485,8 @@ div[data-testid="stAlert"] svg {{
   border: 1px solid {CARD_BORDER};
   border-left: 4px solid {NEUTRAL};
   border-radius: 8px;
-  padding: 9px 12px;
-  margin-bottom: 6px;
+  padding: 13px 15px;
+  margin-bottom: 12px;
   box-shadow: 0 1px 3px rgba(0,0,0,0.35);
 }}
 .kpi-card.good {{ border-left-color: {GOOD}; }}
@@ -482,7 +500,7 @@ div[data-testid="stAlert"] svg {{
   margin-top: 2px;
   overflow-wrap: anywhere;
 }}
-.kpi-sub {{ font-size: 0.7rem; margin-top: 2px; }}
+.kpi-sub {{ font-size: 0.7rem; margin-top: 5px; }}
 .kpi-up   {{ color: {GOOD}; }}
 .kpi-down {{ color: {BAD}; }}
 .kpi-flat {{ color: {NEUTRAL}; }}
@@ -491,18 +509,21 @@ div[data-testid="stAlert"] svg {{
   border: 1px solid rgba(59,130,246,0.25);
   border-radius: 8px;
   padding: 10px 14px;
-  margin-bottom: 12px;
+  margin-bottom: 18px;
   font-size: 0.86rem;
 }}
 .guidance-box b {{ color: {ACCENT}; }}
 section.main h1 {{ margin-bottom: 0.15rem; }}
-section.main h2 {{ margin-top: 0.55rem; margin-bottom: 0.35rem; }}
-section.main h3 {{ margin-top: 0.45rem; margin-bottom: 0.25rem; }}
-div[data-testid="stVerticalBlock"] {{ gap: 0.55rem; }}
+section.main h2 {{ margin-top: 1.05rem; margin-bottom: 0.65rem; }}
+section.main h3 {{ margin-top: 0.9rem; margin-bottom: 0.55rem; }}
+div[data-testid="stVerticalBlock"] {{ gap: 0.9rem; }}
+div[data-testid="stHorizontalBlock"] {{ gap: 0.85rem; }}
 div[data-testid="stDataFrame"] {{
   border: 1px solid rgba(148,163,184,0.14);
   border-radius: 8px;
   overflow: hidden;
+  margin-top: 12px;
+  margin-bottom: 20px;
 }}
 @media (max-width: 900px) {{
   .hero-grid {{ grid-template-columns: 1fr; }}

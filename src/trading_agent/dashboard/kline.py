@@ -2,7 +2,7 @@
 
 Interactive Plotly chart styled like a pro trading terminal:
   • Price panel: candlesticks + SMA20/50/200 + Bollinger(20,2) band + last-price line.
-  • Per-strategy buy(▲)/sell(▼) markers, each strategy its own color.
+  • Per-strategy buy/sell markers, each strategy its own color.
   • Trade-plan overlays: each buy's stop (red) / target_1·target_2 (green) levels, the
     holding period shaded, and a buy→sell connector colored by round-trip P&L.
   • Volume panel (+ volume MA20), RSI(14) panel (70/30 guides), MACD(12/26/9) panel.
