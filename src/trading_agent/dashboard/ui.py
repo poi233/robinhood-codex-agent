@@ -209,7 +209,19 @@ _CSS = f"""
     linear-gradient(180deg, #070b12 0%, #0b111b 45%, #070b12 100%);
 }}
 header[data-testid="stHeader"] {{ background: transparent; }}
-div[data-testid="stToolbar"] {{ opacity: .45; }}
+#MainMenu,
+footer,
+.stDeployButton,
+div[data-testid="stToolbar"],
+div[data-testid="stDecoration"],
+div[data-testid="stElementToolbar"],
+svg[data-testid="stElementToolbarButtonIcon"] {{
+  display: none !important;
+}}
+a[href^="#"],
+a[href^="#"] svg {{
+  display: none !important;
+}}
 section[data-testid="stSidebar"] {{
   background: linear-gradient(180deg, #101722 0%, #0b111b 100%);
   border-right: 1px solid rgba(148,163,184,0.12);
@@ -283,6 +295,10 @@ div[data-testid="stAlert"] {{
 }}
 div[data-testid="stAlert"] svg {{
   display: none;
+}}
+.modebar,
+.modebar-container {{
+  display: none !important;
 }}
 .hero-panel {{
   position: relative;
