@@ -85,7 +85,7 @@
 | | C2 | theme exposure / speculative cap 诊断 | docx | ✅ **已完成**（2026-06-15） |
 | | C3 | Dashboard v2（可读性重构 + 策略对比，含 F1） | 用户新增 | ✅ **已完成**（2026-06-16，首次 headless 渲染验证；像素级视觉仍待人工目测） |
 | | C4 | Dashboard v3（高级化重设计：中文化 + 深色主题/卡片 + 11→5 主区 + 四种指引） | 用户新增（2026-06-18） | ✅ **已完成（2026-06-18）**：只读不变；中文为主、深色高级主题、KPI 卡片、11 标签合并为 5 主区、每类数据带「好坏判定 / 基准对比 / 同比变化 / 行动建议」；headless AppTest 渲染 5 主区全绿（33 dashboard 测试通过） |
-| | C5 | Dashboard K线复盘（每只股票的日K + 各策略买卖点 + 均线/量/MACD） | 用户新增（2026-06-18） | ✅ **已完成（2026-06-18）**：新增第 6 主区「📉 K线复盘」——Plotly 日K + SMA20/50 + 成交量 + MACD，叠加 champion（paper 账本）与各挑战者（experiments/<id> 隔离账本）在每只票上的 ▲买/▼卖点（按策略着色），下方按策略列均买价 + 浮动盈亏；plotly 进 [dashboard] extra；只读 |
+| | C5 | Dashboard K线复盘（每只股票的日K + 各策略买卖点 + 均线/量/MACD） | 用户新增（2026-06-18） | ✅ **已完成 + 专业版升级（2026-06-18）**：第 6 主区「📉 K线复盘」——Plotly 4 面板（日K+SMA20/50/200+布林(20,2) · 成交量+量MA20 · RSI(14) · MACD），叠加 champion 与各挑战者买卖点；每笔订单画 **止损/目标位线 + 持仓期阴影 + 买→卖盈亏连线**；FIFO 配对回合 → 每策略 **已实现盈亏/胜率/均R/持仓浮动** 卡片对比；区间按钮(1M/3M/6M/全部)+十字光标+右轴+周末 rangebreaks；plotly 进 [dashboard] extra；只读 |
 | **D 工程优化 · 不阻塞** | D1 | DSA/Technical token 优化 | design doc | ✅ **已完成**（2026-06-15，见下方实现记录） |
 | | D2 | market_feed 跨日缓存 / batch | 旧 R4 | 🟡 缓存（2026-06-15）+ batch 拉取能力（2026-06-17：`fetch_live_rows_batch` 一次 `yf.download` 多 ticker + 分发纯函数 + 测试）已建；采集主流程逐步采用 |
 | | D3 | Kronos batch 推理 | 旧 R5 | ✅ **已完成**（2026-06-16） |
@@ -282,8 +282,17 @@ pip 安装假包而失败，与本改动无关）。README「11 tabs」段落 + 
 **验收**：✅ AppTest 渲染 6 主区无异常（33 dashboard 测试通过、全套 606 通过）；✅ 图含 K线/SMA20/SMA50/
 champion 买点/challenger 买点/成交量/MACD（DIF/DEA/柱）共 9 条 trace；✅ 缺数据降级为 info 不报错。
 
-> **后续可增量**：卖出/平仓配对的逐笔盈亏连线、按某挑战者重放「如果用它会怎样」的权益对比、intraday 分钟级
-> K 线（需分钟 OHLCV 采集）、画 entry/stop/target 水平线（technical levels 已有）。
+**专业版升级（2026-06-18，同日）**：按用户「太简陋了，按专业的来」要求加深——
+- 指标：SMA20/50/200 + 布林(20,2) 带 + 成交量MA20 + RSI(14)（70/30 辅助线）+ MACD(12/26/9)，共 4 个堆叠面板。
+- 交易计划可视化：每笔买单从 `orders` 表的 `stop_price`/`target_1`/`target_2` 画止损（红虚线）/目标（绿虚线）线段，
+  持仓期用半透明阴影标出，买→卖用按回合盈亏着色的连线连起来。
+- `summarize_strategy_trades`：FIFO 配对买卖成回合，算每策略 **已实现盈亏 / 胜率 / 均 R / 持仓浮动盈亏**，做成对比卡片。
+- 交互：周末 rangebreaks（去空档）、1M/3M/6M/全部 区间按钮、十字光标 spike、右侧 y 轴。
+- `queries.trades_for_symbol` 透传 `setup_type/stop/target/reward_risk/slippage_bps`，明细表展示完整交易计划。
+- 测试 seed 补 stop/target + 一笔卖出（成一个闭合回合），图实测 21 条 trace；33 dashboard 测试通过。
+
+> **后续可增量**：按某挑战者重放「如果用它会怎样」的整段权益对比、intraday 分钟级 K 线（需分钟 OHLCV 采集）、
+> 画扇形/斐波那契等手绘工具、把 entry/stop/target 也接 technical_levels（非成交票也显示计划）。
 
 ---
 
