@@ -63,7 +63,7 @@
 | H6 evidence-based proposals | `ENABLE_EVIDENCE_PROPOSALS` | growth propose 的证据校验 | ✅ **gate 已建（2026-06-17，默认 0）**：开时 proposal 必须带 calibration/weight evidence 才生成；更多 evidence 类型增量加后翻默认 |
 | M1–M5 intraday advisory overlay | `ENABLE_INTRADAY_ADVISORY_OVERLAY` | intraday 排序/仓位/风控 overlay | 🟡 **M1–M5 核心已完成（2026-06-18，默认 0）**：loader/normalizer + H2/H3 rank_delta 排序 + K1/K2 风控/仓位收紧 + rankings/order/email/dashboard audit + forward-return/growth evidence + overlay mutation 安全白名单已建；自动 proposal rule 仍待；flag 关时 champion 完全保持旧行为 |
 | O1 每周 Serenity 自动选股 | `ENABLE_WEEKLY_SCREENER` | 周度 cron 自动写 `universe.txt` + `universe_meta.json` | 🟡 **规划中（2026-06-19，默认 0）**：Codex + vendored `serenity-supply-chain` skill 发现池外上游瓶颈股 → 因子验证 → **自动增改 universe（只增不删 + 重排，无需人工确认）**。flag 关时 cron 只产报告不改 config；翻默认门槛=auto-apply 路径有「只增不删」单测护栏 + 备份/回滚 + 落审计 |
-| O2 每日动态选 active | `ENABLE_DYNAMIC_ACTIVE` | premarket 贵分析层（Kronos/technical/market_feed）的 active 集来源 | 🟡 **规划中（2026-06-19，默认 0）**：active 集由写死 `active_watchlist.txt` 改为「pin 锚 ∪ 全 universe 便宜预排 top-N」。flag 关时＝完全现状（仍读 active_watchlist.txt） |
+| O2 每日动态选 active | `ENABLE_DYNAMIC_ACTIVE` | premarket 贵分析层（Kronos/technical/market_feed）的 active 集来源 | 🟢 **代码完成（2026-06-19，默认 0）**：active 集由写死 `active_watchlist.txt` 改为「pin 锚 ∪ 全 universe 按 screen_score 预排 top-N（`ACTIVE_MAX`）」，落 `planner/active_selection.{json,txt}`，Kronos 也用动态集。flag 关时＝完全现状（既有 premarket 测试全绿） |
 
 > 注：纯手动命令（`analytics calibrate`、`growth observe/propose`）和 shadow-only 路径**天然隔离**（不在热
 > 路径、不动 champion），可以不强制 flag；**强制 flag 的是会接进 premarket/intraday 热路径的模块**。
@@ -146,7 +146,7 @@
 | | ~~N4~~ | 数据保留 / 归档策略 | 用户新增（2026-06-18） | ✅ **已完成（2026-06-18）**：`analytics retention [--keep-days N] [--apply]`——对超过保留窗的旧 run 只 prune `market_feed/`（大输入快照，分析不读），保留全部分析输入小 JSON；默认 dry-run、`--apply` 才删；写 `retention_report.{json,md}` |
 | **O 选股层升级（每周自动发现 + 每日动态选）** | O0 | vendor Serenity 供应链 skill + 接入安装/校验脚本 | 用户新增（2026-06-19） | ✅ **已完成（2026-06-19）**：`muxuuu/serenity-skill`（MIT，~2.5k★）vendor 进 `.agents/skills/serenity-supply-chain/`，加进 `install_repo_skills.sh`/`verify_repo_skills.sh` 的 SKILLS 列表 |
 | | O1 | **每周 cron 自动改 universe**（Serenity 发现 + 因子验证 → 自动增改标的与排名） | 用户新增（2026-06-19） | 🟢 **代码完成（2026-06-19，`ENABLE_WEEKLY_SCREENER` 默认 0）**：自动 **只增不删 + 重排**，无需人工确认。step 1 骨架 + step 2 因子严门槛 + step 3 Codex 发现 + step 4 auto-apply writer（限速/cap 降级/只写 meta 分数/备份/审计）+ step 5 周度 cron + 文档 全部落地；27 个 screener 单测通过。flag 关时只产报告、零改动；翻 1 即 auto-apply。等观察几周报告质量后人工翻默认 |
-| | O2 | 每日 premarket 动态选 active（pin 锚 ∪ 全 universe 预排 top-N） | 用户新增（2026-06-19） | 🟡 **规划中（2026-06-19，`ENABLE_DYNAMIC_ACTIVE` 默认 0）**：贵分析输入由写死 `active_watchlist.txt` 改为每日动态预排；flag 关时＝现状 |
+| | O2 | 每日 premarket 动态选 active（pin 锚 ∪ 全 universe 预排 top-N） | 用户新增（2026-06-19） | 🟢 **代码完成（2026-06-19，`ENABLE_DYNAMIC_ACTIVE` 默认 0）**：`select_dynamic_active`（pins 永含 ∪ top-`ACTIVE_MAX` by screen_score、排除 passive、无分排最后）接进 premarket + Kronos，落 `active_selection.{json,txt}`；7 个纯函数单测 + 既有 premarket 测试全绿；flag 关时＝现状 |
 
 > **新旧编号对照**：R1→E1（增 benchmark returns）、R2→E2、R3→A3、R4→D2、R5→D3、R6→D4、R7→F2；
 > token 优化设计→D1；docx 的 run_manifest→B1、registry→B2、analytics.db→B3、changelog→B4、
@@ -331,10 +331,27 @@ fail-closed（不写半成品、不删东西）；✅ `CODEX_EXEC_DRY_RUN=1` 可
 - 🟢 **O1 代码全部完成（2026-06-19）**：`ENABLE_WEEKLY_SCREENER` 默认 0（report-only），翻 1 即 auto-apply。
   全套 27 个 screener 单测通过。等积累几周观察 `universe_change.md` 质量后，由人工把 flag 翻 1。
 
-## O2 — 每日 premarket 动态选 active（+ 少量 pin）（🟡 规划中）
+## O2 — 每日 premarket 动态选 active（+ 少量 pin）（🟢 代码完成 2026-06-19）
 
 **目标**：贵分析（Kronos / technical / market_feed）的输入从写死的 `active_watchlist.txt` 改为**每日从全
 universe 动态选**最该 review 的一批。
+
+**实现记录（2026-06-19，全部完成）**：
+- `data/universe.py::select_dynamic_active`（纯函数）：active = pins（active_watchlist 锚，**永含**，即便超
+  `ACTIVE_MAX` 也不丢）∪ 全 universe 按 `screen_score`（O1 写的）降序 top-N，**排除 `tier:passive`**，无分的排
+  在所有有分之后（universe 顺序）。`load_dynamic_active` 读 universe.txt + universe_meta.json + pins，meta 缺/坏
+  时退化为「全无分、universe 顺序」，universe.txt 缺时退为 pins-only。
+- `orchestration/premarket.py`：`ENABLE_DYNAMIC_ACTIVE=1` 时把 `active_symbols` 换成动态集，落
+  `planner/active_selection.{json,txt}`（json 留痕、txt 供 Kronos）；`run_kronos` 优先用 `active_selection.txt`。
+  **flag 关时这段完全不执行，`active_symbols` 仍＝`active_watchlist.txt`，零回归。**
+- `runtime.env`（`ENABLE_DYNAMIC_ACTIVE=0` / `ACTIVE_MAX=30`）+ `doctor` 回显。
+- 测试：7 个 `select_dynamic_active`/`load_dynamic_active` 纯函数单测（pins 永含、top-N、passive 排除、无分排最后、
+  pins 超额全留、dedup/大写、缺 meta 降级）+ 既有 premarket orchestration 测试逐字全绿。
+
+> 原计划用 `build_dsa_metrics` 做预排；实现改用 O1 已落盘的 `screen_score`（离线、零额外网络、与每周进货同源），
+> 更简单且可完全离线测。`build_dsa_metrics` 融合可作后续增量。
+
+<details><summary>原计划步骤（存档）</summary>
 
 **具体步骤**：
 1. premarket 开头用便宜信号对全 universe 预排：复用 `build_dsa_metrics`（已在 premarket 算）+ O1 写进
@@ -352,7 +369,9 @@ universe 动态选**最该 review 的一批。
 pins ∪ top-N、写 `active_selection.json`、benchmark（SPY 等）仍在 market_feed；✅ universe/数据缺失时
 fail-closed 退回 pin 锚。
 
-> **建议实施顺序**：O0（✅ 已完成）→ O1（周度、独立、低耦合）→ O2（动每日热路径，带 flag 默认关）。
+</details>
+
+> **建议实施顺序**：O0（✅ 已完成）→ O1（✅ 完成）→ O2（✅ 完成，动每日热路径，flag 默认关）。
 > **后续可增量**：把 O1 的 thesis/证据接进 K3 Thesis Tracker 做"发现来源命中率"归因；universe 体检报告进
 > dashboard；O1 发现的票自动补 `universe_meta` 的 `supply_chain`/`risk_tags`。
 

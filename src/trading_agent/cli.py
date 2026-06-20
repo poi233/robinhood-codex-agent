@@ -264,6 +264,8 @@ def _run_doctor(agent_root: Path) -> int:
         f"  UNIVERSE_MAX              = {env.get('UNIVERSE_MAX', '120')}",
         f"  SCREEN_MIN_DOLLAR_VOL     = {env.get('SCREEN_MIN_DOLLAR_VOL', '20000000')}",
         f"  SCREEN_REQUIRE_UPTREND    = {env.get('SCREEN_REQUIRE_UPTREND', '1')}",
+        f"  ENABLE_DYNAMIC_ACTIVE     = {env.get('ENABLE_DYNAMIC_ACTIVE', '0')}",
+        f"  ACTIVE_MAX                = {env.get('ACTIVE_MAX', '30')}",
         "",
         "  --- Notifications ---",
         f"  ENABLE_TRADE_EMAIL        = {env.get('ENABLE_TRADE_EMAIL_NOTIFICATIONS', '1')}",

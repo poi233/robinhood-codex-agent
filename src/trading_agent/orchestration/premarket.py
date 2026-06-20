@@ -187,6 +187,21 @@ def run_premarket_pipeline(*, dry_run: bool) -> int:
     runtime = load_runtime_config(agent_root)
     paths = build_runtime_paths(agent_root)
     active_symbols = parse_active_watchlist(paths.config_dir)
+    # O2: optionally pick the day's active set dynamically (pins ∪ top-N universe by screen_score)
+    # instead of the static active_watchlist. Flag default 0 → behavior is exactly as before.
+    dynamic_active_path: Path | None = None
+    if os.environ.get("ENABLE_DYNAMIC_ACTIVE", "0") == "1":
+        from trading_agent.core.io import ensure_dir
+        from trading_agent.data.universe import load_dynamic_active
+
+        active_max = int(os.environ.get("ACTIVE_MAX", "30") or "30")
+        selection = load_dynamic_active(paths.config_dir, active_max=active_max)
+        if selection["active"]:
+            active_symbols = selection["active"]
+            ensure_dir(paths.planner_dir)
+            write_json(paths.planner_dir / "active_selection.json", selection)
+            dynamic_active_path = paths.planner_dir / "active_selection.txt"
+            dynamic_active_path.write_text("\n".join(active_symbols) + "\n", encoding="utf-8")
     run_date = paths.run_date
     market_feed_dir = paths.market_feed_dir
     timeframes = [value.strip() for value in runtime.market_feed_timeframes.split(",") if value.strip()]
@@ -290,7 +305,13 @@ def run_premarket_pipeline(*, dry_run: bool) -> int:
             append_stage_log(agent_root, run_date, "kronos", "skipped", "Kronos signal layer disabled")
             return
         active_watchlist_path = paths.config_dir / "active_watchlist.txt"
-        kronos_universe = active_watchlist_path if active_watchlist_path.exists() else paths.config_dir / "universe.txt"
+        if dynamic_active_path is not None and dynamic_active_path.exists():
+            # O2: Kronos forecasts the dynamically-selected active set, not the static file.
+            kronos_universe = dynamic_active_path
+        elif active_watchlist_path.exists():
+            kronos_universe = active_watchlist_path
+        else:
+            kronos_universe = paths.config_dir / "universe.txt"
         try:
             _write_kronos_signals(agent_root, active_universe_file=kronos_universe)
         except Exception as exc:
