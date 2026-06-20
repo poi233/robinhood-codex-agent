@@ -89,7 +89,12 @@ python3 -m trading_agent growth observe
    python3 -m trading_agent screen --dry-run  # 强制只报告
    ```
    只动选股层（universe / 排名 / tier），绝不碰仓位/风险；新票仍要过每天的打分→risk_overlay→价格/仓位 gate
-   才会被真正交易。
+   才会被真正交易。**想安全反复测「写入」逻辑而不碰真 `universe.txt`**：用沙箱脚本（把 `src/config` 复制到临时
+   `AGENT_ROOT`，所有写入落副本，末尾校验真文件未变）：
+   ```bash
+   src/scripts/screener/sandbox_screen.sh --offline-demo  # 离线确定性：合成候选 → 真实 plan/apply/audit
+   src/scripts/screener/sandbox_screen.sh                 # 完整 live：在副本上跑真 `screen --apply`
+   ```
 
 ---
 
