@@ -128,6 +128,12 @@ if active_page == "总览":
 elif active_page == "选股":
     ui.page_header(PAGE_BRIEFS["picks"], run_date=selected_run_date, show_help=show_help)
     charts.candidates_with_rankings_view(queries.candidates_with_rankings(AGENT_ROOT, selected_run_date))
+
+    st.subheader("每周选股（O1）")
+    charts.screener_change_view(queries.screener_change(AGENT_ROOT))
+    st.subheader("今日 active 选择（O2）")
+    charts.active_selection_view(queries.active_selection(AGENT_ROOT, selected_run_date))
+
     charts.replay_summary_view(queries.replay_summary(AGENT_ROOT))
 
     with ui.detail_expander("因子、叠加与决策明细", show_detail=show_detail):

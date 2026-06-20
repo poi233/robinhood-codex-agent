@@ -990,3 +990,63 @@ def trends_view(history_dates: list, snapshot: dict, trend: dict) -> None:
         df = pd.DataFrame(points).set_index("date")[["value"]].rename(columns={"value": ui.label_of(str(metric))})
         st.caption(ui.label_of(str(metric)))
         _line_chart_or_table(df, caption=ui.label_of(str(metric)))
+
+
+# ── O3: selection layer (weekly screener O1 + daily dynamic active O2) ──────────────────
+def screener_change_view(payload: dict[str, Any]) -> None:
+    """O1: the latest weekly universe change — what the screener added / demoted / skipped."""
+    if not payload or not payload.get("change"):
+        st.info(
+            "暂无每周选股记录。运行 `python3 -m trading_agent screen`（或周日 cron）后会生成 "
+            "`runtime/screener/<date>/universe_change.json`。默认 `ENABLE_WEEKLY_SCREENER=0` 时仍会产报告。"
+        )
+        return
+    change = payload["change"]
+    status = payload.get("status") or {}
+    applied = change.get("applied")
+    st.caption(
+        f"最近一次：{payload.get('date', '?')}　·　模式：{'✅ 已应用' if applied else '📝 仅报告'}"
+        f"　·　发现 {status.get('discovered_count', '?')} 只"
+        f"　·　effective {change.get('effective_count_before', '?')}→{change.get('effective_count_after', '?')}"
+    )
+    added = change.get("added") or []
+    if added:
+        st.write(f"**新增 {len(added)} 只**（按因子分）")
+        ui.pretty_table(
+            added,
+            columns=["symbol", "factor_score", "theme", "thesis"],
+            rename={"symbol": "代码", "factor_score": "因子分", "theme": "主题", "thesis": "逻辑"},
+        )
+    else:
+        st.write("本期无新增。")
+    demoted = change.get("demoted") or []
+    if demoted:
+        st.caption("⬇️ 降级为 passive（超上限，仍留在池中、未删）：" + ", ".join(demoted))
+    skipped = change.get("skipped") or []
+    if skipped:
+        with st.expander(f"跳过的发现（{len(skipped)}）"):
+            ui.pretty_table(skipped, columns=["symbol", "reason"], rename={"symbol": "代码", "reason": "原因"})
+
+
+def active_selection_view(payload: dict[str, Any]) -> None:
+    """O2: today's dynamic active set — pins ∪ top-N universe by screen_score."""
+    if not payload or not payload.get("active"):
+        st.info(
+            "暂无动态 active 选择。设 `ENABLE_DYNAMIC_ACTIVE=1` 后，premarket 会写 "
+            "`planner/active_selection.json`（默认关时仍用静态 active_watchlist.txt）。"
+        )
+        return
+    active = payload.get("active") or []
+    pins = payload.get("pins") or []
+    from_screen = payload.get("from_screen") or []
+    st.caption(
+        f"今日 active {len(active)} 只　·　pin 锚 {len(pins)}　·　screen 补 {len(from_screen)}"
+        f"　·　ACTIVE_MAX {payload.get('active_max', '?')}　·　universe {payload.get('universe_size', '?')}"
+    )
+    if from_screen:
+        st.write("**靠 screen_score 选进来的**")
+        ui.pretty_table(
+            from_screen, columns=["symbol", "screen_score"], rename={"symbol": "代码", "screen_score": "因子分"}
+        )
+    if pins:
+        st.write("**pin 锚（永含）**：" + ", ".join(pins))

@@ -147,6 +147,8 @@
 | **O 选股层升级（每周自动发现 + 每日动态选）** | O0 | vendor Serenity 供应链 skill + 接入安装/校验脚本 | 用户新增（2026-06-19） | ✅ **已完成（2026-06-19）**：`muxuuu/serenity-skill`（MIT，~2.5k★）vendor 进 `.agents/skills/serenity-supply-chain/`，加进 `install_repo_skills.sh`/`verify_repo_skills.sh` 的 SKILLS 列表 |
 | | O1 | **每周 cron 自动改 universe**（Serenity 发现 + 因子验证 → 自动增改标的与排名） | 用户新增（2026-06-19） | 🟢 **代码完成（2026-06-19，`ENABLE_WEEKLY_SCREENER` 默认 0）**：自动 **只增不删 + 重排**，无需人工确认。step 1 骨架 + step 2 因子严门槛 + step 3 Codex 发现 + step 4 auto-apply writer（限速/cap 降级/只写 meta 分数/备份/审计）+ step 5 周度 cron + 文档 全部落地；27 个 screener 单测通过。flag 关时只产报告、零改动；翻 1 即 auto-apply。等观察几周报告质量后人工翻默认 |
 | | O2 | 每日 premarket 动态选 active（pin 锚 ∪ 全 universe 预排 top-N） | 用户新增（2026-06-19） | 🟢 **代码完成（2026-06-19，`ENABLE_DYNAMIC_ACTIVE` 默认 0）**：`select_dynamic_active`（pins 永含 ∪ top-`ACTIVE_MAX` by screen_score、排除 passive、无分排最后）接进 premarket + Kronos，落 `active_selection.{json,txt}`；7 个纯函数单测 + 既有 premarket 测试全绿；flag 关时＝现状 |
+| | O3 | dashboard 选股层面板（描述性：O1 每周变化 + O2 今日 active） | 用户新增（2026-06-19） | 🟢 **代码完成（2026-06-19）**：「选股与决策」加「每周选股(O1)」「今日 active 选择(O2)」两个只读小节（加/降/跳过 + 因子分 + active 构成）；queries 3 个单测；顺手修了 dashboard smoke 因 app 迁移到 `st.segmented_control` 后失效的陈旧断言 |
+| | O4 | 选股有效性报告（screen_score Rank IC + 新增票超额收益 + O2 覆盖率） | 用户新增（2026-06-19） | ⏳ **待数据**：评估机器待建（复用 E1 前向收益）；`universe_change.json`/`active_selection.json` 按期独立落盘，flag 开起来跑几周后即可算 |
 
 > **新旧编号对照**：R1→E1（增 benchmark returns）、R2→E2、R3→A3、R4→D2、R5→D3、R6→D4、R7→F2；
 > token 优化设计→D1；docx 的 run_manifest→B1、registry→B2、analytics.db→B3、changelog→B4、
@@ -372,6 +374,33 @@ fail-closed 退回 pin 锚。
 </details>
 
 > **建议实施顺序**：O0（✅ 已完成）→ O1（✅ 完成）→ O2（✅ 完成，动每日热路径，flag 默认关）。
+
+## O3 — dashboard 选股层面板（🟢 代码完成 2026-06-19）
+
+把 O1/O2 的只读产物搬上 dashboard 的「🎯 选股与决策」主区，回答"它选了谁/在不在跑"（描述性，**还不是**"选得对不对"——那是 O4）。
+
+- `dashboard/queries.py`：`screener_change`（读最近一期 `universe_change.json`+`status.json`，带 `available_dates` 供选期）、
+  `active_selection`（读当日 `planner/active_selection.json`）、`list_screener_dates`。
+- `dashboard/charts.py`：`screener_change_view`（加/降/跳过 + 因子分 + effective 数 + 已应用/仅报告）、
+  `active_selection_view`（active 构成：pins vs screen 补、ACTIVE_MAX、universe 大小）。
+- `dashboard/app.py`：「选股」页加「每周选股(O1)」「今日 active 选择(O2)」两个 subheader。纯只读。
+- 测试：3 个 queries 单测（不依赖 streamlit）；smoke seed 补 O1/O2 产物；**顺手修复 dashboard smoke** —— app 早已从
+  `st.tabs` 迁到 `st.segmented_control`，旧断言 `len(app.tabs)==6` + 多页 header 同时存在已失效（平时因 CI 不装
+  streamlit 被 `importorskip` 跳过而无人察觉），改为驱动 segmented_control 逐页渲染断言。
+
+## O4 — 选股有效性报告（⏳ 待数据）
+
+回答"选得对不对"：把选股层的 pick 接到 E1 前向收益。**机器待建**，但评估所需数据（`universe_change.json` 按周、
+`active_selection.json` 按天）已**按期独立落盘**，flag 开起来跑几周即可消费。计划指标：
+
+1. `screen_score` 的多 horizon **Rank IC**（因子分能否预测前向收益）。
+2. O1 **新增票 vs SPY 的超额收益**（5/21/63d）。
+3. **被降级票**后续是否确实跑输（验证 cap 砍对人）。
+4. O2 **覆盖率/命中**：最终赢家有多少被当天 active 选中；动态 active 是否优于静态名单。
+5. **采纳→交易→盈亏链路**（接 `orders`/`thesis_tags`）。
+
+复用 `replay/forward_returns.py` + `benchmark_returns.py`；输出 `screen_eval_report.{json,md}` + dashboard「校准与归因」子视图 + 夜间批。
+
 > **后续可增量**：把 O1 的 thesis/证据接进 K3 Thesis Tracker 做"发现来源命中率"归因；universe 体检报告进
 > dashboard；O1 发现的票自动补 `universe_meta` 的 `supply_chain`/`risk_tags`。
 

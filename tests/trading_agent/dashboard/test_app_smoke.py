@@ -104,24 +104,49 @@ def _seed(root: Path) -> None:
     write_json(run / "planner" / "regime_state.json", {
         "date": rd, "regime": "neutral", "multiplier": 1.0, "applied_multiplier": 1.0,
         "reasons": ["no risk-off / bull trigger"], "indicators": {}})
+    # O3 selection layer: weekly screener change (O1) + daily dynamic active selection (O2)
+    write_json(root / "runtime" / "screener" / rd / "universe_change.json", {
+        "applied": True, "effective_count_before": 88, "effective_count_after": 88,
+        "added": [{"symbol": "SIVE", "factor_score": 9.1, "theme": "photonics", "thesis": "laser chokepoint"}],
+        "demoted": ["BILI"], "skipped": [{"symbol": "FOO", "reason": "below_min_dollar_volume"}]})
+    write_json(root / "runtime" / "screener" / rd / "status.json", {"discovered_count": 3, "applied": True})
+    write_json(run / "planner" / "active_selection.json", {
+        "active": ["SPY", "NVDA", "SIVE"], "pins": ["SPY", "NVDA"],
+        "from_screen": [{"symbol": "SIVE", "screen_score": 9.1}], "active_max": 30, "universe_size": 88})
     build_analytics_db(root)
 
 
-def test_dashboard_renders_all_tabs_without_error(tmp_path, monkeypatch):
+EXPECTED_PAGES = ["总览", "选股", "业绩", "日线", "校准", "成长"]
+
+
+def test_dashboard_renders_every_page_without_error(tmp_path, monkeypatch):
     _seed(tmp_path)
     monkeypatch.setenv("AGENT_ROOT", str(tmp_path))
     monkeypatch.chdir(tmp_path)
     app = AppTest.from_file(str(APP_PATH), default_timeout=60)
     app.run()
     assert not app.exception, app.exception
-    assert len(app.tabs) == 6
-    headers = [h.value for h in app.header]
-    assert any("今日驾驶舱" in h for h in headers)
-    assert any("选股与决策" in h for h in headers)
-    assert any("业绩与对比" in h for h in headers)
-    assert any("K线复盘" in h for h in headers)
-    assert any("校准与归因" in h for h in headers)
-    assert any("成长与趋势" in h for h in headers)
+    # The C4 redesign replaced st.tabs with a 6-option segmented_control page switcher.
+    assert len(app.segmented_control) == 1
+    assert app.segmented_control[0].options == EXPECTED_PAGES
+    # Drive each page and confirm it renders cleanly.
+    for page in EXPECTED_PAGES:
+        app.segmented_control[0].set_value(page).run()
+        assert not app.exception, f"page {page}: {app.exception}"
+
+
+def test_dashboard_selection_layer_panels_render(tmp_path, monkeypatch):
+    """O3: the 选股 page shows the weekly-screener (O1) + dynamic-active (O2) sections."""
+    _seed(tmp_path)
+    monkeypatch.setenv("AGENT_ROOT", str(tmp_path))
+    monkeypatch.chdir(tmp_path)
+    app = AppTest.from_file(str(APP_PATH), default_timeout=60)
+    app.run()
+    app.segmented_control[0].set_value("选股").run()
+    assert not app.exception, app.exception
+    subheaders = [s.value for s in app.subheader]
+    assert "每周选股（O1）" in subheaders
+    assert "今日 active 选择（O2）" in subheaders
 
 
 def test_dashboard_ignores_current_working_directory(tmp_path, monkeypatch):
@@ -132,4 +157,4 @@ def test_dashboard_ignores_current_working_directory(tmp_path, monkeypatch):
     app = AppTest.from_file(str(APP_PATH), default_timeout=60)
     app.run()
     assert not app.exception, app.exception
-    assert len(app.tabs) == 6
+    assert len(app.segmented_control) == 1

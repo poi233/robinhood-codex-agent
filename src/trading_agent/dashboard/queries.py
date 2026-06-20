@@ -466,6 +466,42 @@ def fill_quality_report(agent_root: Path) -> dict[str, Any]:
     return _read_json_or_empty(default_fill_quality_report_path(agent_root))
 
 
+# ── O3: selection-layer (weekly screener O1 + daily dynamic active O2) ──────────────────
+def _screener_base_dir(agent_root: Path) -> Path:
+    return build_runtime_paths(agent_root).runtime_dir / "screener"
+
+
+def list_screener_dates(agent_root: Path) -> list[str]:
+    base = _screener_base_dir(agent_root)
+    if not base.is_dir():
+        return []
+    return sorted((p.name for p in base.iterdir() if p.is_dir()), reverse=True)
+
+
+def screener_change(agent_root: Path, screener_date: str | None = None) -> dict[str, Any]:
+    """Read-only O1: the latest (or a given) weekly universe_change.json + status.json.
+
+    Empty dict when the screener has never run. ``available_dates`` lets the UI offer a picker.
+    """
+    base = _screener_base_dir(agent_root)
+    dates = list_screener_dates(agent_root)
+    if not dates:
+        return {}
+    date = screener_date if (screener_date and (base / screener_date).is_dir()) else dates[0]
+    return {
+        "date": date,
+        "available_dates": dates,
+        "change": _read_json_or_empty(base / date / "universe_change.json"),
+        "status": _read_json_or_empty(base / date / "status.json"),
+    }
+
+
+def active_selection(agent_root: Path, run_date: str) -> dict[str, Any]:
+    """Read-only O2: the day's dynamic active selection (empty unless ENABLE_DYNAMIC_ACTIVE was on)."""
+    paths = build_runtime_paths(agent_root, run_date=run_date)
+    return _read_json_or_empty(paths.planner_dir / "active_selection.json")
+
+
 def ai_signal_study(agent_root: Path) -> dict[str, Any]:
     """Read-only: the H3 ai_signal_study.json (empty until `analytics ai-signal-study` is run)."""
     from trading_agent.replay.ai_signal_study import default_ai_signal_study_path
