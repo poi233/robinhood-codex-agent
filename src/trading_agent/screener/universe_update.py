@@ -246,6 +246,14 @@ def write_audit(
         "skipped": plan.skipped,
         "effective_count_before": plan.effective_count_before,
         "effective_count_after": plan.effective_count_after,
+        # Per-week cross-section of screen_score (symbol → score) so the O4 effectiveness report
+        # can compute the screen_score Rank IC against forward returns. universe_meta.json is
+        # overwritten each week, so this durable per-date snapshot is what makes the IC computable.
+        "screen_scores": {
+            symbol: scores["screen_score"]
+            for symbol, scores in plan.meta_score_updates.items()
+            if scores.get("screen_score") is not None
+        },
     }
     json_path = run_dir / "universe_change.json"
     json_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")

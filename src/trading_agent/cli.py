@@ -60,6 +60,9 @@ def build_parser() -> argparse.ArgumentParser:
     analytics_thesis_parser = analytics_subparsers.add_parser("thesis", help="Write runtime/analytics/thesis_attribution.{json,md} (K3: per-thesis win rate / mean forward return; needs network for yfinance).")
     analytics_thesis_parser.add_argument("--since", metavar="YYYY-MM-DD", default=None)
     analytics_thesis_parser.add_argument("--until", metavar="YYYY-MM-DD", default=None)
+    analytics_screen_eval_parser = analytics_subparsers.add_parser("screen-eval", help="Write runtime/analytics/screen_eval_report.{json,md} (O4: selection-layer effectiveness — added/demoted forward returns vs SPY + screen_score Rank IC; needs network for yfinance).")
+    analytics_screen_eval_parser.add_argument("--since", metavar="YYYY-MM-DD", default=None)
+    analytics_screen_eval_parser.add_argument("--until", metavar="YYYY-MM-DD", default=None)
     analytics_validate_parser = analytics_subparsers.add_parser("validate", help="Write runtime/analytics/validate_report.{json,md} (N3: read-only scan for malformed JSONL lines + rows missing key fields; local-only, modifies nothing).")
     analytics_validate_parser.add_argument("--since", metavar="YYYY-MM-DD", default=None)
     analytics_validate_parser.add_argument("--until", metavar="YYYY-MM-DD", default=None)
@@ -545,6 +548,15 @@ def _run_analytics_thesis(agent_root: Path, *, since: str | None, until: str | N
     return 0
 
 
+def _run_analytics_screen_eval(agent_root: Path, *, since: str | None, until: str | None) -> int:
+    from trading_agent.replay.screen_eval import write_screen_eval_report
+
+    json_path, md_path = write_screen_eval_report(agent_root, since=since, until=until)
+    print(f"Wrote {json_path}")
+    print(f"Wrote {md_path}")
+    return 0
+
+
 def _run_nightly_analysis(agent_root: Path) -> int:
     from trading_agent.core.config import load_env_files
     from trading_agent.core.context import build_runtime_paths
@@ -609,6 +621,7 @@ def _run_nightly_analysis(agent_root: Path) -> int:
         ("analytics ai-signal-study", ["analytics", "ai-signal-study"]),
         ("analytics ai-ablation", ["analytics", "ai-ablation"]),
         ("analytics thesis", ["analytics", "thesis"]),
+        ("analytics screen-eval", ["analytics", "screen-eval"]),
         ("analytics weight-suggestion", ["analytics", "weight-suggestion"]),
         ("growth observe", ["growth", "observe"]),
         ("growth propose", ["growth", "propose"]),
@@ -691,6 +704,8 @@ def main(argv: list[str] | None = None) -> int:
         return _run_analytics_nightly_health(agent_root)
     if args.command == "analytics" and args.analytics_command == "thesis":
         return _run_analytics_thesis(agent_root, since=args.since, until=args.until)
+    if args.command == "analytics" and args.analytics_command == "screen-eval":
+        return _run_analytics_screen_eval(agent_root, since=args.since, until=args.until)
     if args.command == "analytics" and args.analytics_command == "validate":
         return _run_analytics_validate(agent_root, since=args.since, until=args.until)
     if args.command == "analytics" and args.analytics_command == "retention":

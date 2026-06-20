@@ -502,6 +502,13 @@ def active_selection(agent_root: Path, run_date: str) -> dict[str, Any]:
     return _read_json_or_empty(paths.planner_dir / "active_selection.json")
 
 
+def screen_eval_report(agent_root: Path) -> dict[str, Any]:
+    """Read-only O4: the selection-layer effectiveness report (empty until `analytics screen-eval`)."""
+    from trading_agent.replay.screen_eval import default_screen_eval_report_path
+
+    return _read_json_or_empty(default_screen_eval_report_path(agent_root))
+
+
 def ai_signal_study(agent_root: Path) -> dict[str, Any]:
     """Read-only: the H3 ai_signal_study.json (empty until `analytics ai-signal-study` is run)."""
     from trading_agent.replay.ai_signal_study import default_ai_signal_study_path

@@ -1050,3 +1050,45 @@ def active_selection_view(payload: dict[str, Any]) -> None:
         )
     if pins:
         st.write("**pin 锚（永含）**：" + ", ".join(pins))
+
+
+# ── O4: selection-layer effectiveness ──────────────────────────────────────────────────
+def screen_eval_view(report: dict[str, Any]) -> None:
+    """O4: did the screener's picks actually work — added/demoted forward returns + screen_score IC."""
+    if not report or report.get("status") != "ok":
+        st.info(
+            "暂无选股有效性数据。开 `ENABLE_WEEKLY_SCREENER=1` 跑几周、有未来价格 bar 后，运行 "
+            "`analytics screen-eval`（或夜间批）会算：新增票超额收益、被降级票表现、screen_score Rank IC。"
+        )
+        return
+    st.caption(
+        f"基准 {report.get('benchmark', 'SPY')}　·　screener 运行 {report.get('screener_runs', 0)} 次"
+        f"　·　新增 {report.get('added_count', 0)}（匹配 {report.get('added_matched', 0)}）"
+        f"　·　降级 {report.get('demoted_count', 0)}"
+    )
+    added = report.get("added") or {}
+    if added:
+        st.write("**新增票 forward return（vs 基准超额）**")
+        ui.pretty_table(
+            [{"horizon": f"{h}d", **row} for h, row in added.items()],
+            columns=["horizon", "count", "mean_return", "mean_excess_vs_benchmark", "win_rate_vs_benchmark"],
+            rename={"horizon": "周期", "count": "样本", "mean_return": "平均收益",
+                    "mean_excess_vs_benchmark": "平均超额", "win_rate_vs_benchmark": "跑赢基准率"},
+        )
+    ic = report.get("screen_score_ic") or {}
+    if ic:
+        st.write("**screen_score Rank IC（越高越能预测前向收益）**")
+        ui.pretty_table(
+            [{"horizon": f"{h}d", "ic": row.get("ic"), "n": row.get("n")} for h, row in ic.items()],
+            columns=["horizon", "ic", "n"],
+            rename={"horizon": "周期", "ic": "IC", "n": "样本"},
+        )
+    demoted = report.get("demoted") or {}
+    if demoted and report.get("demoted_count"):
+        with st.expander("被降级票 forward return（期望偏弱）"):
+            ui.pretty_table(
+                [{"horizon": f"{h}d", **row} for h, row in demoted.items()],
+                columns=["horizon", "count", "mean_return", "mean_excess_vs_benchmark"],
+                rename={"horizon": "周期", "count": "样本", "mean_return": "平均收益",
+                        "mean_excess_vs_benchmark": "平均超额"},
+            )

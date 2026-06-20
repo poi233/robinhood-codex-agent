@@ -194,6 +194,8 @@ elif active_page == "日线":
 elif active_page == "校准":
     ui.page_header(PAGE_BRIEFS["calibration"], show_help=show_help)
     charts.calibration_view(queries.calibration_report(AGENT_ROOT))
+    st.subheader("选股有效性（O4）")
+    charts.screen_eval_view(queries.screen_eval_report(AGENT_ROOT))
     with ui.detail_expander("成交、AI、逻辑和主题细节", show_detail=show_detail):
         st.subheader("成交质量")
         charts.fill_quality_view(queries.fill_quality_report(AGENT_ROOT))

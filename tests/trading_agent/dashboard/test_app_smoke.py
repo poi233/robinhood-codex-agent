@@ -113,6 +113,12 @@ def _seed(root: Path) -> None:
     write_json(run / "planner" / "active_selection.json", {
         "active": ["SPY", "NVDA", "SIVE"], "pins": ["SPY", "NVDA"],
         "from_screen": [{"symbol": "SIVE", "screen_score": 9.1}], "active_max": 30, "universe_size": 88})
+    write_json(root / "runtime" / "analytics" / "screen_eval_report.json", {
+        "status": "ok", "benchmark": "SPY", "horizons": [5, 21], "screener_runs": 2,
+        "added_count": 3, "added_matched": 3, "demoted_count": 1,
+        "added": {"5": {"count": 3, "mean_return": 0.02, "mean_excess_vs_benchmark": 0.01, "win_rate_vs_benchmark": 0.67}},
+        "demoted": {"5": {"count": 1, "mean_return": -0.01, "mean_excess_vs_benchmark": -0.02, "win_rate_vs_benchmark": 0.0}},
+        "screen_score_ic": {"5": {"ic": 0.18, "n": 12}}})
     build_analytics_db(root)
 
 
@@ -147,6 +153,10 @@ def test_dashboard_selection_layer_panels_render(tmp_path, monkeypatch):
     subheaders = [s.value for s in app.subheader]
     assert "每周选股（O1）" in subheaders
     assert "今日 active 选择（O2）" in subheaders
+    # O4 effectiveness panel lives on the 校准 page
+    app.segmented_control[0].set_value("校准").run()
+    assert not app.exception, app.exception
+    assert "选股有效性（O4）" in [s.value for s in app.subheader]
 
 
 def test_dashboard_ignores_current_working_directory(tmp_path, monkeypatch):
