@@ -224,7 +224,7 @@ def _run_doctor(agent_root: Path) -> int:
         effective_tier_line,
         "",
         "  --- Codex ---",
-        f"  CODEX_MODEL               = {env.get('CODEX_MODEL', 'gpt-5.5-high')}",
+        f"  CODEX_MODEL               = {env.get('CODEX_MODEL', 'gpt-5.5')}",
         f"  CODEX_BIN                 = {env.get('CODEX_BIN', 'codex')}",
         f"  CODEX_EXEC_TIMEOUT_SEC    = {env.get('CODEX_EXEC_TIMEOUT_SEC', '3600')}",
         f"  CODEX_EXEC_DRY_RUN        = {env.get('CODEX_EXEC_DRY_RUN', '0')}",

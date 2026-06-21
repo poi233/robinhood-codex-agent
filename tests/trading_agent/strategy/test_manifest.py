@@ -42,7 +42,7 @@ def test_build_run_manifest_writes_expected_fields(tmp_path: Path) -> None:
     assert manifest["scoring_profile"] == "aggressive_growth"
     assert manifest["policy_profile"] == "aggressive_growth"
     assert manifest["active_watchlist_count"] == 3
-    assert manifest["codex_model"] == "gpt-5.5-high"
+    assert manifest["codex_model"] == "gpt-5.5"
     assert isinstance(manifest["git_commit"], str) and manifest["git_commit"]
     assert isinstance(manifest["config_hash"], str) and len(manifest["config_hash"]) == 12
 
