@@ -69,10 +69,13 @@ class OpenOrder:
 class OrderIntent:
     symbol: str
     side: OrderSide
-    order_type: Literal["limit"]
+    order_type: Literal["limit", "market"]
     limit_price: float
     estimated_notional: float
     quantity: float
+    dollar_amount: float | None = None
+    time_in_force: str = "day"
+    market_hours: str = "regular_hours"
     reference_price: float | None = None
     setup_type: str = ""
     stop_price: float | None = None
@@ -96,7 +99,9 @@ class OrderIntent:
             "symbol": self.symbol,
             "side": self.side,
             "order_type": self.order_type,
-            "time_in_force": "day",
+            "time_in_force": self.time_in_force,
+            "market_hours": self.market_hours,
+            "dollar_amount": self.dollar_amount,
             "setup_type": self.setup_type,
             "limit_price": self.limit_price,
             "estimated_notional": self.estimated_notional,

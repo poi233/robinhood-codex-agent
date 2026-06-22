@@ -36,7 +36,7 @@ Before any trading action:
 Runtime mode behavior:
 - `paper`: never call `review_equity_order` or `place_equity_order`. If a trade would be allowed, append `decision="would_trade"` with the full proposed order fields.
 - `review`: call `get_equity_tradability` and then `review_equity_order` only if all local gates pass. Never call `place_equity_order`. Append `decision="reviewed_no_place"` or `decision="review_blocked"`.
-- `live`: call `get_equity_tradability`, then `review_equity_order`, and only call `place_equity_order` if review returns no warning, no rejection, no ambiguity, and all local gates still pass.
+- `live`: call `get_equity_tradability`, then call `place_equity_order` directly when every local gate passes. Do not call `review_equity_order` in live mode unless `REQUIRE_ROBINHOOD_REVIEW=1` is explicitly present in the runtime block. If a broker/tool response says review is mandatory, stop and append `decision="blocked"` with `reason="broker_review_required"`; do not ask the user for confirmation in unattended automation.
 
 Trading rules:
 - Only long equities/ETFs present in all of:
@@ -47,7 +47,9 @@ Trading rules:
 - Only trade in the dedicated Robinhood Agentic Account.
 - Never trade in ordinary Investing, Roth IRA, Managed, Spending, Traditional IRA, Crypto, external accounts, or hidden accounts.
 - Never trade options, crypto, futures, margin, short selling, leveraged ETFs, or inverse ETFs.
-- Only limit orders.
+- Buy orders should be dollar-based market orders in regular hours when the intended notional is a dollar amount, when fractional shares are required, or when the target notional is below one full share at the current ask. Use `type="market"`, `dollar_amount` rounded down to cents, `time_in_force="gfd"`, and `market_hours="regular_hours"`. Do not send `quantity` or `limit_price` for a dollar-based market buy.
+- Limit buy orders are allowed only when buying whole-share quantity and the estimated notional remains within all caps.
+- Sell orders may use quantity-based limit orders from the policy plan. Never sell more than the current long position and never open a short.
 - Max single order notional: use the most conservative cap from `src/config/runtime.env`, `RISK_TIER`, `src/config/risk.md`, and `DAILY_PLAN_PATH`.
 - Max daily notional: use the most conservative cap from `src/config/runtime.env`, `RISK_TIER`, `src/config/risk.md`, and `DAILY_PLAN_PATH`.
 - Never let a live order exceed the current tier cap.
@@ -56,8 +58,8 @@ Trading rules:
 - Do not average down automatically if already holding a losing position.
 - Do not cancel open orders automatically in v1.
 - Always call `get_equity_tradability` before a review or live order.
-- Always call `review_equity_order` before `place_equity_order` in live mode.
-- If review shows any warning, rejection, ambiguity, or unexpected field, do not place the order.
+- In `live`, do not call `review_equity_order` by default. Place directly only after all local gates, account checks, tradability checks, quote checks, and notional caps pass.
+- In `review`, if review shows any warning, rejection, ambiguity, or unexpected field, do not place the order.
 - If any quote/account/order/position/daily-usage data is missing, stale, or inconsistent, do not trade.
 
 Decision logic:
@@ -102,8 +104,10 @@ Decision JSONL fields:
   "proposed_order": {
     "symbol": "SPY",
     "side": "buy|sell",
-    "order_type": "limit",
-    "time_in_force": "day",
+    "order_type": "market|limit",
+    "time_in_force": "gfd|day",
+    "market_hours": "regular_hours",
+    "dollar_amount": 0,
     "limit_price": 0,
     "estimated_notional": 0,
     "quantity": 0

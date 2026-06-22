@@ -187,8 +187,9 @@ else
   echo "  - WARNING: intraday prompt missing runtime mode gate."
 fi
 
-if file_has_pattern 'Only use limit orders' "$SRC_ROOT/config/risk.md"; then
-  echo "  - Limit-order-only rule found: ok"
+if file_has_pattern 'dollar-based market orders' "$SRC_ROOT/config/risk.md" \
+  && file_has_pattern 'Robinhood rejects fractional-share limit quantities' "$SRC_ROOT/config/risk.md"; then
+  echo "  - Dollar-amount market-buy rule found: ok"
 else
-  echo "  - WARNING: limit-order-only rule missing."
+  echo "  - WARNING: dollar-amount market-buy rule missing."
 fi

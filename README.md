@@ -7,14 +7,15 @@ into three phases:
 
 - **Premarket** — Codex (LLM) + the Robinhood Trading MCP gather data and write a **daily plan**.
 - **Intraday** — **deterministic Python** reads the premarket snapshots, refreshes live quotes, runs
-  a policy engine, and (in paper mode) updates a local simulated ledger. **Never calls Robinhood.**
+  a policy engine, and (in paper mode) updates a local simulated ledger. In `review`/`live`, the
+  intraday entrypoint delegates to the Codex MCP prompt for Robinhood review/place actions.
 - **Postmarket** — day-end paper ledger + performance summary + a Codex review.
 
 The system is conservative and **fail-closed**: missing or stale data → do nothing.
 
-> Automation infrastructure, **not financial advice**. Live trading can lose money. Real order
-> placement is intentionally **not wired** in Python (fails closed with `execution_not_wired`). Keep
-> it in paper mode until the logs are boring and correct.
+> Automation infrastructure, **not financial advice**. Live trading can lose money. The default mode
+> is still paper, `KILL_SWITCH` blocks review/live, and all live orders must pass the local gates
+> before the Codex MCP prompt can call Robinhood.
 
 ---
 
@@ -161,13 +162,14 @@ flowchart TD
     Allowed -->|no| NoAction["no_action"]
     Allowed -->|yes| Rank["rank candidates by<br/><b>trade_readiness_score</b>"]
     Rank --> PriceGate{"per candidate:<br/>in entry zone? · no chase? ·<br/>reward:risk OK? · size ≥ min?"}
-    PriceGate -->|first that clears| BuyOrder["BUY · limit order"]
+    PriceGate -->|first that clears| BuyOrder["BUY · limit or dollar market order"]
     PriceGate -->|none clears| NoAction
 
     SellOrder --> Mode{"trading_mode"}
     BuyOrder --> Mode
     Mode -->|paper| Fill["paper broker fill<br/><i>conservative model + slippage<br/>→ local ledger</i>"]
-    Mode -->|review / live| Unwired["blocked · execution_not_wired<br/><i>(human-gated, never auto)</i>"]
+    Mode -->|review| Review["Codex MCP review only<br/><i>no place</i>"]
+    Mode -->|live| Place["Codex MCP place order<br/><i>no default review</i>"]
 ```
 
 **Buy ranking (`trade_readiness_score`)** — a 6-component blend used to order survivors of the hard
@@ -180,8 +182,8 @@ trade_readiness_score = 0.35·candidate_score + 0.25·technical + 0.15·price_se
 
 Key properties: **sell is evaluated before buy** (risk reduction wins ties); the **catastrophic hard
 stop** guarantees every position has an automatic exit even with no technical levels and a plan that
-permits no discretionary sell; **review/live placement is never wired** in Python — it always blocks
-with `execution_not_wired`, so only a human can take it live.
+permits no discretionary sell. `paper` stays deterministic; `review` and `live` run the intraday
+Codex MCP prompt after the same calendar/time/kill-switch gates.
 
 **M-stage advisory overlay (in progress)** — `ENABLE_INTRADAY_ADVISORY_OVERLAY=0` by default, so the
 current champion intraday path is unchanged. When enabled for paper/shadow testing, intraday loads
@@ -320,9 +322,10 @@ Permanently forbidden from any mutation (hard-coded): `TRADING_MODE`, `RISK_TIER
 | `KILL_SWITCH` | present | Hard stop for review/live intraday; paper may still run |
 
 **Hard rules:** dedicated Agentic account only · long equities/ETFs only (no options/crypto/futures/
-margin/shorts) · limit orders only · notional capped by tier + daily plan · missing/stale data → do
-nothing · DSA/Kronos/technical/factor/fundamental/event signals are advisory only · real execution
-unwired in Python. Verify with `./src/scripts/safety/check_safety.sh`.
+margin/shorts) · dollar-based market buys are allowed in regular hours when fractional shares are
+needed · quantity-based limit orders remain allowed for whole-share buys/sells · notional capped by
+tier + daily plan · missing/stale data → do nothing · DSA/Kronos/technical/factor/fundamental/event
+signals are advisory only. Verify with `./src/scripts/safety/check_safety.sh`.
 
 **Risk tiers** (`src/config/risk_tiers.json`; effective tier depends on `TRADING_MODE`):
 

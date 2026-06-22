@@ -11,7 +11,7 @@ Do not place orders in the user's ordinary Investing account, Roth IRA, Managed 
 Runtime modes:
 - `paper`: never call `review_equity_order` or `place_equity_order`; write `would_trade` only.
 - `review`: `review_equity_order` is allowed, but `place_equity_order` is forbidden.
-- `live`: `place_equity_order` is allowed only after every hard limit passes and `review_equity_order` returns no warning, ambiguity, or rejection.
+- `live`: `place_equity_order` is allowed after every hard limit passes. Do not call `review_equity_order` by default in live mode; use it only when `REQUIRE_ROBINHOOD_REVIEW=1` is explicitly set or the broker/tool requires review.
 
 Risk tiers:
 - `RISK_TIER=0`: max single order `$10`, max daily notional `$25`, max 1 live order/day. This is the initial micro-test tier.
@@ -29,7 +29,8 @@ Hard limits:
 - `src/config/allowlist.txt` is only a static emergency fallback and must not be used for normal dynamic trading.
 - Only long equities or ETFs.
 - Never trade options, crypto, futures, margin, short selling, leveraged ETFs, or inverse ETFs.
-- Only use limit orders.
+- Buy orders may use dollar-based market orders during regular hours when the target is a dollar amount or fractional shares are required. This is the preferred live order shape for small high-priced-stock buys because Robinhood rejects fractional-share limit quantities.
+- Limit orders remain allowed for whole-share buys and quantity-based sells when the policy plan supplies a valid limit price.
 - Max single order notional is the lower of `src/config/runtime.env`, `RISK_TIER`, and `DAILY_PLAN_PATH`.
 - Max daily notional is the lower of `src/config/runtime.env`, `RISK_TIER`, and `DAILY_PLAN_PATH`.
 - Max one open order per symbol.
@@ -38,8 +39,8 @@ Hard limits:
 - Do not trade if quote, account, position, order, or daily-usage data is missing, stale, or inconsistent.
 - Do not trade if the dedicated Agentic Account cannot be identified unambiguously.
 - Always call `get_equity_tradability` before a trade candidate.
-- Always call `review_equity_order` before `place_equity_order` in `live` mode.
-- If review shows any warning, ambiguity, rejection, or unexpected field, do not place the order.
+- In `live`, place directly only after local gates, account checks, tradability checks, quote checks, and notional caps pass. If a direct placement fails or asks for review, do not improvise another order shape.
+- In `review`, if review shows any warning, ambiguity, rejection, or unexpected field, do not place the order.
 - If `market_regime` is `risk_off` or `no_trade`, do not place any order.
 - If `KILL_SWITCH` exists, do not place any order.
 - If `TODAY_ALLOWLIST_PATH` is missing, stale, empty, or not generated today, do not place any order.

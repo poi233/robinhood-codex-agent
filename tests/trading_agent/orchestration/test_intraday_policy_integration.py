@@ -414,7 +414,7 @@ class IntradayPolicyIntegrationTests(unittest.TestCase):
         self.assertTrue(kwargs["require_live_quotes"])
         self.assertIsNotNone(kwargs["quote_provider"])
 
-    def test_review_mode_blocks_when_execution_is_unwired(self) -> None:
+    def test_review_mode_runs_intraday_codex_prompt(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
             _prepare_repo_root(root)
@@ -425,18 +425,66 @@ class IntradayPolicyIntegrationTests(unittest.TestCase):
                     mock.patch.object(intraday_module, "_is_intraday_window_pt", return_value=True), \
                     mock.patch.object(intraday_module, "pt_date_string", return_value="2026-06-14"), \
                     mock.patch.object(intraday_module, "load_runtime_config") as load_runtime_config, \
-                    mock.patch.object(intraday_module, "load_policy_inputs", return_value=policy_ready_inputs(trading_mode="review")):
+                    mock.patch.object(intraday_module, "load_policy_inputs") as load_policy_inputs, \
+                    mock.patch.object(intraday_module, "run_codex_prompt", return_value=0) as run_codex_prompt:
                     load_runtime_config.return_value = mock.Mock(trading_mode="review", risk_tier=0, paper_risk_tier=0, effective_risk_tier=0)
 
                     status = intraday_module.run_intraday_pipeline(dry_run=False)
+            finally:
+                os.chdir(original_cwd)
+
+        self.assertEqual(status, 0)
+        load_policy_inputs.assert_not_called()
+        run_codex_prompt.assert_called_once()
+        self.assertEqual(run_codex_prompt.call_args.args[0], "intraday")
+        self.assertEqual(run_codex_prompt.call_args.args[2].name, "check.txt")
+
+    def test_live_mode_runs_intraday_codex_prompt(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            _prepare_repo_root(root)
+            original_cwd = os.getcwd()
+            os.chdir(root)
+            try:
+                with mock.patch.object(intraday_module, "_is_weekday_pt", return_value=True), \
+                    mock.patch.object(intraday_module, "_is_intraday_window_pt", return_value=True), \
+                    mock.patch.object(intraday_module, "pt_date_string", return_value="2026-06-14"), \
+                    mock.patch.object(intraday_module, "load_runtime_config") as load_runtime_config, \
+                    mock.patch.object(intraday_module, "load_policy_inputs") as load_policy_inputs, \
+                    mock.patch.object(intraday_module, "run_codex_prompt", return_value=0) as run_codex_prompt:
+                    load_runtime_config.return_value = mock.Mock(trading_mode="live", risk_tier=0, paper_risk_tier=0, effective_risk_tier=0)
+
+                    status = intraday_module.run_intraday_pipeline(dry_run=False)
+            finally:
+                os.chdir(original_cwd)
+
+        self.assertEqual(status, 0)
+        load_policy_inputs.assert_not_called()
+        run_codex_prompt.assert_called_once()
+
+    def test_live_dry_run_skips_intraday_codex_prompt(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            _prepare_repo_root(root)
+            original_cwd = os.getcwd()
+            os.chdir(root)
+            try:
+                with mock.patch.object(intraday_module, "_is_weekday_pt", return_value=True), \
+                    mock.patch.object(intraday_module, "_is_intraday_window_pt", return_value=True), \
+                    mock.patch.object(intraday_module, "pt_date_string", return_value="2026-06-14"), \
+                    mock.patch.object(intraday_module, "load_runtime_config") as load_runtime_config, \
+                    mock.patch.object(intraday_module, "run_codex_prompt") as run_codex_prompt:
+                    load_runtime_config.return_value = mock.Mock(trading_mode="live", risk_tier=0, paper_risk_tier=0, effective_risk_tier=0)
+
+                    status = intraday_module.run_intraday_pipeline(dry_run=True)
                     decisions = read_decisions(root)
             finally:
                 os.chdir(original_cwd)
 
         self.assertEqual(status, 0)
-        self.assertEqual(decisions[0]["decision"], "blocked")
-        self.assertIn("execution_not_wired", decisions[0]["blocked_reasons"])
-        self.assertEqual(decisions[0]["action_taken"], "none")
+        run_codex_prompt.assert_not_called()
+        self.assertEqual(decisions[0]["decision"], "dry_run_skip")
+        self.assertEqual(decisions[0]["reason"], "dry_run_non_paper_prompt_skipped")
 
     def test_existing_kill_switch_skip_is_preserved(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

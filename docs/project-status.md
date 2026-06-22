@@ -1,6 +1,6 @@
 # 项目状态总表 — 做了什么 / 没做什么
 
-> 最后更新：2026-06-18
+> 最后更新：2026-06-22
 > 范围：`src/trading_agent/` + 配置 + 编排 + 入口 + 测试（608 passed）
 > 用途：**单一权威的"现状"文档**，按子系统逐块说明已实现与未实现。未来要做的事另见
 > [`roadmap.md`](./roadmap.md)。
@@ -21,7 +21,7 @@
 | 维度 | 状态 |
 |---|---|
 | 核心交易引擎（price/sizing/sell/paper 链路） | ✅ 成型且完整 |
-| 安全边界（execution_not_wired / KILL_SWITCH / fail-closed） | ✅ 扎实 |
+| 安全边界（KILL_SWITCH / fail-closed / Agentic-only） | ✅ 扎实 |
 | 配置一致性（shell 与 Python 入口一致） | ✅ 已统一（P0） |
 | 数据干净度（previous_close 等脏数据） | ✅ 已修（P0） |
 | paper 仿真真实度（滑点 / pending 生命周期） | ✅ 已加（P1） |
@@ -42,7 +42,7 @@
 | 组合管理 / 市场 regime 引擎 / thesis 归因 | 🟡 **K1+K2+K3 第一版已建（2026-06-17）** + **K3 thesis tags 落盘 + K2 VIX 自动接入（2026-06-18）**：K1 `portfolio/target.py`（cash/单仓/主题敞口 vs 上限）；K2 `regime/engine.py`（确定性 regime + 仓位乘子 + **自动拉 ^VIX**，`ENABLE_REGIME_VIX_FETCH`）；K3 `replay/thesis.py` + `analytics thesis`（主题级胜率）+ `OrderIntent.thesis_tags` 买入时点落盘。K1/K2 premarket advisory write-only；接 sizing 由 M3 overlay 实现（只收紧）。 |
 | 调度自动化 | ✅ 交易生命周期已 cron 化（premarket/intraday/postmarket）+ **夜间分析批处理已上线**（I1：`run_nightly_analysis.sh`，只读/shadow-only，`ENABLE_NIGHTLY_ANALYSIS` 默认 1；I2 快照 + I3 趋势 + I4 Trends tab） |
 | 止损/退出逻辑 | ✅ `full_invalidation_exit`（跌破技术 invalidation 全清）+ **兜底硬止损已上线**（J1：`HARD_STOP_LOSS_PCT` 默认 8%，独立于 levels/actions，paper-only）；strategy.md 已与 code 一致。剩 `risk_exit` 分级减仓仍未启用（策略选择，待人工） |
-| review/live 真实下单 | ⛔ 故意未接线 |
+| review/live 真实下单 | 🟡 已接到 intraday Codex MCP prompt；默认仍被 KILL_SWITCH/风险门控拦住 |
 
 ---
 
@@ -221,13 +221,16 @@
 
 **已做**
 - premarket：分阶段 DAG，advisory 组并发，fail-closed，最后 normalize plan_state + 诊断 + archive。
-- intraday：纯 Python，先 reconcile pending，再 sell-first then buy，写一条 decision，
-  paper 成交发邮件。
+- intraday：paper 模式纯 Python，先 reconcile pending，再 sell-first then buy，写一条 decision，
+  paper 成交发邮件；review/live 模式在相同 calendar/time/KILL_SWITCH gate 后调用 intraday Codex MCP
+  prompt。
 - postmarket：paper day-end + 绩效汇总 + 中文报告 + Codex 复盘 prompt。
 - 三个入口都用 `effective_risk_tier`。
 
-**没做**
-- intraday review/live 分支仍 `execution_not_wired`（故意）。
+**没做 / 注意**
+- Python policy engine 本身仍只产 intent；真实 Robinhood 下单由 intraday Codex MCP prompt 执行。
+- live prompt 默认不再调用 `review_equity_order`，通过本地门控后直接 `place_equity_order`；小额高价股买入优先
+  用 regular-hours `market` + `dollar_amount`，避免 Robinhood 拒绝 fractional limit quantity。
 
 ### 11. 数据 / quote（`data/live_quotes.py`）
 
@@ -407,7 +410,8 @@
   ✅ E3 near-miss tracking、✅ E4 bid/ask/spread 成交质量（含 H1 校准补强：21/63d horizon + 逐候选超额 +
   多 horizon Rank IC/t-stat）均已建。剩 **E2 评分/价格 setup 权重重标定**——需先攒 15–30 交易日 paper 数据
   才能用真实 IC 证据调权重（绝不手调）。
-- **F 后期/故意推后**：strategy compare、review/live 真实下单接线、dashboard config editor。
+- **F 后期/部分完成**：review/live 真实下单已接到 intraday Codex MCP prompt；剩 strategy compare、
+  dashboard config editor、live 执行质量监控与更细的运行开关。
 - **G 自成长平台（paper/shadow only）**：growth_policy 安全边界 + 校验器、growth observations、模块
   diagnosers + dashboard Self-Growth Lab（G0–G2，已有详细实现计划
   [`superpowers/plans/2026-06-16-self-growth-platform-g0-g2.md`](./superpowers/plans/2026-06-16-self-growth-platform-g0-g2.md)）；

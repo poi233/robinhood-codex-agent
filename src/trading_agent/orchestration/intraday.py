@@ -114,7 +114,6 @@ def _is_intraday_window_pt() -> bool:
 
 
 def run_intraday_pipeline(*, dry_run: bool) -> int:
-    del dry_run
     agent_root = resolve_agent_root()
     load_env_files(agent_root)
     run_date = pt_date_string()
@@ -131,6 +130,25 @@ def run_intraday_pipeline(*, dry_run: bool) -> int:
         return 0
     effective_risk_tier = runtime.effective_risk_tier
     build_run_manifest(agent_root, run_date)
+    if runtime.trading_mode in {"review", "live"}:
+        if dry_run:
+            _append_local_decision(
+                agent_root,
+                "dry_run_skip",
+                "dry_run_non_paper_prompt_skipped",
+                run_date=run_date,
+            )
+            return 0
+        paths = build_runtime_paths(agent_root, run_date=run_date)
+        status = run_codex_prompt("intraday", agent_root, paths.prompts_dir / "intraday" / "check.txt")
+        if status != 0:
+            _append_local_decision(
+                agent_root,
+                "blocked",
+                f"intraday_prompt_failed:{status}",
+                run_date=run_date,
+            )
+        return status
     paper_starting_cash = float(os.environ.get("PAPER_STARTING_CASH", "400000"))
     inputs = load_policy_inputs(
         agent_root,

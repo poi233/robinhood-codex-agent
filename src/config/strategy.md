@@ -96,7 +96,7 @@ Daily Stock Analysis signal layer:
   - trading mode;
   - risk tier caps;
   - allowlist intersection;
-  - limit-order-only rule;
+  - live order-shape rules;
   - tax/wash-sale blocks when available.
 
 Candidate buckets:
@@ -113,7 +113,10 @@ Buy rule:
 - Do not buy if `market_regime` is `risk_off` or `no_trade`.
 - Do not buy if the account already has an open order for that symbol.
 - Do not average down automatically if the existing position is below cost basis.
-- Limit price must be at or below the latest verified quote.
+- In live mode, use a dollar-based market buy during regular hours when target notional is below one
+  full share or fractional shares are required. Do not send `quantity` or `limit_price` for that
+  dollar-based buy.
+- Limit price must be at or below the latest verified quote when using a whole-share limit buy.
 - Order notional must respect `src/config/risk.md`, `src/config/runtime.env`, and `DAILY_USAGE_PATH`.
 
 Sell rule:
@@ -127,8 +130,8 @@ Sell rule:
     hard stop (`HARD_STOP_LOSS_PCT`, default 8%) is fully exited even when no technical levels exist
     and even when the plan permits no discretionary sell action (`catastrophic_stop`). Set
     `HARD_STOP_LOSS_PCT=0` to disable.
-  - These automatic exits run in paper only; review/live order placement remains human-gated
-    (`execution_not_wired`).
+  - These automatic exits run in paper via the deterministic broker; review/live execution is routed
+    through the intraday Codex MCP prompt and remains blocked by `KILL_SWITCH`/data/account gates.
 - Never short.
 - Limit price must be at or above the latest verified quote unless explicitly reducing risk after a review-safe take-profit setup.
 
