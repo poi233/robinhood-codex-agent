@@ -86,6 +86,13 @@ def test_write_proposals_emits_json_and_md_and_changes_nothing(tmp_path):
                 "blocked_reasons": ["below_trade_threshold"],
             }) + "\n")
     (tmp_path / "runtime" / "state" / "runs" / "2026-06-15").mkdir(parents=True, exist_ok=True)
+    # Evidence gate is always on: a trade_threshold proposal must cite near-miss evidence.
+    analytics = tmp_path / "runtime" / "analytics"
+    analytics.mkdir(parents=True, exist_ok=True)
+    (analytics / "calibration_report.json").write_text(
+        json.dumps({"near_miss": {"5": {"cleared": {"mean_return": 0.8}, "near_miss": {"mean_return": 1.1}}}}),
+        encoding="utf-8",
+    )
 
     paths = write_proposals(tmp_path, run_date="2026-06-16")
 

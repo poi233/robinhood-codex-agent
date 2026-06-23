@@ -154,7 +154,7 @@ class PremarketOrchestrationTests(unittest.TestCase):
             (root / "runtime" / "cache" / "ohlcv").resolve(),
         )
 
-    def test_ohlcv_cache_disabled_via_env_flag(self) -> None:
+    def test_ohlcv_cache_dir_is_always_passed(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
             _prepare_repo_root(root)
@@ -169,20 +169,14 @@ class PremarketOrchestrationTests(unittest.TestCase):
                 try:
                     with mock.patch.dict(
                         premarket_module.os.environ,
-                        {
-                            "ENABLE_OHLCV_CACHE": "0",
-                            "ENABLE_DSA_SIGNAL_LAYER": "0",
-                            "ENABLE_KRONOS_SIGNAL_LAYER": "0",
-                            "ENABLE_TECHNICAL_SIGNAL_LAYER": "0",
-                            "ALLOW_WEEKEND_RUN": "1",
-                        },
+                        {"ALLOW_WEEKEND_RUN": "1"},
                         clear=False,
                     ):
                         premarket_module.run_premarket_pipeline(dry_run=False)
                 finally:
                     os.chdir(original_cwd)
 
-        self.assertIsNone(collect_market_context.call_args.kwargs["cache_dir"])
+        self.assertIsNotNone(collect_market_context.call_args.kwargs["cache_dir"])
 
     def test_candidate_quote_and_tradability_stages_do_not_call_codex_prompts(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

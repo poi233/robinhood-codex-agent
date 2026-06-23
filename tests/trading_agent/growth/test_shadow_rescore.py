@@ -25,14 +25,6 @@ def test_single_scoring_mutation_always_applies(tmp_path):
     assert prof["technical"] == 0.30  # untouched
 
 
-def test_changes_list_ignored_when_flag_off(tmp_path):
-    exp = {"changes": [{"module": "scoring", "field": "technical", "proposed": 0.45},
-                       {"module": "scoring", "field": "kronos", "proposed": 0.05}]}
-    with mock.patch.dict(os.environ, {"ENABLE_SHADOW_RESCORE": "0"}, clear=False):
-        prof = _profile(tmp_path, exp)
-    assert prof == _BASE_PROFILE  # changes list not applied
-
-
 def test_changes_list_applies_when_flag_on(tmp_path):
     exp = {"changes": [{"module": "scoring", "field": "technical", "proposed": 0.45},
                        {"module": "scoring", "field": "kronos", "proposed": 0.05}]}
@@ -53,12 +45,6 @@ def test_changes_skips_non_scoring_and_malformed(tmp_path):
 
 
 # --- H4 expensive-path re-scoring config extraction ---
-
-def test_rescore_config_none_when_flag_off():
-    exp = {"changes": [{"module": "analyzer", "field": "kronos.enabled", "proposed": False}]}
-    with mock.patch.dict(os.environ, {"ENABLE_SHADOW_RESCORE": "0"}, clear=False):
-        assert shadow_runner._challenger_rescore_config(exp) is None
-
 
 def test_rescore_config_none_for_pure_threshold_challenger():
     # A scoring-profile-only challenger needs no re-scoring → cheap path.

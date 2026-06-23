@@ -150,7 +150,7 @@ if [[ -f "$SRC_ROOT/scripts/kronos/kronos_generate_signals.py" ]] \
   && [[ -f "$PREMARKET_PIPELINE" ]] \
   && [[ -f "$PREMARKET_SCRIPT" ]] \
   && file_has_pattern '-m trading_agent premarket' "$PREMARKET_SCRIPT" \
-  && file_has_pattern 'ENABLE_KRONOS_SIGNAL_LAYER' "$PREMARKET_PIPELINE" \
+  && file_has_pattern 'def run_kronos' "$PREMARKET_PIPELINE" \
   && file_has_pattern '_write_kronos_signals' "$PREMARKET_PIPELINE" \
   && file_has_pattern 'KRONOS_SIGNALS_PATH' "$SRC_ROOT/prompts/premarket/final_research.txt"; then
   echo "  - Kronos signal layer is configured and wired into premarket: ok"
@@ -175,7 +175,7 @@ if [[ -f "$SRC_ROOT/config/runtime.env.local.example" ]] \
   && [[ -f "$AGENT_ROOT/requirements-kronos-extra.txt" ]] \
   && [[ -f "$SRC_ROOT/scripts/kronos/setup_kronos_env.sh" ]] \
   && [[ -f "$SRC_ROOT/scripts/kronos/verify_kronos_env.sh" ]] \
-  && file_has_pattern '^ENABLE_KRONOS_SIGNAL_LAYER=' "$SRC_ROOT/config/runtime.env"; then
+  && file_has_pattern '^KRONOS_MODEL_NAME=' "$SRC_ROOT/config/runtime.env"; then
   echo "  - Portable Kronos setup files found: ok"
 else
   echo "  - WARNING: portable Kronos setup files missing."

@@ -11,10 +11,6 @@ from trading_agent.core.time import pt_now
 from trading_agent.prompts.codex import run_codex_prompt
 
 
-def _enabled() -> bool:
-    return os.environ.get("ENABLE_TRADE_EMAIL_NOTIFICATIONS", "1") == "1"
-
-
 def _recipient() -> str:
     return os.environ.get("TRADE_NOTIFY_EMAIL", "").strip()
 
@@ -30,8 +26,6 @@ def send_trade_email_notification(
     artifacts: Sequence[Path] | None = None,
     details: Mapping[str, object] | None = None,
 ) -> bool:
-    if not _enabled():
-        return False
     recipient = _recipient()
     if not recipient:
         return False

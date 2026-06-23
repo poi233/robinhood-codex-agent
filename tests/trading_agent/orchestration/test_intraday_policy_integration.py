@@ -414,7 +414,12 @@ class IntradayPolicyIntegrationTests(unittest.TestCase):
         self.assertTrue(kwargs["require_live_quotes"])
         self.assertIsNotNone(kwargs["quote_provider"])
 
-    def test_review_mode_runs_intraday_codex_prompt(self) -> None:
+    def test_review_mode_uses_deterministic_path(self) -> None:
+        # review now uses the SAME deterministic engine as paper; on no would_trade
+        # it only fetches the snapshot (no execute prompt).
+        no_trade = PolicyDecision(
+            trading_mode="review", checked_symbols=["NVDA"], decision="no_action", reason="no candidate",
+        )
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
             _prepare_repo_root(root)
@@ -426,41 +431,20 @@ class IntradayPolicyIntegrationTests(unittest.TestCase):
                     mock.patch.object(intraday_module, "pt_date_string", return_value="2026-06-14"), \
                     mock.patch.object(intraday_module, "load_runtime_config") as load_runtime_config, \
                     mock.patch.object(intraday_module, "load_policy_inputs") as load_policy_inputs, \
+                    mock.patch.object(intraday_module, "generate_order_intent", return_value=no_trade), \
+                    mock.patch.object(intraday_module, "_run_shadow_experiments_safely"), \
                     mock.patch.object(intraday_module, "run_codex_prompt", return_value=0) as run_codex_prompt:
                     load_runtime_config.return_value = mock.Mock(trading_mode="review", risk_tier=0, paper_risk_tier=0, effective_risk_tier=0)
+                    load_policy_inputs.return_value = policy_ready_inputs(trading_mode="review")
 
                     status = intraday_module.run_intraday_pipeline(dry_run=False)
             finally:
                 os.chdir(original_cwd)
 
         self.assertEqual(status, 0)
-        load_policy_inputs.assert_not_called()
-        run_codex_prompt.assert_called_once()
-        self.assertEqual(run_codex_prompt.call_args.args[0], "intraday")
-        self.assertEqual(run_codex_prompt.call_args.args[2].name, "check.txt")
-
-    def test_live_mode_runs_intraday_codex_prompt(self) -> None:
-        with tempfile.TemporaryDirectory() as tmpdir:
-            root = Path(tmpdir)
-            _prepare_repo_root(root)
-            original_cwd = os.getcwd()
-            os.chdir(root)
-            try:
-                with mock.patch.object(intraday_module, "_is_weekday_pt", return_value=True), \
-                    mock.patch.object(intraday_module, "_is_intraday_window_pt", return_value=True), \
-                    mock.patch.object(intraday_module, "pt_date_string", return_value="2026-06-14"), \
-                    mock.patch.object(intraday_module, "load_runtime_config") as load_runtime_config, \
-                    mock.patch.object(intraday_module, "load_policy_inputs") as load_policy_inputs, \
-                    mock.patch.object(intraday_module, "run_codex_prompt", return_value=0) as run_codex_prompt:
-                    load_runtime_config.return_value = mock.Mock(trading_mode="live", risk_tier=0, paper_risk_tier=0, effective_risk_tier=0)
-
-                    status = intraday_module.run_intraday_pipeline(dry_run=False)
-            finally:
-                os.chdir(original_cwd)
-
-        self.assertEqual(status, 0)
-        load_policy_inputs.assert_not_called()
-        run_codex_prompt.assert_called_once()
+        load_policy_inputs.assert_called_once()
+        run_kinds = [call.args[0] for call in run_codex_prompt.call_args_list]
+        self.assertEqual(run_kinds, ["intraday_snapshot"])  # no would_trade -> no execute
 
     def test_deterministic_live_shares_decision_and_only_executes(self) -> None:
         # Flag on: live must use the deterministic engine (load_policy_inputs +

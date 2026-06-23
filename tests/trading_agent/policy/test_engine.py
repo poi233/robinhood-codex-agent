@@ -202,22 +202,12 @@ class PolicyEngineTests(unittest.TestCase):
         self.assertEqual(decision.decision, "blocked")
         self.assertIn("cooldown_after_buy", decision.blocked_reasons)
 
-    def test_review_mode_blocks_execution_when_unwired(self) -> None:
-        decision = generate_order_intent(base_inputs(trading_mode="review"))
-
-        self.assertEqual(decision.decision, "blocked")
-        self.assertIsNotNone(decision.intent)
-        self.assertIn("execution_not_wired", decision.blocked_reasons)
-        self.assertEqual(decision.action_taken, "none")
-
-    def test_deterministic_execution_makes_live_match_paper(self) -> None:
-        # With deterministic_execution, review/live produce the SAME would_trade
-        # decision as paper (execution is handled downstream by the execute prompt).
+    def test_review_and_live_match_paper_decision(self) -> None:
+        # review/live produce the SAME would_trade decision as paper; execution is
+        # handled downstream by the execute prompt (LLM as executor only).
         paper = generate_order_intent(base_inputs())
         for mode in ("review", "live"):
-            inputs = base_inputs(trading_mode=mode)
-            inputs.deterministic_execution = True
-            decision = generate_order_intent(inputs)
+            decision = generate_order_intent(base_inputs(trading_mode=mode))
             self.assertEqual(decision.decision, "would_trade")
             self.assertIsNotNone(decision.intent)
             self.assertEqual(decision.intent.symbol, paper.intent.symbol)

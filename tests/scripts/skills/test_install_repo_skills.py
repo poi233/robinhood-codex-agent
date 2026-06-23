@@ -59,8 +59,7 @@ class CommonRuntimeSkillFeedTests(unittest.TestCase):
                     "-lc",
                     (
                         f"cd {tmp} && source src/scripts/lib/common.sh && "
-                        "printf '%s\\n%s\\n%s\\n%s\\n%s' "
-                        "\"$ENABLE_MARKET_FEED_LAYER\" "
+                        "printf '%s\\n%s\\n%s\\n%s' "
                         "\"$MARKET_FEED_DIR\" "
                         "\"$RUN_STATE_DIR\" "
                         "\"$DSA_SIGNALS_PATH\" "

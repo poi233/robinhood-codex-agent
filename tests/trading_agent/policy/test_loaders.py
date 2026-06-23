@@ -130,9 +130,9 @@ class PolicyLoaderTests(unittest.TestCase):
         self.assertEqual(inputs.today_allowlist, [])
         self.assertEqual(inputs.dynamic_allowlist, {})
         self.assertEqual(inputs.daily_usage, {})
-        self.assertIsNone(inputs.advisory_overlay)
+        self.assertIsNotNone(inputs.advisory_overlay)  # always hydrated now
 
-    def test_load_policy_inputs_hydrates_advisory_overlay_only_when_flag_enabled(self) -> None:
+    def test_load_policy_inputs_always_hydrates_advisory_overlay(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
             (root / "src" / "config").mkdir(parents=True)
@@ -145,12 +145,8 @@ class PolicyLoaderTests(unittest.TestCase):
             write_json(root / "runtime" / "state" / "runs" / "2026-06-18" / "planner" / "portfolio_target.json",
                        {"date": "2026-06-18", "position_weights": {"NVDA": 0.04}, "breaches": {}})
 
-            with mock.patch.dict(os.environ, {"ENABLE_INTRADAY_ADVISORY_OVERLAY": "0"}, clear=False):
-                disabled = load_policy_inputs(root, run_date="2026-06-18", trading_mode="paper", risk_tier=0)
-            with mock.patch.dict(os.environ, {"ENABLE_INTRADAY_ADVISORY_OVERLAY": "1"}, clear=False):
-                enabled = load_policy_inputs(root, run_date="2026-06-18", trading_mode="paper", risk_tier=0)
+            enabled = load_policy_inputs(root, run_date="2026-06-18", trading_mode="paper", risk_tier=0)
 
-        self.assertIsNone(disabled.advisory_overlay)
         self.assertIsNotNone(enabled.advisory_overlay)
         self.assertEqual(enabled.advisory_overlay.symbols["NVDA"].components["factor_alpha"]["score"], 84.0)
 

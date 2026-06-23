@@ -188,21 +188,20 @@ def run_premarket_pipeline(*, dry_run: bool) -> int:
     runtime = load_runtime_config(agent_root)
     paths = build_runtime_paths(agent_root)
     active_symbols = parse_active_watchlist(paths.config_dir)
-    # O2: optionally pick the day's active set dynamically (pins ∪ top-N universe by screen_score)
-    # instead of the static active_watchlist. Flag default 0 → behavior is exactly as before.
+    # O2: pick the day's active set dynamically (pins ∪ top-N universe by screen_score)
+    # instead of the static active_watchlist.
     dynamic_active_path: Path | None = None
-    if os.environ.get("ENABLE_DYNAMIC_ACTIVE", "0") == "1":
-        from trading_agent.core.io import ensure_dir
-        from trading_agent.data.universe import load_dynamic_active
+    from trading_agent.core.io import ensure_dir
+    from trading_agent.data.universe import load_dynamic_active
 
-        active_max = int(os.environ.get("ACTIVE_MAX", "30") or "30")
-        selection = load_dynamic_active(paths.config_dir, active_max=active_max)
-        if selection["active"]:
-            active_symbols = selection["active"]
-            ensure_dir(paths.planner_dir)
-            write_json(paths.planner_dir / "active_selection.json", selection)
-            dynamic_active_path = paths.planner_dir / "active_selection.txt"
-            dynamic_active_path.write_text("\n".join(active_symbols) + "\n", encoding="utf-8")
+    active_max = int(os.environ.get("ACTIVE_MAX", "30") or "30")
+    selection = load_dynamic_active(paths.config_dir, active_max=active_max)
+    if selection["active"]:
+        active_symbols = selection["active"]
+        ensure_dir(paths.planner_dir)
+        write_json(paths.planner_dir / "active_selection.json", selection)
+        dynamic_active_path = paths.planner_dir / "active_selection.txt"
+        dynamic_active_path.write_text("\n".join(active_symbols) + "\n", encoding="utf-8")
     run_date = paths.run_date
     market_feed_dir = paths.market_feed_dir
     timeframes = [value.strip() for value in runtime.market_feed_timeframes.split(",") if value.strip()]
@@ -262,9 +261,6 @@ def run_premarket_pipeline(*, dry_run: bool) -> int:
         )
 
     def collect_context() -> None:
-        if os.environ.get("ENABLE_MARKET_FEED_LAYER", "1") != "1":
-            append_stage_log(agent_root, run_date, "market_context", "skipped", "market feed layer disabled")
-            return
         # L3: always include the benchmark set in the feed so factor beta/residual/relative never
         # silently degrade when a strategy's active_watchlist happens not to contain SPY. Benchmarks
         # are fetched for their bars only; they are not added to the scored/technical symbol set.
@@ -279,32 +275,25 @@ def run_premarket_pipeline(*, dry_run: bool) -> int:
             timeframes=timeframes,
             news_limit=news_limit,
             mock=dry_run,
-            cache_dir=paths.ohlcv_cache_dir if os.environ.get("ENABLE_OHLCV_CACHE", "1") == "1" else None,
+            cache_dir=paths.ohlcv_cache_dir,
         )
 
     def run_dsa() -> None:
-        if os.environ.get("ENABLE_DSA_SIGNAL_LAYER", "1") != "1":
-            append_stage_log(agent_root, run_date, "dsa", "skipped", "DSA signal layer disabled")
-            return
-        if os.environ.get("ENABLE_DSA_METRICS_PRECOMPUTE", "1") == "1":
-            lookback_days = int(os.environ.get("DSA_METRICS_LOOKBACK_DAYS", "180") or "180")
-            mock = os.environ.get("DSA_USE_MOCK", "0") == "1" or dry_run
-            write_json(
-                paths.dsa_metrics_path,
-                build_dsa_metrics(
-                    universe_file=paths.config_dir / "universe.txt",
-                    meta_file=paths.config_dir / "universe_meta.json",
-                    run_date=run_date,
-                    lookback_days=lookback_days,
-                    mock=mock,
-                ),
-            )
+        lookback_days = int(os.environ.get("DSA_METRICS_LOOKBACK_DAYS", "180") or "180")
+        mock = os.environ.get("DSA_USE_MOCK", "0") == "1" or dry_run
+        write_json(
+            paths.dsa_metrics_path,
+            build_dsa_metrics(
+                universe_file=paths.config_dir / "universe.txt",
+                meta_file=paths.config_dir / "universe_meta.json",
+                run_date=run_date,
+                lookback_days=lookback_days,
+                mock=mock,
+            ),
+        )
         run_dsa_scan(agent_root, prompt_runner=run_codex_prompt)
 
     def run_kronos() -> None:
-        if os.environ.get("ENABLE_KRONOS_SIGNAL_LAYER", "1") != "1":
-            append_stage_log(agent_root, run_date, "kronos", "skipped", "Kronos signal layer disabled")
-            return
         active_watchlist_path = paths.config_dir / "active_watchlist.txt"
         if dynamic_active_path is not None and dynamic_active_path.exists():
             # O2: Kronos forecasts the dynamically-selected active set, not the static file.
@@ -326,9 +315,6 @@ def run_premarket_pipeline(*, dry_run: bool) -> int:
             raise
 
     def run_technical() -> None:
-        if os.environ.get("ENABLE_TECHNICAL_SIGNAL_LAYER", "1") != "1":
-            append_stage_log(agent_root, run_date, "technical", "skipped", "technical signal layer disabled")
-            return
         manifest_path = market_feed_dir / "manifest.json"
         if not manifest_path.exists():
             raise RuntimeError("market feed manifest missing")
@@ -356,40 +342,39 @@ def run_premarket_pipeline(*, dry_run: bool) -> int:
         )
         write_json(paths.technical_signals_path, signals)
 
-        # Optional narrative + bounded-LLM pass: the prompt (cheap/mini model)
-        # writes chan/Brooks/fundamentals narrative AND a structured
-        # llm_assessment per symbol. apply_llm_assessment then folds that opinion
-        # into action/priority/confidence WITHIN HARD BOUNDS and never edits price
+        # Narrative + bounded-LLM pass: the prompt (cheap/mini model) writes
+        # chan/Brooks/fundamentals narrative AND a structured llm_assessment per
+        # symbol. apply_llm_assessment then folds that opinion into
+        # action/priority/confidence WITHIN HARD BOUNDS and never edits price
         # levels/stops/no_trade_zone, so the price-gate risk controls always
         # stand. A failure here never fails the stage — the deterministic engine
         # output above already stands.
-        if os.environ.get("ENABLE_TECHNICAL_NARRATIVE", "1") == "1":
-            try:
-                status = run_codex_prompt(
-                    "technical_research", agent_root, paths.prompts_dir / "technical" / "research.txt"
-                )
-                if status != 0:
-                    append_stage_log(
-                        agent_root,
-                        run_date,
-                        "technical",
-                        "partial",
-                        "technical narrative enrichment failed; deterministic engine signals retained",
-                        details={"returncode": status},
-                    )
-                if paths.technical_signals_path.exists():
-                    write_json(
-                        paths.technical_signals_path,
-                        apply_llm_assessment(read_json(paths.technical_signals_path)),
-                    )
-            except Exception as exc:  # noqa: BLE001 - advisory pass must not break premarket
+        try:
+            status = run_codex_prompt(
+                "technical_research", agent_root, paths.prompts_dir / "technical" / "research.txt"
+            )
+            if status != 0:
                 append_stage_log(
                     agent_root,
                     run_date,
                     "technical",
                     "partial",
-                    f"technical narrative/LLM reconciliation errored; deterministic engine signals retained: {exc}",
+                    "technical narrative enrichment failed; deterministic engine signals retained",
+                    details={"returncode": status},
                 )
+            if paths.technical_signals_path.exists():
+                write_json(
+                    paths.technical_signals_path,
+                    apply_llm_assessment(read_json(paths.technical_signals_path)),
+                )
+        except Exception as exc:  # noqa: BLE001 - advisory pass must not break premarket
+            append_stage_log(
+                agent_root,
+                run_date,
+                "technical",
+                "partial",
+                f"technical narrative/LLM reconciliation errored; deterministic engine signals retained: {exc}",
+            )
 
         # Snapshot the full-day technical file. Intraday reads the merge of this snapshot and
         # the live file, so a later ad hoc single-symbol run that overwrites the live file can
@@ -584,11 +569,6 @@ def run_premarket_pipeline(*, dry_run: bool) -> int:
             paths.candidate_scores_path,
             paths.risk_overlay_path,
         ],
-        details={
-            "market_feed_enabled": os.environ.get("ENABLE_MARKET_FEED_LAYER", "1"),
-            "dsa_enabled": os.environ.get("ENABLE_DSA_SIGNAL_LAYER", "1"),
-            "kronos_enabled": os.environ.get("ENABLE_KRONOS_SIGNAL_LAYER", "1"),
-            "technical_enabled": os.environ.get("ENABLE_TECHNICAL_SIGNAL_LAYER", "1"),
-        },
+        details={},
     )
     return 0

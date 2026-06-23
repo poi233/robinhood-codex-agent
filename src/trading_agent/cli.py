@@ -75,17 +75,17 @@ def build_parser() -> argparse.ArgumentParser:
     screen_parser = subparsers.add_parser(
         "screen",
         help="O1 weekly Serenity-skill stock screener: discover pool-external bottleneck stocks "
-        "→ factor-validate → auto-update universe (add-only + re-rank). Gated by ENABLE_WEEKLY_SCREENER.",
+        "→ factor-validate → auto-update universe (add-only + re-rank).",
     )
     screen_parser.add_argument(
         "--dry-run",
         action="store_true",
-        help="Force report-only: never write universe.txt/universe_meta.json, even if ENABLE_WEEKLY_SCREENER=1.",
+        help="Force report-only: never write universe.txt/universe_meta.json.",
     )
     screen_parser.add_argument(
         "--apply",
         action="store_true",
-        help="Force auto-apply (write the universe) even if ENABLE_WEEKLY_SCREENER=0. --dry-run wins if both given.",
+        help="Force auto-apply (write the universe). --dry-run wins if both given.",
     )
 
     growth_parser = subparsers.add_parser("growth", help="Self-growth diagnostics (paper-only, read-only).")
@@ -229,22 +229,14 @@ def _run_doctor(agent_root: Path) -> int:
         f"  CODEX_BIN                 = {env.get('CODEX_BIN', 'codex')}",
         f"  CODEX_EXEC_TIMEOUT_SEC    = {env.get('CODEX_EXEC_TIMEOUT_SEC', '3600')}",
         f"  CODEX_EXEC_DRY_RUN        = {env.get('CODEX_EXEC_DRY_RUN', '0')}",
-        f"  ENABLE_DETERMINISTIC_INTRADAY = {env.get('ENABLE_DETERMINISTIC_INTRADAY', '0')}",
         "",
-        "  --- Signal Layers ---",
-        f"  ENABLE_DSA_SIGNAL_LAYER   = {env.get('ENABLE_DSA_SIGNAL_LAYER', '1')}",
+        "  --- Signal Layers (always on) ---",
         f"  DSA_MAX_SUBAGENTS         = {env.get('DSA_MAX_SUBAGENTS', '3')}",
-        f"  ENABLE_DSA_METRICS_PRECOMPUTE = {env.get('ENABLE_DSA_METRICS_PRECOMPUTE', '1')}",
         f"  DSA_METRICS_LOOKBACK_DAYS = {env.get('DSA_METRICS_LOOKBACK_DAYS', '180')}",
-        f"  ENABLE_KRONOS_SIGNAL_LAYER= {env.get('ENABLE_KRONOS_SIGNAL_LAYER', '1')}",
-        f"  ENABLE_MARKET_FEED_LAYER  = {env.get('ENABLE_MARKET_FEED_LAYER', '1')}",
         f"  MARKET_FEED_TIMEFRAMES    = {config.market_feed_timeframes}",
-        f"  ENABLE_OHLCV_CACHE        = {env.get('ENABLE_OHLCV_CACHE', '1')}",
-        f"  ENABLE_BATCH_OHLCV_FETCH  = {env.get('ENABLE_BATCH_OHLCV_FETCH', '1')}",
-        f"  ENABLE_TECHNICAL_SIGNAL   = {env.get('ENABLE_TECHNICAL_SIGNAL_LAYER', '1')}",
         f"  TECHNICAL_MAX_SUBAGENTS   = {env.get('TECHNICAL_MAX_SUBAGENTS', '3')}",
-        f"  ENABLE_TECHNICAL_FEATURES_PRECOMPUTE = {env.get('ENABLE_TECHNICAL_FEATURES_PRECOMPUTE', '1')}",
         f"  TECHNICAL_RECENT_BARS     = {env.get('TECHNICAL_RECENT_BARS', '30')}",
+        f"  TECHNICAL_LLM_MAX_SWING   = {env.get('TECHNICAL_LLM_MAX_SWING', '12')}",
         "",
         "  --- Paper ---",
         f"  PAPER_STARTING_CASH       = {env.get('PAPER_STARTING_CASH', '400000')}",
@@ -256,24 +248,12 @@ def _run_doctor(agent_root: Path) -> int:
         f"  LIVE_QUOTES_CAPTURE_BOOK  = {env.get('LIVE_QUOTES_CAPTURE_BOOK', '0')}",
         f"  HARD_STOP_LOSS_PCT        = {env.get('HARD_STOP_LOSS_PCT', '0.08')}",
         "",
-        "  --- Automation ---",
-        f"  ENABLE_NIGHTLY_ANALYSIS   = {env.get('ENABLE_NIGHTLY_ANALYSIS', '1')}",
-        f"  ENABLE_EVIDENCE_PROPOSALS = {env.get('ENABLE_EVIDENCE_PROPOSALS', '0')}",
-        f"  ENABLE_SHADOW_RESCORE     = {env.get('ENABLE_SHADOW_RESCORE', '0')}",
-        f"  ENABLE_INTRADAY_ADVISORY_OVERLAY = {env.get('ENABLE_INTRADAY_ADVISORY_OVERLAY', '0')}",
-        f"  ENABLE_REGIME_VIX_FETCH   = {env.get('ENABLE_REGIME_VIX_FETCH', '1')}",
-        "",
         "  --- Selection Layer (weekly screener · O1) ---",
-        f"  ENABLE_WEEKLY_SCREENER    = {env.get('ENABLE_WEEKLY_SCREENER', '0')}",
         f"  SCREEN_MAX_ADDS_PER_WEEK  = {env.get('SCREEN_MAX_ADDS_PER_WEEK', '5')}",
         f"  UNIVERSE_MAX              = {env.get('UNIVERSE_MAX', '120')}",
         f"  SCREEN_MIN_DOLLAR_VOL     = {env.get('SCREEN_MIN_DOLLAR_VOL', '20000000')}",
         f"  SCREEN_REQUIRE_UPTREND    = {env.get('SCREEN_REQUIRE_UPTREND', '1')}",
-        f"  ENABLE_DYNAMIC_ACTIVE     = {env.get('ENABLE_DYNAMIC_ACTIVE', '0')}",
         f"  ACTIVE_MAX                = {env.get('ACTIVE_MAX', '30')}",
-        "",
-        "  --- Notifications ---",
-        f"  ENABLE_TRADE_EMAIL        = {env.get('ENABLE_TRADE_EMAIL_NOTIFICATIONS', '1')}",
         "",
         "  --- Scheduling (launchd) ---",
         *_launchd_status_lines(agent_root),
@@ -565,10 +545,6 @@ def _run_nightly_analysis(agent_root: Path) -> int:
     from trading_agent.core.time import pt_now
 
     load_env_files(agent_root)
-    if os.environ.get("ENABLE_NIGHTLY_ANALYSIS", "1") != "1":
-        print("nightly analysis disabled (ENABLE_NIGHTLY_ANALYSIS=0); skipping")
-        return 0
-
     paths = build_runtime_paths(agent_root)
     nightly_log_dir = paths.run_logs_dir / "nightly"
     nightly_log_dir.mkdir(parents=True, exist_ok=True)

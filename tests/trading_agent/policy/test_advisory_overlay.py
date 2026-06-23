@@ -166,6 +166,28 @@ def test_ai_layer_envelope_list_enters_overlay() -> None:
     assert "ai_kronos_bullish" in nvda.reason_codes
 
 
+def test_fundamental_and_event_layers_enter_overlay() -> None:
+    inputs = PolicyInputs(run_date="2026-06-18", trading_mode="paper", risk_tier=4, today_allowlist=["NVDA"])
+    artifacts = {
+        "factor_alpha": {},
+        "ai_signals": {},
+        "regime_state": {},
+        "portfolio_target": {},
+        "fundamental": {"symbols": {"NVDA": {"quality_flags": ["unprofitable"], "suggested_use": "quality_warning"}}},
+        "event": {"symbols": {"NVDA": {"event_flags": ["earnings_imminent"], "days_to_earnings": 1}}},
+    }
+
+    overlay = build_advisory_overlay(inputs, artifacts)
+    nvda = overlay_for_symbol(overlay, "NVDA")
+
+    # weak fundamentals (-2) + imminent earnings (-2) demote the rank
+    assert nvda.rank_delta == -4.0
+    assert "fundamental_quality_warning" in nvda.reason_codes
+    assert "earnings_imminent_caution" in nvda.reason_codes
+    assert nvda.components["fundamental"]["quality_flags"] == ["unprofitable"]
+    assert nvda.components["event"]["days_to_earnings"] == 1
+
+
 def test_overexposed_theme_blocks_via_theme_by_symbol() -> None:
     # Regression: portfolio_target must expose theme_by_symbol so the per-symbol
     # overexposed-theme breach can actually block the buy.

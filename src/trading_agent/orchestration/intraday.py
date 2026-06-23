@@ -140,22 +140,11 @@ def run_intraday_pipeline(*, dry_run: bool) -> int:
                 run_date=run_date,
             )
             return 0
-        if os.environ.get("ENABLE_DETERMINISTIC_INTRADAY", "0") == "1":
-            # Unified path: review/live use the SAME deterministic decision as paper;
-            # only execution differs (a thin execute prompt places the exact order).
-            return _run_deterministic_nonpaper_intraday(
-                agent_root, run_date=run_date, runtime=runtime, effective_risk_tier=effective_risk_tier
-            )
-        paths = build_runtime_paths(agent_root, run_date=run_date)
-        status = run_codex_prompt("intraday", agent_root, paths.prompts_dir / "intraday" / "check.txt")
-        if status != 0:
-            _append_local_decision(
-                agent_root,
-                "blocked",
-                f"intraday_prompt_failed:{status}",
-                run_date=run_date,
-            )
-        return status
+        # review/live use the SAME deterministic decision as paper; only execution
+        # differs (a thin execute prompt places the exact engine-decided order).
+        return _run_deterministic_nonpaper_intraday(
+            agent_root, run_date=run_date, runtime=runtime, effective_risk_tier=effective_risk_tier
+        )
     paper_starting_cash = float(os.environ.get("PAPER_STARTING_CASH", "400000"))
     inputs = load_policy_inputs(
         agent_root,
@@ -245,8 +234,7 @@ def _run_deterministic_nonpaper_intraday(
     Three phases, so the decision is identical to paper and only execution differs:
       1. snapshot prompt — read-only MCP fetch of fresh Agentic-account buying power,
          positions and open equity orders (no trading tools).
-      2. decide — load_policy_inputs + generate_order_intent (deterministic_execution
-         is set via ENABLE_DETERMINISTIC_INTRADAY so the engine returns would_trade).
+      2. decide — load_policy_inputs + generate_order_intent (same as paper).
       3. execute prompt — places EXACTLY the engine-decided order (LLM as executor
          only; no independent analysis). review → review_equity_order, live →
          place_equity_order, both still gated by .codex/config.toml + KILL_SWITCH.

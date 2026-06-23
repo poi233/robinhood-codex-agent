@@ -55,11 +55,10 @@ def _read_json_or_empty(path: Path) -> dict[str, Any]:
 
 
 def _shadow_rescore_enabled() -> bool:
-    """H4: when on, a challenger may carry a multi-change `changes` list (re-weight several scoring
-    components at once), not just the single scoring threshold G3 moves. Default off keeps the shadow
-    runner's behavior byte-for-byte. The whole shadow path is already double-isolated (writes only
-    experiments/<id>/, never the champion), so this only widens what a challenger can express."""
-    return str(os.environ.get("ENABLE_SHADOW_RESCORE", "0") or "0") == "1"
+    """H4: a challenger may carry a multi-change `changes` list (re-weight several scoring
+    components at once), not just the single scoring threshold G3 moves. The whole shadow path is
+    already double-isolated (writes only experiments/<id>/, never the champion)."""
+    return True
 
 
 def _challenger_scoring_profile(agent_root: Path, experiment: dict[str, Any]) -> dict[str, Any]:

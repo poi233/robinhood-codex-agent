@@ -69,7 +69,7 @@ class PackageCliTests(unittest.TestCase):
         self.assertIn("effective_risk_tier", result.stdout)
         self.assertIn("active_strategy", result.stdout)
         self.assertIn("midfreq_v1", result.stdout)
-        self.assertIn("ENABLE_OHLCV_CACHE", result.stdout)
+        self.assertIn("MARKET_FEED_TIMEFRAMES", result.stdout)
         self.assertIn("PAPER_PARTIAL_FILL", result.stdout)
 
     def test_doctor_reports_launchd_scheduling(self) -> None:
@@ -184,6 +184,13 @@ def test_growth_propose_writes_validated_proposals(tmp_path, monkeypatch, capsys
         for i in range(5):
             fh.write(json.dumps({"timestamp": f"2026-06-15T07:0{i}:00-0700",
                                  "decision": "no_trade", "blocked_reasons": ["below_trade_threshold"]}) + "\n")
+    # Evidence gate is always on: seed near-miss evidence so the trade_threshold proposal survives.
+    analytics = tmp_path / "runtime" / "analytics"
+    analytics.mkdir(parents=True, exist_ok=True)
+    (analytics / "calibration_report.json").write_text(
+        json.dumps({"near_miss": {"5": {"cleared": {"mean_return": 0.8}, "near_miss": {"mean_return": 1.1}}}}),
+        encoding="utf-8",
+    )
     monkeypatch.chdir(tmp_path)
     # main() resolves its root from the code location (cron robustness), not cwd, so point it at the
     # tmp sandbox explicitly — otherwise the command would read/write the real repo.

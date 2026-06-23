@@ -65,16 +65,14 @@ PY
 # Write the single-symbol analysis into manual/<SYMBOL>/ (next to its market_feed input), NOT the
 # global signals/technical_signals.json. This stops an ad hoc one-symbol run from clobbering the
 # day's full-watchlist technical file, and makes the output easy to find. The narrative pass is
-# advisory: if disabled, the deterministic engine output above already stands.
-if [[ "${ENABLE_TECHNICAL_NARRATIVE:-1}" == "1" ]]; then
-  TECHNICAL_SIGNALS_PATH="$manual_output" TECHNICAL_FEATURES_PATH="$manual_features" \
-    PROGRESS_LOG_PATH="$manual_progress" MARKET_FEED_DIR="$manual_dir" \
-    run_codex_prompt "technical_research" "$SRC_ROOT/prompts/technical/research.txt" || \
-    log_line "symbol_research narrative enrichment failed; engine signals retained"
-  # Fold the prompt's bounded llm_assessment into the decision (no-op if absent).
-  "$resolved_python" -c "from trading_agent.signals.technical_engine import reconcile_technical_signals_file as r; r('$manual_output')" || \
-    log_line "symbol_research llm reconciliation failed; engine signals retained"
-fi
+# advisory: the deterministic engine output above already stands if it fails.
+TECHNICAL_SIGNALS_PATH="$manual_output" TECHNICAL_FEATURES_PATH="$manual_features" \
+  PROGRESS_LOG_PATH="$manual_progress" MARKET_FEED_DIR="$manual_dir" \
+  run_codex_prompt "technical_research" "$SRC_ROOT/prompts/technical/research.txt" || \
+  log_line "symbol_research narrative enrichment failed; engine signals retained"
+# Fold the prompt's bounded llm_assessment into the decision (no-op if absent).
+"$resolved_python" -c "from trading_agent.signals.technical_engine import reconcile_technical_signals_file as r; r('$manual_output')" || \
+  log_line "symbol_research llm reconciliation failed; engine signals retained"
 
 if [[ ! -s "$manual_output" ]]; then
   log_line "symbol_research failed: missing expected output $manual_output"

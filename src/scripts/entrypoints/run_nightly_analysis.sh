@@ -14,11 +14,6 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/../lib/common.sh"
 cd "$AGENT_ROOT"
 
-if [[ "${ENABLE_NIGHTLY_ANALYSIS:-1}" != "1" ]]; then
-  log_line "nightly analysis disabled (ENABLE_NIGHTLY_ANALYSIS=0); skipping"
-  exit 0
-fi
-
 python_bin="$(resolve_runtime_python_bin)" || {
   log_line "nightly analysis failed: no Python 3.11+ interpreter found"
   printf '%s no Python 3.11+ interpreter found for nightly analysis\n' "$(pt_now)" >> "$ERROR_LOG"

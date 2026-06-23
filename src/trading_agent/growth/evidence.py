@@ -14,7 +14,8 @@ from trading_agent.core.io import read_json
 
 
 def evidence_proposals_enabled() -> bool:
-    return str(os.environ.get("ENABLE_EVIDENCE_PROPOSALS", "0") or "0") == "1"
+    # Always on: a proposal must cite at least one supporting evidence item.
+    return True
 
 
 def _read(agent_root: Path, name: str) -> dict[str, Any]:

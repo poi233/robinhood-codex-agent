@@ -65,6 +65,8 @@ def load_advisory_artifacts(paths: Any) -> dict[str, dict[str, Any]]:
         "ai_signals": _fresh_payload(paths.ai_signals_path, run_date),
         "regime_state": _fresh_payload(paths.planner_dir / "regime_state.json", run_date),
         "portfolio_target": _fresh_payload(paths.planner_dir / "portfolio_target.json", run_date),
+        "fundamental": _fresh_payload(paths.signals_dir / "fundamental_snapshot.json", run_date),
+        "event": _fresh_payload(paths.planner_dir / "event_snapshot.json", run_date),
     }
 
 
@@ -95,6 +97,9 @@ def _symbols_from_artifacts(artifacts: dict[str, dict[str, Any]]) -> set[str]:
     symbols.update(str(symbol).upper() for symbol in position_weights if symbol)
     theme_by_symbol = (artifacts.get("portfolio_target") or {}).get("theme_by_symbol") or {}
     symbols.update(str(symbol).upper() for symbol in theme_by_symbol if symbol)
+    for layer in ("fundamental", "event"):
+        layer_symbols = (artifacts.get(layer) or {}).get("symbols") or {}
+        symbols.update(str(symbol).upper() for symbol in layer_symbols if symbol)
     return symbols
 
 
@@ -157,6 +162,49 @@ def _portfolio_component(artifacts: dict[str, dict[str, Any]], symbol: str) -> d
         "oversize_position": symbol in set(breaches.get("oversize_positions") or []),
         "overexposed_theme": theme in set(breaches.get("overexposed_themes") or []),
     }
+
+
+def _fundamental_component(artifacts: dict[str, dict[str, Any]], symbol: str) -> dict[str, Any]:
+    payload = (((artifacts.get("fundamental") or {}).get("symbols") or {}).get(symbol) or {})
+    if not isinstance(payload, dict) or not payload:
+        return {}
+    return {
+        "quality_flags": list(payload.get("quality_flags") or []),
+        "suggested_use": payload.get("suggested_use"),
+    }
+
+
+def _event_component(artifacts: dict[str, dict[str, Any]], symbol: str) -> dict[str, Any]:
+    payload = (((artifacts.get("event") or {}).get("symbols") or {}).get(symbol) or {})
+    if not isinstance(payload, dict) or not payload:
+        return {}
+    return {
+        "event_flags": list(payload.get("event_flags") or []),
+        "days_to_earnings": payload.get("days_to_earnings"),
+    }
+
+
+def _fundamental_rank_delta(component: dict[str, Any]) -> tuple[float, list[str]]:
+    # Quality is a caution filter only: weak fundamentals can demote, never promote.
+    if component.get("quality_flags"):
+        return -2.0, ["fundamental_quality_warning"]
+    return 0.0, []
+
+
+def _event_rank_delta(component: dict[str, Any]) -> tuple[float, list[str]]:
+    flags = set(component.get("event_flags") or [])
+    delta = 0.0
+    reasons: list[str] = []
+    if "earnings_imminent" in flags:
+        delta -= 2.0
+        reasons.append("earnings_imminent_caution")
+    if {"estimate_revised_up", "analyst_bullish"} & flags:
+        delta += 2.0
+        reasons.append("event_estimate_up")
+    if {"estimate_revised_down", "analyst_bearish"} & flags:
+        delta -= 2.0
+        reasons.append("event_estimate_down")
+    return delta, reasons
 
 
 def _factor_rank_delta(component: dict[str, Any]) -> tuple[float, list[str]]:
@@ -233,9 +281,13 @@ def build_advisory_overlay(inputs: Any, artifacts: dict[str, dict[str, Any]]) ->
             "ai": _ai_component(artifacts, symbol),
             "regime": regime,
             "portfolio": _portfolio_component(artifacts, symbol),
+            "fundamental": _fundamental_component(artifacts, symbol),
+            "event": _event_component(artifacts, symbol),
         }
         factor_delta, factor_reasons = _factor_rank_delta(components["factor_alpha"])
         ai_delta, ai_reasons = _ai_rank_delta(components["ai"])
+        fundamental_delta, fundamental_reasons = _fundamental_rank_delta(components["fundamental"])
+        event_delta, event_reasons = _event_rank_delta(components["event"])
         block_buy, size_multiplier, blocked_reasons, risk_reasons = _risk_tightening(components)
         reason_codes = [
             source
@@ -244,10 +296,12 @@ def build_advisory_overlay(inputs: Any, artifacts: dict[str, dict[str, Any]]) ->
         ]
         reason_codes.extend(factor_reasons)
         reason_codes.extend(ai_reasons)
+        reason_codes.extend(fundamental_reasons)
+        reason_codes.extend(event_reasons)
         reason_codes.extend(risk_reasons)
         overlay_symbols[symbol] = SymbolOverlay(
             symbol=symbol,
-            rank_delta=max(-5.0, min(5.0, factor_delta + ai_delta)),
+            rank_delta=max(-5.0, min(5.0, factor_delta + ai_delta + fundamental_delta + event_delta)),
             size_multiplier=size_multiplier,
             block_buy=block_buy,
             blocked_reasons=blocked_reasons,

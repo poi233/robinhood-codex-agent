@@ -80,13 +80,6 @@ def test_explicit_vix_takes_precedence_over_fetcher(tmp_path):
     assert ind["vix"] == 15.0
 
 
-def test_vix_fetch_disabled_via_env(tmp_path, monkeypatch):
-    _seed_feed(tmp_path)
-    monkeypatch.setenv("ENABLE_REGIME_VIX_FETCH", "0")
-    ind = indicators_from_market_feed(tmp_path, vix_fetcher=lambda: 28.0)
-    assert ind["vix"] is None  # fetcher not consulted when disabled
-
-
 def test_vix_fetcher_failure_degrades_to_none(tmp_path):
     _seed_feed(tmp_path)
 

@@ -136,21 +136,9 @@ def generate_order_intent(inputs: PolicyInputs) -> PolicyDecision:
             per_candidate_blocks=buy_per_candidate_blocks,
         )
 
-    if inputs.trading_mode in {"review", "live"} and not inputs.deterministic_execution:
-        # Legacy path: the deterministic engine does not place review/live orders;
-        # the intraday Codex prompt does. With deterministic_execution enabled, the
-        # decision is shared with paper and a thin execute prompt places it, so we
-        # fall through to would_trade below.
-        return PolicyDecision(
-            trading_mode=inputs.trading_mode,
-            checked_symbols=checked_symbols,
-            decision="blocked",
-            intent=intent,
-            reason="execution_not_wired",
-            risk_checks={**risk_checks, "execution_wired": False},
-            blocked_reasons=["execution_not_wired"],
-        )
-
+    # All modes share the same deterministic decision. Execution differs downstream:
+    # paper simulates the fill; review/live hand this exact intent to the execute
+    # prompt (LLM as executor only).
     return PolicyDecision(
         trading_mode=inputs.trading_mode,
         checked_symbols=checked_symbols,

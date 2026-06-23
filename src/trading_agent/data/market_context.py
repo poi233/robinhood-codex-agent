@@ -290,11 +290,9 @@ def _prefetch_ohlcv_batch(
     """D2: pre-fetch OHLCV for all symbols in one yf.download per timeframe.
 
     Returns {symbol: {timeframe: rows}} on success, None on any batch failure (caller falls
-    back to per-symbol fetch). Only used when ENABLE_BATCH_OHLCV_FETCH=1 (default) and
-    cache is disabled — the per-symbol cache path handles its own incremental pull.
+    back to per-symbol fetch). Used when cache is disabled — the per-symbol cache path handles
+    its own incremental pull.
     """
-    if str(os.environ.get("ENABLE_BATCH_OHLCV_FETCH", "1") or "1") != "1":
-        return None
     prefetched: dict[str, dict[str, list]] = {}
     try:
         for timeframe in timeframes:

@@ -38,7 +38,7 @@ def _read_float(env: Mapping[str, str], name: str, default: float) -> float:
 def load_screener_config(env: Mapping[str, str] | None = None) -> ScreenerConfig:
     env = env if env is not None else os.environ
     return ScreenerConfig(
-        enabled=env.get("ENABLE_WEEKLY_SCREENER", "0") == "1",
+        enabled=True,
         max_adds_per_week=_read_int(env, "SCREEN_MAX_ADDS_PER_WEEK", 5),
         universe_max=_read_int(env, "UNIVERSE_MAX", 120),
         min_dollar_volume=_read_float(env, "SCREEN_MIN_DOLLAR_VOL", 20_000_000.0),

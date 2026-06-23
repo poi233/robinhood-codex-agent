@@ -9,7 +9,7 @@ from trading_agent.screener.pipeline import _resolve_will_apply, run_screen
 
 def test_config_defaults_are_user_locked():
     cfg = load_screener_config(env={})
-    assert cfg.enabled is False
+    assert cfg.enabled is True
     assert cfg.max_adds_per_week == 5
     assert cfg.universe_max == 120
     assert cfg.min_dollar_volume == 20_000_000.0
