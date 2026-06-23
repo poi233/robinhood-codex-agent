@@ -33,6 +33,10 @@ def test_email_notification_writes_payload_and_runs_prompt(tmp_path: Path, monke
     def fake_runner(run_kind: str, _agent_root: Path, _prompt_file: Path, *, runtime_overrides: dict[str, str] | None = None) -> int:
         assert runtime_overrides is not None
         calls.append((run_kind, runtime_overrides))
+        Path(runtime_overrides["TRADE_NOTIFY_RESULT_PATH"]).write_text(
+            json.dumps({"sent": True, "message_id": "gmail-123", "label_applied": True}),
+            encoding="utf-8",
+        )
         return 0
 
     monkeypatch.setattr(email_module, "run_codex_prompt", fake_runner)
@@ -61,6 +65,61 @@ def test_email_notification_writes_payload_and_runs_prompt(tmp_path: Path, monke
     assert calls[0][0] == "email_notification_trade_executed"
     assert calls[0][1]["TRADE_NOTIFY_EMAIL"] == "local@example.com"
     assert calls[0][1]["TRADE_NOTIFY_GMAIL_LABEL"] == "trade"
+    assert calls[0][1]["TRADE_NOTIFY_RESULT_PATH"].endswith("trade_executed.send_result.json")
+
+
+def test_email_notification_fails_when_prompt_exits_zero_without_send_receipt(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("TRADE_NOTIFY_EMAIL", "local@example.com")
+    monkeypatch.setenv("RUN_DATE_PT", "2026-06-14")
+    prompt_dir = tmp_path / "src" / "prompts" / "notifications"
+    prompt_dir.mkdir(parents=True)
+    (prompt_dir / "trade_email.txt").write_text("send email\n", encoding="utf-8")
+    monkeypatch.setattr(email_module, "run_codex_prompt", lambda *_args, **_kwargs: 0)
+
+    sent = email_module.send_trade_email_notification(
+        tmp_path,
+        event_tag="POSTMARKET_DONE",
+        title="盘后流程完成",
+        summary="ok",
+    )
+
+    assert sent is False
+
+
+def test_email_notification_retries_once_for_new_mcp_handshake_failure(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("TRADE_NOTIFY_EMAIL", "local@example.com")
+    monkeypatch.setenv("RUN_DATE_PT", "2026-06-14")
+    prompt_dir = tmp_path / "src" / "prompts" / "notifications"
+    prompt_dir.mkdir(parents=True)
+    (prompt_dir / "trade_email.txt").write_text("send email\n", encoding="utf-8")
+    calls = 0
+
+    def fake_runner(run_kind: str, _agent_root: Path, _prompt_file: Path, *, runtime_overrides: dict[str, str] | None = None) -> int:
+        nonlocal calls
+        calls += 1
+        assert runtime_overrides is not None
+        if calls == 1:
+            stderr_path = tmp_path / "runtime" / "logs" / "runs" / "2026-06-14" / "outputs" / "stderr" / f"{run_kind}.log"
+            stderr_path.parent.mkdir(parents=True, exist_ok=True)
+            stderr_path.write_text("handshaking with MCP server failed\n", encoding="utf-8")
+        else:
+            Path(runtime_overrides["TRADE_NOTIFY_RESULT_PATH"]).write_text(
+                json.dumps({"sent": True, "message_id": "gmail-456", "label_applied": True}),
+                encoding="utf-8",
+            )
+        return 0
+
+    monkeypatch.setattr(email_module, "run_codex_prompt", fake_runner)
+
+    sent = email_module.send_trade_email_notification(
+        tmp_path,
+        event_tag="POSTMARKET_DONE",
+        title="盘后流程完成",
+        summary="ok",
+    )
+
+    assert sent is True
+    assert calls == 2
 
 
 def test_trade_email_prompt_requires_exact_body_and_trade_label() -> None:
@@ -68,6 +127,8 @@ def test_trade_email_prompt_requires_exact_body_and_trade_label() -> None:
 
     assert "payload.body" in prompt
     assert "TRADE_NOTIFY_GMAIL_LABEL" in prompt
+    assert "TRADE_NOTIFY_RESULT_PATH" in prompt
+    assert '"message_id"' in prompt
     assert "trade" in prompt
     assert "发送后" in prompt
     assert "标签" in prompt

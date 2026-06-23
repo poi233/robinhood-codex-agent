@@ -247,6 +247,11 @@
 **已做**：通知（email）、合约校验（`contracts/`）、报告（`reporting/`）、运行历史日志、
 仓库自带 skills 安装/校验、安全检查脚本、Kronos 可移植安装。
 
+- 邮件通知必须取得 Gmail 返回的非空 `message_id` 并写入结构化 send-result 文件后，才会
+  记录为 `completed`；仅有 Codex 子进程退出码 0 不再视为发送成功。
+- Gmail MCP 初始化/握手类瞬时错误会自动重试一次。重试判断只读取本次调用新增的 stderr，
+  避免历史错误日志触发重复发送。
+
 ### 13. 策略可追溯（`strategy/`）
 
 **已做**

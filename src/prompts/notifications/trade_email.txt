@@ -61,6 +61,10 @@ Fallback body template only when `payload.body` is empty:
 这是一封自动通知邮件，仅用于本地模拟盘/交易流程复盘；最终风控仍以本地日志、计划文件和账户状态为准。
 
 After sending:
-- Print a short stdout summary that includes the event tag and recipient.
-- Include the Gmail label result in stdout.
+- Only after Gmail returns a non-empty message ID, write valid JSON to `TRADE_NOTIFY_RESULT_PATH`:
+  `{"sent":true,"message_id":"<gmail message id>","label_applied":true|false}`.
+- Never write `sent: true` before the Gmail send call succeeds.
+- If sending fails, write:
+  `{"sent":false,"message_id":"","label_applied":false,"error":"<short error>"}`.
+- Print a short stdout summary that includes the event tag, recipient, message ID, and Gmail label result.
 - Do not write decision logs or order logs.
