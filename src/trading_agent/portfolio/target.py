@@ -105,6 +105,10 @@ def build_portfolio_target(
             "sector_cap": sector_cap,
         },
         "position_weights": dict(sorted(position_weights.items(), key=lambda kv: -kv[1])),
+        # Per-symbol theme map for held positions. The advisory overlay reads this to
+        # attribute an overexposed-theme breach back to the specific symbols in it;
+        # without it the per-symbol overexposed_theme block can never fire.
+        "theme_by_symbol": {sym: theme_map.get(sym, "unknown") for sym in position_weights},
         "theme_exposure": dict(sorted(theme_exposure.items(), key=lambda kv: -kv[1])),
         "sector_exposure": dict(sorted(sector_exposure.items(), key=lambda kv: -kv[1])),
         "breaches": {

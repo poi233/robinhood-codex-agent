@@ -28,6 +28,9 @@ def test_concentrated_ai_book_flags_breaches():
     # ai_semiconductor (4 x 18% = 72%) is over the 35% theme cap
     assert "ai_semiconductor" in target["breaches"]["overexposed_themes"]
     assert target["theme_exposure"]["ai_semiconductor"] == 0.72
+    # per-symbol theme map must be present so the advisory overlay can attribute the
+    # overexposed-theme breach back to specific symbols (otherwise the block never fires)
+    assert target["theme_by_symbol"]["NVDA"] == "ai_semiconductor"
     assert target["breaches"]["below_cash_target"] is True  # 10% < 20%
 
 

@@ -84,9 +84,13 @@ def _symbols_from_artifacts(artifacts: dict[str, dict[str, Any]]) -> set[str]:
     symbols: set[str] = set()
     factor_symbols = (artifacts.get("factor_alpha") or {}).get("symbols") or {}
     symbols.update(str(symbol).upper() for symbol in factor_symbols if symbol)
+    # ai_signals layers are LISTS of canonical envelopes ({symbol, direction, confidence, ...}),
+    # not dicts keyed by symbol.
     for layer in ((artifacts.get("ai_signals") or {}).get("layers") or {}).values():
-        if isinstance(layer, dict):
-            symbols.update(str(symbol).upper() for symbol in (layer.get("symbols") or {}) if symbol)
+        if isinstance(layer, list):
+            for env in layer:
+                if isinstance(env, dict) and env.get("symbol"):
+                    symbols.add(str(env["symbol"]).upper())
     position_weights = (artifacts.get("portfolio_target") or {}).get("position_weights") or {}
     symbols.update(str(symbol).upper() for symbol in position_weights if symbol)
     theme_by_symbol = (artifacts.get("portfolio_target") or {}).get("theme_by_symbol") or {}
@@ -108,19 +112,25 @@ def _factor_component(artifacts: dict[str, dict[str, Any]], symbol: str) -> dict
 
 
 def _ai_component(artifacts: dict[str, dict[str, Any]], symbol: str) -> dict[str, Any]:
+    # ai_signals layers are LISTS of canonical envelopes ({symbol, direction,
+    # confidence, ...}), one list per layer (dsa/kronos/catalyst) — NOT dicts
+    # keyed by symbol. Match the envelope whose symbol equals this candidate.
     layers = (artifacts.get("ai_signals") or {}).get("layers") or {}
+    normalized = str(symbol).upper()
     result: dict[str, Any] = {}
     for layer_name, layer in layers.items():
-        if not isinstance(layer, dict):
+        if not isinstance(layer, list):
             continue
-        symbol_payload = ((layer.get("symbols") or {}).get(symbol) or {})
-        if isinstance(symbol_payload, dict) and symbol_payload:
+        for env in layer:
+            if not isinstance(env, dict) or str(env.get("symbol") or "").upper() != normalized:
+                continue
             result[str(layer_name)] = {
-                "direction": symbol_payload.get("direction"),
-                "confidence": symbol_payload.get("confidence"),
-                "reason_codes": list(symbol_payload.get("reason_codes") or []),
-                "warning_codes": list(symbol_payload.get("warning_codes") or []),
+                "direction": env.get("direction"),
+                "confidence": env.get("confidence"),
+                "reason_codes": list(env.get("reason_codes") or []),
+                "warning_codes": list(env.get("warning_codes") or []),
             }
+            break
     return result
 
 
