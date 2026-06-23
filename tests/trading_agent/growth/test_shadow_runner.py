@@ -5,6 +5,8 @@ from pathlib import Path
 from trading_agent.core.context import build_experiment_paths, build_runtime_paths
 from trading_agent.core.time import PT
 from trading_agent.growth.shadow_runner import (
+    _challenger_policy_profile,
+    build_challenger_inputs,
     build_challenger_risk_overlay,
     run_shadow_experiment,
 )
@@ -75,6 +77,28 @@ def _minimal_inputs(run_date: str) -> PolicyInputs:
         account={"buying_power": 25.0},
         quotes={"NVDA": Quote(symbol="NVDA", price=100.0, previous_close=101.0, timestamp=fresh)},
     )
+
+
+def test_challenger_policy_profile_loads_named_profile():
+    # A policy-setup challenger names its own profile; it must resolve to that profile's setups.
+    profile = _challenger_policy_profile(Path("."), {"policy_profile": "range_reversion"})
+    assert profile is not None
+    assert profile["setups"] == ["range_reversion"]
+    # A pure scoring/threshold challenger (no policy_profile) keeps the champion's profile.
+    assert _challenger_policy_profile(Path("."), {"module": "scoring", "field": "trade_threshold"}) is None
+
+
+def test_build_challenger_inputs_swaps_policy_profile_when_provided():
+    champion = _minimal_inputs("2026-06-14")
+    champion.policy_profile = {"name": "champion", "setups": ["pullback", "breakout"]}
+    challenger_profile = {"name": "range_reversion", "setups": ["range_reversion"]}
+
+    swapped = build_challenger_inputs(champion, {"symbol_trade_rules": {}}, policy_profile=challenger_profile)
+    assert swapped.policy_profile["setups"] == ["range_reversion"]
+    # Champion inputs are not mutated, and omitting the profile keeps the champion's.
+    assert champion.policy_profile["setups"] == ["pullback", "breakout"]
+    kept = build_challenger_inputs(champion, {"symbol_trade_rules": {}})
+    assert kept.policy_profile["setups"] == ["pullback", "breakout"]
 
 
 def test_run_shadow_experiment_writes_isolated_ledger_only(tmp_path):

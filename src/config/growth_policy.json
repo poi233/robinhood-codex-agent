@@ -17,7 +17,7 @@
       "min_reward_risk": {"min": 1.2, "max": 2.5, "max_delta": 0.25}
     },
     "setups": {
-      "enabled_setups": {"allowed": ["pullback", "breakout", "trend_continuation"]}
+      "enabled_setups": {"allowed": ["pullback", "breakout", "trend_continuation", "breakout_momentum", "dip_pullback", "range_reversion"]}
     },
     "overlay": {
       "factor_weight": {"min": 0.00, "max": 0.25, "max_delta": 0.05},

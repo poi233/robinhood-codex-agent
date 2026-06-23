@@ -185,6 +185,21 @@ stop** guarantees every position has an automatic exit even with no technical le
 permits no discretionary sell. `paper` stays deterministic; `review` and `live` run the intraday
 Codex MCP prompt after the same calendar/time/kill-switch gates.
 
+**Pluggable entry setups & shadow multi-strategy** — the buy price gate (`decide_buy_price`) is a
+dispatcher over a registry of *setups* (`policy/setups.py`). A strategy selects its entry logic via
+`policy_profile["setups"]`; the champion configures none and falls back to `pullback` → `breakout`
+(byte-for-byte unchanged). The champion only ever trades when premarket emitted a *valid* `long_setup`
+with a real entry zone — which `technical_engine._build_setups` only does for bullish breakout/pullback
+symbols (otherwise the entry zone collapses to a single price and the no-trade zone covers the whole
+range), so on most symbols it does nothing. The alternative setups — `breakout_momentum`,
+`trend_continuation`, `dip_pullback`, `range_reversion` — instead derive entries from the
+**always-present** `key_levels` (supports/resistances/range/reference_price) with their own thresholds,
+so they trade on days the champion is silent. They run as `active_shadow` challengers
+(`strategy_experiments.yaml`), each with its own `policy_profile` and its own **isolated paper ledger**
+(G9), and are compared via `growth recommend` + the dashboard (champion vs challengers, per-strategy
+equity, per-symbol buy/sell points). Champion stays frozen and remains the only path that can reach
+review/live; challengers are paper/shadow only.
+
 **M-stage advisory overlay (in progress)** — `ENABLE_INTRADAY_ADVISORY_OVERLAY=0` by default, so the
 current champion intraday path is unchanged. When enabled for paper/shadow testing, intraday loads
 the H2 `factor_alpha`, H3 `ai_signals`, K1 `portfolio_target`, and K2 `regime_state` artifacts into

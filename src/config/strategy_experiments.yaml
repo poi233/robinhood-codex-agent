@@ -2,4 +2,66 @@
 # Lifecycle: proposed -> human_approved -> active_shadow -> ready_for_review -> promoted/rejected/archived.
 # `growth experiments approve` only enables shadow paper; it NEVER switches active_strategy
 # in strategy_registry.yaml. Promotion to the champion is always a manual YAML edit (G8).
+#
+# The four challengers below are pluggable-setup strategies (H4 setup-shadow). Each reuses the
+# champion's scoring (aggressive_growth) so the candidate universe is identical, and differs ONLY in
+# its entry logic via `policy_profile` (its own `setups` + thresholds in policy_profiles.json). They
+# run every intraday tick in their own isolated paper ledger (experiments/<id>/paper/), so each
+# really trades and is comparable via `growth recommend` + the dashboard. Champion is untouched.
 experiments:
+  exp_2026-06-23_policy_momentum_breakout:
+    status: "active_shadow"
+    challenger_strategy_id: "midfreq_v1__momentum_breakout"
+    parent_strategy_id: "midfreq_v1"
+    module: "policy"
+    field: "setup_family"
+    current: "midfreq_v1"
+    proposed: "momentum_breakout"
+    proposal_id: null
+    created_at: "2026-06-23"
+    updated_at: "2026-06-23"
+    policy_profile: "momentum_breakout"
+    scoring_profile: "aggressive_growth"
+    change_reason: "Buy strength as price clears nearest resistance / range high (wider chase, lower score bar); entries from always-present key_levels, not the long_setup zone."
+  exp_2026-06-23_policy_trend_follow:
+    status: "active_shadow"
+    challenger_strategy_id: "midfreq_v1__trend_follow"
+    parent_strategy_id: "midfreq_v1"
+    module: "policy"
+    field: "setup_family"
+    current: "midfreq_v1"
+    proposed: "trend_follow"
+    proposal_id: null
+    created_at: "2026-06-23"
+    updated_at: "2026-06-23"
+    policy_profile: "trend_follow"
+    scoring_profile: "aggressive_growth"
+    change_reason: "Buy an established uptrend on a mild, non-extended advance above the reference price; no narrow entry zone required."
+  exp_2026-06-23_policy_dip_pullback:
+    status: "active_shadow"
+    challenger_strategy_id: "midfreq_v1__dip_pullback"
+    parent_strategy_id: "midfreq_v1"
+    module: "policy"
+    field: "setup_family"
+    current: "midfreq_v1"
+    proposed: "dip_pullback"
+    proposal_id: null
+    created_at: "2026-06-23"
+    updated_at: "2026-06-23"
+    policy_profile: "dip_pullback"
+    scoring_profile: "aggressive_growth"
+    change_reason: "Buy a controlled pullback into a band just above nearest support (stop below it); fires even when premarket only marked the long setup 'watch'."
+  exp_2026-06-23_policy_range_reversion:
+    status: "active_shadow"
+    challenger_strategy_id: "midfreq_v1__range_reversion"
+    parent_strategy_id: "midfreq_v1"
+    module: "policy"
+    field: "setup_family"
+    current: "midfreq_v1"
+    proposed: "range_reversion"
+    proposal_id: null
+    created_at: "2026-06-23"
+    updated_at: "2026-06-23"
+    policy_profile: "range_reversion"
+    scoring_profile: "aggressive_growth"
+    change_reason: "Mean-revert inside an established range: buy the lower portion near range_low, target range_high; trades the chop the champion's no_trade_zone skips."

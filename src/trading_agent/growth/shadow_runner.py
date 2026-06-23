@@ -184,13 +184,34 @@ def build_challenger_risk_overlay(
     )
 
 
-def build_challenger_inputs(champion_inputs: PolicyInputs, challenger_overlay: dict[str, Any]) -> PolicyInputs:
+def _challenger_policy_profile(agent_root: Path, experiment: dict[str, Any]) -> dict[str, Any] | None:
+    """The policy profile a challenger should decide with, when its experiment names one.
+
+    This is what lets a challenger run genuinely different *entry logic* (its own setups +
+    thresholds via policy_profiles.json), not just re-weighted scores. None → keep the champion's
+    profile (backward compatible: a pure scoring/threshold challenger is unchanged)."""
+    name = experiment.get("policy_profile")
+    if not name:
+        return None
+    from trading_agent.policy.profiles import load_policy_profile
+
+    return load_policy_profile(agent_root, profile_name=str(name))
+
+
+def build_challenger_inputs(
+    champion_inputs: PolicyInputs,
+    challenger_overlay: dict[str, Any],
+    *,
+    policy_profile: dict[str, Any] | None = None,
+) -> PolicyInputs:
     """A copy of the champion inputs with the challenger's overlay swapped in.
 
     The intraday policy reads tradability from risk_overlay.symbol_trade_rules and the
     plan gates (market_regime/allowed_actions/today_watchlist) from daily_plan, so both
-    are re-derived from the challenger overlay. All other inputs (quotes, positions,
-    watch levels, profile) are shared with the champion run unchanged.
+    are re-derived from the challenger overlay. When the challenger names its own
+    ``policy_profile`` it is swapped in too (its setups/thresholds drive decide_buy_price);
+    otherwise the champion's profile is kept. All other inputs (quotes, positions, watch
+    levels) are shared with the champion run unchanged.
     """
     champion_plan = champion_inputs.daily_plan or {}
     challenger_plan = {
@@ -200,7 +221,10 @@ def build_challenger_inputs(champion_inputs: PolicyInputs, challenger_overlay: d
         "today_watchlist": challenger_overlay.get("today_watchlist", champion_plan.get("today_watchlist")),
         "symbol_trade_rules": challenger_overlay.get("symbol_trade_rules", champion_plan.get("symbol_trade_rules")),
     }
-    return replace(champion_inputs, risk_overlay=challenger_overlay, daily_plan=challenger_plan)
+    changes: dict[str, Any] = {"risk_overlay": challenger_overlay, "daily_plan": challenger_plan}
+    if policy_profile is not None:
+        changes["policy_profile"] = policy_profile
+    return replace(champion_inputs, **changes)
 
 
 def run_shadow_experiment(
@@ -217,7 +241,9 @@ def run_shadow_experiment(
     Champion ledgers are never touched.
     """
     overlay = build_challenger_risk_overlay(agent_root, run_date, experiment, trading_mode=trading_mode, risk_tier=risk_tier)
-    challenger_inputs = build_challenger_inputs(champion_inputs, overlay)
+    challenger_inputs = build_challenger_inputs(
+        champion_inputs, overlay, policy_profile=_challenger_policy_profile(agent_root, experiment)
+    )
 
     strategy_id = str(experiment.get("challenger_strategy_id") or experiment.get("experiment_id") or "challenger")
 

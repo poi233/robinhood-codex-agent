@@ -21,12 +21,20 @@ class SizeDecision:
     blocked_reason: str | None = None
 
 
-def _score_multiplier(score: float) -> float:
-    if score >= 93:
+def _score_multiplier(score: float, profile: dict[str, Any] | None = None) -> float:
+    """Tiered size multiplier by candidate score. Tiers are profile-configurable; the defaults equal
+    the original champion thresholds (93/88/82 → 1.0/0.75/0.5, else 0.0), so a profile that does not
+    set them is unchanged. Alternative strategies that run a lower-scored universe set lower tiers so
+    a setup that clears the price gate can also be sized (otherwise sizing silently blocks at <82)."""
+    profile = profile or {}
+    full = float(profile.get("size_score_full", 93))
+    high = float(profile.get("size_score_high", 88))
+    base = float(profile.get("size_score_base", 82))
+    if score >= full:
         return 1.0
-    if score >= 88:
+    if score >= high:
         return 0.75
-    if score >= 82:
+    if score >= base:
         return 0.5
     return 0.0
 
@@ -98,7 +106,7 @@ def decide_size(inputs: PolicyInputs, candidate: RankedCandidate, price: BuyPric
 
     shares_by_risk = risk_budget / price.risk_per_share
     notional_by_risk = shares_by_risk * price.limit_price
-    score_multiplier = _score_multiplier(candidate.candidate_score)
+    score_multiplier = _score_multiplier(candidate.candidate_score, profile)
     market_multiplier = _market_multiplier(inputs)
     research_multiplier = _research_multiplier(candidate)
     profile_multiplier = score_multiplier * market_multiplier * research_multiplier
