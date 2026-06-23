@@ -249,6 +249,7 @@ def candidates_with_rankings(agent_root: Path, run_date: str) -> list[dict[str, 
             ranking = latest_rankings.get(str(row.get("symbol") or "")) or {}
             row["trade_readiness_score"] = ranking.get("trade_readiness_score")
             row["price_setup_score"] = ranking.get("price_setup_score")
+            row["advisory_rank_delta"] = ranking.get("advisory_rank_delta")
         return rows
 
     def _query(connection: sqlite3.Connection) -> list[dict[str, Any]]:
@@ -257,10 +258,10 @@ def candidates_with_rankings(agent_root: Path, run_date: str) -> list[dict[str, 
             SELECT c.symbol, c.candidate_score, c.score_status,
                    c.technical_score, c.catalyst_score, c.dsa_score, c.kronos_score, c.quote_score,
                    c.is_watchlist, c.is_tradable,
-                   r.trade_readiness_score, r.price_setup_score
+                   r.trade_readiness_score, r.price_setup_score, r.advisory_rank_delta
             FROM candidates c
             LEFT JOIN (
-                SELECT symbol, trade_readiness_score, price_setup_score, MAX(timestamp) AS ts
+                SELECT symbol, trade_readiness_score, price_setup_score, advisory_rank_delta, MAX(timestamp) AS ts
                 FROM intraday_rankings WHERE run_date = ? GROUP BY symbol
             ) r ON c.symbol = r.symbol
             WHERE c.run_date = ?

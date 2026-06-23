@@ -357,8 +357,13 @@ def candidates_with_rankings_view(rows: list[dict[str, Any]]) -> None:
     ui.pick_cards(top, limit=5)
     ui.pretty_table(
         top,
-        columns=["symbol", "candidate_score", "score_status", "is_watchlist", "is_tradable", "trade_readiness_score"],
+        columns=[
+            "symbol", "candidate_score", "score_status", "is_watchlist", "is_tradable",
+            "trade_readiness_score", "advisory_rank_delta",
+        ],
+        rename={"advisory_rank_delta": "叠加调整(±)"},
     )
+    st.caption("「叠加调整(±)」= 基本面/事件/因子/AI/市场状态等辅助层对该票的净排名增量（正=上调，负=下调；空=当日尚无盘中叠加）。")
     with st.expander("完整候选排名与图表"):
         _bar([(row["symbol"], float(row.get("candidate_score") or 0)) for row in rows],
              x_title="candidate_score", y_title="symbol", x_label="综合评分", y_label="标的")
