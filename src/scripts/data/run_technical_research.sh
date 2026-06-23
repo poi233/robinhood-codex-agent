@@ -56,4 +56,7 @@ PY
 if [[ "${ENABLE_TECHNICAL_NARRATIVE:-1}" == "1" ]]; then
   run_codex_prompt "technical_research" "$SRC_ROOT/prompts/technical/research.txt" || \
     log_line "technical_research narrative enrichment failed; deterministic engine signals retained"
+  # Fold the prompt's bounded llm_assessment into the decision (no-op if absent).
+  "$python_bin" -c "from trading_agent.signals.technical_engine import reconcile_technical_signals_file as r; r('$TECHNICAL_SIGNALS_PATH')" || \
+    log_line "technical_research llm reconciliation failed; deterministic engine signals retained"
 fi

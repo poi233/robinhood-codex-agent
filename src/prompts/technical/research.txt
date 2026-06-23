@@ -22,6 +22,26 @@ with the already-computed action and levels above:
   reasoning but keep the engine summary intact)
 - `technical_phase`
 
+In addition, add a structured `llm_assessment` object per symbol. This is the
+ONLY way your analysis feeds the decision, and Python applies it within hard
+bounds (it can swing priority by at most a few points and can downgrade on veto,
+but never edits price levels/stops). Be calibrated and conservative:
+```
+"llm_assessment": {
+  "bias": "bullish" | "neutral" | "bearish",        // your overall directional read
+  "conviction": 0.0-1.0,                              // how strongly you hold it
+  "chan_signal": "buy" | "sell" | "none",            // 缠论 structural signal
+  "brooks_quality": "strong" | "medium" | "weak" | "none",  // price-action setup quality
+  "fundamental_bias": "positive" | "neutral" | "negative",
+  "veto": true | false,                              // true ONLY to add caution (structure broken / event risk)
+  "notes": "one line why"
+}
+```
+Rules for `llm_assessment`:
+- Set `veto: true` only to REDUCE risk (it can force the symbol to `avoid`); it can never upgrade.
+- `conviction` must reflect genuine evidence; default low when structure is ambiguous.
+- Keep it consistent with `chan`/`brooks`/`fundamentals` narrative you wrote.
+
 Read these local files first:
 - `TECHNICAL_SIGNALS_PATH` — the engine output you are enriching (authoritative for all decision fields)
 - `TECHNICAL_FEATURES_PATH` — the precomputed SMA/EMA/RSI/MACD/ATR, swing levels, recent_bars, alignment, relative strength

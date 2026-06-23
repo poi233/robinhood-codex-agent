@@ -71,6 +71,9 @@ if [[ "${ENABLE_TECHNICAL_NARRATIVE:-1}" == "1" ]]; then
     PROGRESS_LOG_PATH="$manual_progress" MARKET_FEED_DIR="$manual_dir" \
     run_codex_prompt "technical_research" "$SRC_ROOT/prompts/technical/research.txt" || \
     log_line "symbol_research narrative enrichment failed; engine signals retained"
+  # Fold the prompt's bounded llm_assessment into the decision (no-op if absent).
+  "$resolved_python" -c "from trading_agent.signals.technical_engine import reconcile_technical_signals_file as r; r('$manual_output')" || \
+    log_line "symbol_research llm reconciliation failed; engine signals retained"
 fi
 
 if [[ ! -s "$manual_output" ]]; then

@@ -38,7 +38,7 @@ from trading_agent.core.config import load_env_files, load_runtime_config
 from trading_agent.data.universe import parse_active_watchlist
 from trading_agent.signals.dsa import run_dsa_scan
 from trading_agent.signals.technical_fallback import build_failed_technical_payload
-from trading_agent.signals.technical_engine import build_technical_signals
+from trading_agent.signals.technical_engine import apply_llm_assessment, build_technical_signals
 from trading_agent.strategy.manifest import build_run_manifest
 
 
@@ -356,10 +356,13 @@ def run_premarket_pipeline(*, dry_run: bool) -> int:
         )
         write_json(paths.technical_signals_path, signals)
 
-        # Optional, advisory narrative pass: enrich chan/Brooks/fundamentals/
-        # decision_rationale only. It must never change action/levels/setups, and
-        # a failure here never fails the stage — decisions already stand on the
-        # deterministic engine output above. Runs on the cheap (mini) model.
+        # Optional narrative + bounded-LLM pass: the prompt (cheap/mini model)
+        # writes chan/Brooks/fundamentals narrative AND a structured
+        # llm_assessment per symbol. apply_llm_assessment then folds that opinion
+        # into action/priority/confidence WITHIN HARD BOUNDS and never edits price
+        # levels/stops/no_trade_zone, so the price-gate risk controls always
+        # stand. A failure here never fails the stage — the deterministic engine
+        # output above already stands.
         if os.environ.get("ENABLE_TECHNICAL_NARRATIVE", "1") == "1":
             try:
                 status = run_codex_prompt(
@@ -374,13 +377,18 @@ def run_premarket_pipeline(*, dry_run: bool) -> int:
                         "technical narrative enrichment failed; deterministic engine signals retained",
                         details={"returncode": status},
                     )
+                if paths.technical_signals_path.exists():
+                    write_json(
+                        paths.technical_signals_path,
+                        apply_llm_assessment(read_json(paths.technical_signals_path)),
+                    )
             except Exception as exc:  # noqa: BLE001 - advisory pass must not break premarket
                 append_stage_log(
                     agent_root,
                     run_date,
                     "technical",
                     "partial",
-                    f"technical narrative enrichment errored; deterministic engine signals retained: {exc}",
+                    f"technical narrative/LLM reconciliation errored; deterministic engine signals retained: {exc}",
                 )
 
         # Snapshot the full-day technical file. Intraday reads the merge of this snapshot and
