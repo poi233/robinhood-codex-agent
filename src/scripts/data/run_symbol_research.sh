@@ -35,30 +35,43 @@ resolved_python="$(resolve_market_feed_python_bin)" || {
   --timeframes "$MARKET_FEED_TIMEFRAMES" \
   --news-limit "$MARKET_FEED_NEWS_LIMIT"
 
-"$resolved_python" - "$manual_dir" "$manual_features" "$symbol" "$run_date" <<'PY'
+# Build the precomputed features AND the deterministic engine signals. The engine
+# output is the decision-critical technical_signals.json; the narrative prompt below
+# only enriches chan/Brooks/fundamentals on top of it.
+mkdir -p "$manual_root"
+rm -f "$manual_output"
+"$resolved_python" - "$manual_dir" "$manual_features" "$manual_output" "$symbol" "$run_date" <<'PY'
 import json
 import sys
 from pathlib import Path
 
 from trading_agent.planner.technical_features import build_technical_features
+from trading_agent.signals.technical_engine import build_technical_signals
 
 market_feed_dir = Path(sys.argv[1])
 features_path = Path(sys.argv[2])
-symbol = sys.argv[3]
-run_date = sys.argv[4]
+signals_path = Path(sys.argv[3])
+symbol = sys.argv[4]
+run_date = sys.argv[5]
 features_path.parent.mkdir(parents=True, exist_ok=True)
 features = build_technical_features(market_feed_dir, [symbol], run_date)
 features_path.write_text(json.dumps(features, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+signals = build_technical_signals(
+    features, run_date=run_date, source_feed_manifest=str(market_feed_dir / "manifest.json")
+)
+signals_path.write_text(json.dumps(signals, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 PY
 
 # Write the single-symbol analysis into manual/<SYMBOL>/ (next to its market_feed input), NOT the
 # global signals/technical_signals.json. This stops an ad hoc one-symbol run from clobbering the
-# day's full-watchlist technical file, and makes the output easy to find.
-mkdir -p "$manual_root"
-rm -f "$manual_output"
-TECHNICAL_SIGNALS_PATH="$manual_output" TECHNICAL_FEATURES_PATH="$manual_features" \
-  PROGRESS_LOG_PATH="$manual_progress" MARKET_FEED_DIR="$manual_dir" \
-  run_codex_prompt "technical_research" "$SRC_ROOT/prompts/technical/research.txt"
+# day's full-watchlist technical file, and makes the output easy to find. The narrative pass is
+# advisory: if disabled, the deterministic engine output above already stands.
+if [[ "${ENABLE_TECHNICAL_NARRATIVE:-1}" == "1" ]]; then
+  TECHNICAL_SIGNALS_PATH="$manual_output" TECHNICAL_FEATURES_PATH="$manual_features" \
+    PROGRESS_LOG_PATH="$manual_progress" MARKET_FEED_DIR="$manual_dir" \
+    run_codex_prompt "technical_research" "$SRC_ROOT/prompts/technical/research.txt" || \
+    log_line "symbol_research narrative enrichment failed; engine signals retained"
+fi
 
 if [[ ! -s "$manual_output" ]]; then
   log_line "symbol_research failed: missing expected output $manual_output"

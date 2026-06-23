@@ -17,14 +17,19 @@ DEFAULT_CODEX_MODEL_MINI = "gpt-5.4-mini"
 
 # Run kinds that are simple, mechanical operations (read an MCP tool / format a
 # payload / fetch a snapshot) and do not need a reasoning-heavy model. Everything
-# not listed here (technical_research, final_premarket, dsa_premarket_scan,
-# screener_discover, intraday, postmarket, ...) routes to the full model.
+# not listed here (final_premarket, dsa_premarket_scan, screener_discover,
+# intraday, postmarket, ...) routes to the full model.
+#
+# technical_research is in this tier because the decision-critical technical
+# signals are now computed deterministically in Python (signals/technical_engine);
+# the prompt only adds advisory chan/Brooks/fundamentals narrative.
 SIMPLE_RUN_KINDS = frozenset(
     {
         "account_snapshot",
         "market_calendar",
         "quote_snapshot_core",
         "catalyst_enrichment",
+        "technical_research",
     }
 )
 

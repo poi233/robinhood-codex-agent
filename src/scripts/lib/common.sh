@@ -477,7 +477,7 @@ codex_model_for_run_kind() {
     return
   fi
   case "$run_kind" in
-    account_snapshot|market_calendar|quote_snapshot_core|catalyst_enrichment|email_notification*)
+    account_snapshot|market_calendar|quote_snapshot_core|catalyst_enrichment|technical_research|email_notification*)
       printf '%s' "$CODEX_MODEL_MINI"
       ;;
     *)

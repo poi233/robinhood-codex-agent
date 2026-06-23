@@ -38,6 +38,7 @@ from trading_agent.core.config import load_env_files, load_runtime_config
 from trading_agent.data.universe import parse_active_watchlist
 from trading_agent.signals.dsa import run_dsa_scan
 from trading_agent.signals.technical_fallback import build_failed_technical_payload
+from trading_agent.signals.technical_engine import build_technical_signals
 from trading_agent.strategy.manifest import build_run_manifest
 
 
@@ -341,22 +342,47 @@ def run_premarket_pipeline(*, dry_run: bool) -> int:
             write_json(paths.technical_signals_path, failed_payload)
             write_json(paths.technical_signals_full_path, failed_payload)
             return
-        if os.environ.get("ENABLE_TECHNICAL_FEATURES_PRECOMPUTE", "1") == "1":
-            recent_bars = int(os.environ.get("TECHNICAL_RECENT_BARS", "30") or "30")
-            write_json(
-                paths.technical_features_path,
-                build_technical_features(market_feed_dir, active_symbols, run_date, recent_bars=recent_bars),
-            )
-        status = run_codex_prompt("technical_research", agent_root, paths.prompts_dir / "technical" / "research.txt")
-        if status != 0:
-            failed_payload = build_failed_technical_payload(
-                manifest,
-                run_date=run_date,
-                reason="technical research prompt failed; archived conservative price levels for watch-only use",
-            )
-            write_json(paths.technical_signals_path, failed_payload)
-            write_json(paths.technical_signals_full_path, failed_payload)
-            raise RuntimeError("technical prompt failed")
+        # Hybrid technical layer: the decision-critical signals (action, levels,
+        # setups, no_trade_zone, confidence, priority_score) are computed
+        # deterministically in Python from technical_features. Features are
+        # mandatory here because the engine reads them.
+        recent_bars = int(os.environ.get("TECHNICAL_RECENT_BARS", "30") or "30")
+        features = build_technical_features(market_feed_dir, active_symbols, run_date, recent_bars=recent_bars)
+        write_json(paths.technical_features_path, features)
+        signals = build_technical_signals(
+            features,
+            run_date=run_date,
+            source_feed_manifest=str(manifest_path),
+        )
+        write_json(paths.technical_signals_path, signals)
+
+        # Optional, advisory narrative pass: enrich chan/Brooks/fundamentals/
+        # decision_rationale only. It must never change action/levels/setups, and
+        # a failure here never fails the stage — decisions already stand on the
+        # deterministic engine output above. Runs on the cheap (mini) model.
+        if os.environ.get("ENABLE_TECHNICAL_NARRATIVE", "1") == "1":
+            try:
+                status = run_codex_prompt(
+                    "technical_research", agent_root, paths.prompts_dir / "technical" / "research.txt"
+                )
+                if status != 0:
+                    append_stage_log(
+                        agent_root,
+                        run_date,
+                        "technical",
+                        "partial",
+                        "technical narrative enrichment failed; deterministic engine signals retained",
+                        details={"returncode": status},
+                    )
+            except Exception as exc:  # noqa: BLE001 - advisory pass must not break premarket
+                append_stage_log(
+                    agent_root,
+                    run_date,
+                    "technical",
+                    "partial",
+                    f"technical narrative enrichment errored; deterministic engine signals retained: {exc}",
+                )
+
         # Snapshot the full-day technical file. Intraday reads the merge of this snapshot and
         # the live file, so a later ad hoc single-symbol run that overwrites the live file can
         # never drop the rest of the watchlist (TODO_FIX: missing_technical_levels guard).

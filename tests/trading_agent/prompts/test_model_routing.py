@@ -19,6 +19,7 @@ def test_simple_run_kinds_use_mini_model(monkeypatch) -> None:
         "market_calendar",
         "quote_snapshot_core",
         "catalyst_enrichment",
+        "technical_research",
         "email_notification_trade_filled",
     ):
         assert resolve_codex_model(run_kind) == DEFAULT_CODEX_MODEL_MINI
@@ -27,7 +28,6 @@ def test_simple_run_kinds_use_mini_model(monkeypatch) -> None:
 def test_thinking_run_kinds_use_full_model(monkeypatch) -> None:
     _clear_model_env(monkeypatch)
     for run_kind in (
-        "technical_research",
         "final_premarket",
         "dsa_premarket_scan",
         "screener_discover",
