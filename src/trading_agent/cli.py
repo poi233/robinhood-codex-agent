@@ -229,6 +229,7 @@ def _run_doctor(agent_root: Path) -> int:
         f"  CODEX_BIN                 = {env.get('CODEX_BIN', 'codex')}",
         f"  CODEX_EXEC_TIMEOUT_SEC    = {env.get('CODEX_EXEC_TIMEOUT_SEC', '3600')}",
         f"  CODEX_EXEC_DRY_RUN        = {env.get('CODEX_EXEC_DRY_RUN', '0')}",
+        f"  ENABLE_DETERMINISTIC_INTRADAY = {env.get('ENABLE_DETERMINISTIC_INTRADAY', '0')}",
         "",
         "  --- Signal Layers ---",
         f"  ENABLE_DSA_SIGNAL_LAYER   = {env.get('ENABLE_DSA_SIGNAL_LAYER', '1')}",

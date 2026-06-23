@@ -210,6 +210,20 @@ class PolicyEngineTests(unittest.TestCase):
         self.assertIn("execution_not_wired", decision.blocked_reasons)
         self.assertEqual(decision.action_taken, "none")
 
+    def test_deterministic_execution_makes_live_match_paper(self) -> None:
+        # With deterministic_execution, review/live produce the SAME would_trade
+        # decision as paper (execution is handled downstream by the execute prompt).
+        paper = generate_order_intent(base_inputs())
+        for mode in ("review", "live"):
+            inputs = base_inputs(trading_mode=mode)
+            inputs.deterministic_execution = True
+            decision = generate_order_intent(inputs)
+            self.assertEqual(decision.decision, "would_trade")
+            self.assertIsNotNone(decision.intent)
+            self.assertEqual(decision.intent.symbol, paper.intent.symbol)
+            self.assertEqual(decision.intent.limit_price, paper.intent.limit_price)
+            self.assertNotIn("execution_not_wired", decision.blocked_reasons)
+
     def test_policy_decision_serializes_to_intraday_json_shape(self) -> None:
         decision = generate_order_intent(base_inputs())
 

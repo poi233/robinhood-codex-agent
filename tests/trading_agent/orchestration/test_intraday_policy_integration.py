@@ -462,6 +462,48 @@ class IntradayPolicyIntegrationTests(unittest.TestCase):
         load_policy_inputs.assert_not_called()
         run_codex_prompt.assert_called_once()
 
+    def test_deterministic_live_shares_decision_and_only_executes(self) -> None:
+        # Flag on: live must use the deterministic engine (load_policy_inputs +
+        # generate_order_intent) and place via snapshot+execute prompts — NOT the
+        # legacy analysis "intraday" prompt.
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            _prepare_repo_root(root)
+            intent = OrderIntent(
+                symbol="NVDA", side="buy", order_type="limit",
+                limit_price=100.0, estimated_notional=100.0, quantity=1.0,
+            )
+            would_trade = PolicyDecision(
+                trading_mode="live", checked_symbols=["NVDA"], decision="would_trade",
+                intent=intent, reason="policy buy intent generated",
+            )
+            original_cwd = os.getcwd()
+            os.chdir(root)
+            try:
+                with mock.patch.dict(os.environ, {"ENABLE_DETERMINISTIC_INTRADAY": "1"}, clear=False), \
+                    mock.patch.object(intraday_module, "_is_weekday_pt", return_value=True), \
+                    mock.patch.object(intraday_module, "_is_intraday_window_pt", return_value=True), \
+                    mock.patch.object(intraday_module, "pt_date_string", return_value="2026-06-14"), \
+                    mock.patch.object(intraday_module, "load_runtime_config") as load_runtime_config, \
+                    mock.patch.object(intraday_module, "load_policy_inputs") as load_policy_inputs, \
+                    mock.patch.object(intraday_module, "generate_order_intent", return_value=would_trade), \
+                    mock.patch.object(intraday_module, "_run_shadow_experiments_safely"), \
+                    mock.patch.object(intraday_module, "run_codex_prompt", return_value=0) as run_codex_prompt:
+                    load_runtime_config.return_value = mock.Mock(trading_mode="live", risk_tier=0, paper_risk_tier=0, effective_risk_tier=0)
+                    load_policy_inputs.return_value = policy_ready_inputs(trading_mode="live")
+
+                    status = intraday_module.run_intraday_pipeline(dry_run=False)
+                    decisions = read_decisions(root)
+            finally:
+                os.chdir(original_cwd)
+
+        self.assertEqual(status, 0)
+        load_policy_inputs.assert_called_once()
+        run_kinds = [call.args[0] for call in run_codex_prompt.call_args_list]
+        self.assertEqual(run_kinds, ["intraday_snapshot", "intraday_execute"])
+        self.assertNotIn("intraday", run_kinds)
+        self.assertEqual(decisions[-1]["action_taken"], "live_order_submitted")
+
     def test_live_dry_run_skips_intraday_codex_prompt(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)

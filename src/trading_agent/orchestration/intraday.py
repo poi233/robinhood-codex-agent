@@ -8,6 +8,7 @@ from pathlib import Path
 
 from trading_agent.core.config import load_env_files, load_runtime_config
 from trading_agent.core.context import build_runtime_paths, resolve_agent_root
+from trading_agent.core.io import write_json
 from trading_agent.core.time import PT
 from trading_agent.core.time import pt_date_string
 from trading_agent.data.live_quotes import fetch_yfinance_live_quotes
@@ -139,6 +140,12 @@ def run_intraday_pipeline(*, dry_run: bool) -> int:
                 run_date=run_date,
             )
             return 0
+        if os.environ.get("ENABLE_DETERMINISTIC_INTRADAY", "0") == "1":
+            # Unified path: review/live use the SAME deterministic decision as paper;
+            # only execution differs (a thin execute prompt places the exact order).
+            return _run_deterministic_nonpaper_intraday(
+                agent_root, run_date=run_date, runtime=runtime, effective_risk_tier=effective_risk_tier
+            )
         paths = build_runtime_paths(agent_root, run_date=run_date)
         status = run_codex_prompt("intraday", agent_root, paths.prompts_dir / "intraday" / "check.txt")
         if status != 0:
@@ -224,6 +231,69 @@ def run_intraday_pipeline(*, dry_run: bool) -> int:
             decision = replace(decision, action_taken="paper_pending")
         elif paper_result.reason:
             decision.blocked_reasons.append(paper_result.reason)
+    _append_intraday_rankings(agent_root, inputs, run_date=run_date)
+    _append_policy_decision(agent_root, decision, run_date=run_date)
+    _run_shadow_experiments_safely(agent_root, run_date, inputs, runtime.trading_mode, effective_risk_tier)
+    return 0
+
+
+def _run_deterministic_nonpaper_intraday(
+    agent_root: Path, *, run_date: str, runtime, effective_risk_tier: int
+) -> int:
+    """Review/live decision via the SAME deterministic engine as paper.
+
+    Three phases, so the decision is identical to paper and only execution differs:
+      1. snapshot prompt — read-only MCP fetch of fresh Agentic-account buying power,
+         positions and open equity orders (no trading tools).
+      2. decide — load_policy_inputs + generate_order_intent (deterministic_execution
+         is set via ENABLE_DETERMINISTIC_INTRADAY so the engine returns would_trade).
+      3. execute prompt — places EXACTLY the engine-decided order (LLM as executor
+         only; no independent analysis). review → review_equity_order, live →
+         place_equity_order, both still gated by .codex/config.toml + KILL_SWITCH.
+    """
+    paths = build_runtime_paths(agent_root, run_date=run_date)
+
+    snap_status = run_codex_prompt("intraday_snapshot", agent_root, paths.prompts_dir / "intraday" / "snapshot.txt")
+    if snap_status != 0:
+        _append_local_decision(agent_root, "blocked", f"intraday_snapshot_failed:{snap_status}", run_date=run_date)
+        return snap_status
+
+    inputs = load_policy_inputs(
+        agent_root,
+        run_date=run_date,
+        trading_mode=runtime.trading_mode,
+        risk_tier=effective_risk_tier,
+        robinhood_gateway=None,
+        quote_provider=fetch_yfinance_live_quotes,
+        require_live_quotes=True,
+    )
+    decision = generate_order_intent(inputs)
+
+    if decision.decision == "would_trade" and decision.intent is not None:
+        order_path = paths.run_state_dir / "intraday_execute_order.json"
+        order_payload = {**decision.intent.to_json_dict(), "run_date": run_date}
+        write_json(order_path, order_payload)
+        exec_status = run_codex_prompt(
+            "intraday_execute",
+            agent_root,
+            paths.prompts_dir / "intraday" / "execute.txt",
+            runtime_overrides={
+                "EXECUTE_ORDER_PATH": str(order_path),
+                "EXECUTE_MODE": runtime.trading_mode,
+            },
+        )
+        if exec_status == 0:
+            decision = replace(
+                decision,
+                action_taken="live_order_submitted" if runtime.trading_mode == "live" else "review_submitted",
+            )
+        else:
+            decision = replace(
+                decision,
+                action_taken="execute_failed",
+                blocked_reasons=[*decision.blocked_reasons, f"execute_prompt_failed:{exec_status}"],
+            )
+
     _append_intraday_rankings(agent_root, inputs, run_date=run_date)
     _append_policy_decision(agent_root, decision, run_date=run_date)
     _run_shadow_experiments_safely(agent_root, run_date, inputs, runtime.trading_mode, effective_risk_tier)

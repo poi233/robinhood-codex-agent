@@ -151,6 +151,10 @@ class PolicyInputs:
     advisory_overlay: Any | None = None
     # K3: symbol -> theme from universe_meta.json; used by buy policy to capture thesis tags.
     theme_map: dict[str, str] = field(default_factory=dict)
+    # When True, review/live use the SAME deterministic decision as paper and the
+    # order is placed by a thin execute prompt (LLM as executor only). Gated by
+    # ENABLE_DETERMINISTIC_INTRADAY; default False keeps the legacy LLM-decides path.
+    deterministic_execution: bool = False
 
 
 @dataclass(frozen=True)

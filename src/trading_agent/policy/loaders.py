@@ -361,6 +361,7 @@ def load_policy_inputs(
         research_reports=_load_research_reports(agent_root, run_date),
         kill_switch_present=(agent_root / "KILL_SWITCH").exists(),
         theme_map=load_theme_map(config_dir),
+        deterministic_execution=os.environ.get("ENABLE_DETERMINISTIC_INTRADAY", "0") == "1",
     )
     if robinhood_gateway is None:
         _hydrate_snapshots_if_present(inputs, paths)

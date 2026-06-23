@@ -30,6 +30,10 @@ SIMPLE_RUN_KINDS = frozenset(
         "quote_snapshot_core",
         "catalyst_enrichment",
         "technical_research",
+        # intraday deterministic path: snapshot is a read-only fetch and execute is a
+        # mechanical "place this exact order" — neither needs a reasoning model.
+        "intraday_snapshot",
+        "intraday_execute",
     }
 )
 
