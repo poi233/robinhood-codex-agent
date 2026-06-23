@@ -81,6 +81,7 @@ def build_run_manifest(agent_root: Path, run_date: str) -> dict[str, Any]:
         "git_commit": _git_commit(agent_root),
         "config_hash": config_hash,
         "codex_model": runtime.codex_model,
+        "codex_model_mini": runtime.codex_model_mini,
     }
     write_json(paths.run_state_dir / "run_manifest.json", manifest)
     return manifest

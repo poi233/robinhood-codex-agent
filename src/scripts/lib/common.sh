@@ -14,6 +14,7 @@ mkdir -p "$AGENT_ROOT/runtime/logs" "$AGENT_ROOT/runtime/state" "$AGENT_ROOT/run
 
 OVERRIDE_TRADING_MODE="${TRADING_MODE-}"
 OVERRIDE_CODEX_MODEL="${CODEX_MODEL-}"
+OVERRIDE_CODEX_MODEL_MINI="${CODEX_MODEL_MINI-}"
 OVERRIDE_CODEX_BIN="${CODEX_BIN-}"
 OVERRIDE_RISK_TIER="${RISK_TIER-}"
 OVERRIDE_MAX_SINGLE_ORDER_NOTIONAL="${MAX_SINGLE_ORDER_NOTIONAL-}"
@@ -81,6 +82,7 @@ fi
 
 [[ -n "$OVERRIDE_TRADING_MODE" ]] && TRADING_MODE="$OVERRIDE_TRADING_MODE"
 [[ -n "$OVERRIDE_CODEX_MODEL" ]] && CODEX_MODEL="$OVERRIDE_CODEX_MODEL"
+[[ -n "$OVERRIDE_CODEX_MODEL_MINI" ]] && CODEX_MODEL_MINI="$OVERRIDE_CODEX_MODEL_MINI"
 [[ -n "$OVERRIDE_CODEX_BIN" ]] && CODEX_BIN="$OVERRIDE_CODEX_BIN"
 [[ -n "$OVERRIDE_RISK_TIER" ]] && RISK_TIER="$OVERRIDE_RISK_TIER"
 [[ -n "$OVERRIDE_MAX_SINGLE_ORDER_NOTIONAL" ]] && MAX_SINGLE_ORDER_NOTIONAL="$OVERRIDE_MAX_SINGLE_ORDER_NOTIONAL"
@@ -133,7 +135,11 @@ fi
 [[ -n "$OVERRIDE_KRONOS_MIN_CONFIDENCE" ]] && KRONOS_MIN_CONFIDENCE="$OVERRIDE_KRONOS_MIN_CONFIDENCE"
 
 TRADING_MODE="${TRADING_MODE:-paper}"
-CODEX_MODEL="${CODEX_MODEL:-gpt-5.5}"
+# Two-tier Codex model routing: reasoning-heavy prompts use CODEX_MODEL, simple
+# data-fetch / formatting prompts use CODEX_MODEL_MINI. CODEX_MODEL_FORCE pins
+# every prompt to a single model (escape hatch).
+CODEX_MODEL="${CODEX_MODEL:-gpt-5.4}"
+CODEX_MODEL_MINI="${CODEX_MODEL_MINI:-gpt-5.4-mini}"
 CODEX_BIN="${CODEX_BIN:-codex}"
 RISK_TIER="${RISK_TIER:-0}"
 MAX_SINGLE_ORDER_NOTIONAL="${MAX_SINGLE_ORDER_NOTIONAL:-10}"
@@ -462,9 +468,29 @@ PAPER_POSTMARKET_SUMMARY_PATH=$PAPER_POSTMARKET_SUMMARY_PATH
 RUNTIME
 }
 
+codex_model_for_run_kind() {
+  # Pick the Codex model for a run kind. Keep this in sync with
+  # src/trading_agent/prompts/codex.py (SIMPLE_RUN_KINDS / resolve_codex_model).
+  local run_kind="$1"
+  if [[ -n "${CODEX_MODEL_FORCE:-}" ]]; then
+    printf '%s' "$CODEX_MODEL_FORCE"
+    return
+  fi
+  case "$run_kind" in
+    account_snapshot|market_calendar|quote_snapshot_core|catalyst_enrichment|email_notification*)
+      printf '%s' "$CODEX_MODEL_MINI"
+      ;;
+    *)
+      printf '%s' "$CODEX_MODEL"
+      ;;
+  esac
+}
+
 run_codex_prompt() {
   local run_kind="$1"
   local prompt_file="$2"
+  local model
+  model="$(codex_model_for_run_kind "$run_kind")"
 
   if [[ ! -f "$prompt_file" ]]; then
     log_line "$run_kind prompt file missing: $prompt_file"
@@ -472,7 +498,7 @@ run_codex_prompt() {
     return 1
   fi
 
-  log_line "$run_kind starting mode=$TRADING_MODE model=$CODEX_MODEL kill_switch=$(kill_switch_status)"
+  log_line "$run_kind starting mode=$TRADING_MODE model=$model kill_switch=$(kill_switch_status)"
   printf '{"timestamp":"%s","date":"%s","run_kind":"%s","status":"started","message":"prompt started"}\n' \
     "$(pt_now)" "$RUN_DATE_PT" "$run_kind" >> "$PROGRESS_LOG_DIR/${run_kind}.jsonl"
 
@@ -503,7 +529,7 @@ run_codex_prompt() {
     --cd "$AGENT_ROOT" \
     --skip-git-repo-check \
     --sandbox workspace-write \
-    -m "$CODEX_MODEL" \
+    -m "$model" \
     - < "$prompt_input" >> "$RUN_LOG" 2>> "$ERROR_LOG" &
   local codex_pid=$!
   (
