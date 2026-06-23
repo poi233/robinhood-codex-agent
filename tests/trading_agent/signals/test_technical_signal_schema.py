@@ -32,9 +32,3 @@ class TechnicalPromptWiringTests(unittest.TestCase):
         self.assertIn("TECHNICAL_SIGNALS_PATH", prompt)
         self.assertIn("technical_action", prompt)
 
-    def test_intraday_prompt_reads_key_levels(self) -> None:
-        prompt = (REPO_ROOT / "src" / "prompts" / "intraday" / "check.txt").read_text(encoding="utf-8")
-        self.assertIn("TECHNICAL_SIGNALS_PATH", prompt)
-        self.assertIn("long_setup", prompt)
-        self.assertIn("short_setup", prompt)
-        self.assertIn("no_trade_zone", prompt)

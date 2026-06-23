@@ -404,6 +404,28 @@ def test_regime_state_query(tmp_path):
     assert regime_state(tmp_path, "2026-06-17")["regime"] == "bull"
 
 
+def test_fundamental_event_query(tmp_path):
+    import json
+    from trading_agent.core.context import build_runtime_paths
+    from trading_agent.dashboard.queries import fundamental_event
+    assert fundamental_event(tmp_path, "2026-06-17") == []
+    paths = build_runtime_paths(tmp_path, run_date="2026-06-17")
+    fpath = paths.signals_dir / "fundamental_snapshot.json"
+    epath = paths.planner_dir / "event_snapshot.json"
+    fpath.parent.mkdir(parents=True, exist_ok=True)
+    epath.parent.mkdir(parents=True, exist_ok=True)
+    fpath.write_text(json.dumps({"symbols": {"NVDA": {"quality_flags": ["unprofitable"], "suggested_use": "quality_warning"}}}), encoding="utf-8")
+    epath.write_text(json.dumps({"symbols": {"NVDA": {"days_to_earnings": 2, "event_flags": ["earnings_imminent"]}}}), encoding="utf-8")
+    rows = fundamental_event(tmp_path, "2026-06-17")
+    assert rows == [{
+        "symbol": "NVDA",
+        "quality_flags": ["unprofitable"],
+        "suggested_use": "quality_warning",
+        "days_to_earnings": 2,
+        "event_flags": ["earnings_imminent"],
+    }]
+
+
 def test_advisory_overlay_summary_reads_intraday_rankings(tmp_path: Path) -> None:
     from trading_agent.dashboard.queries import advisory_overlay_summary
 

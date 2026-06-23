@@ -140,6 +140,9 @@ elif active_page == "选股":
         st.subheader("价量因子")
         charts.factor_view(queries.factor_alpha(AGENT_ROOT, selected_run_date))
 
+        st.subheader("基本面与事件（H7/H8）")
+        charts.fundamental_event_view(queries.fundamental_event(AGENT_ROOT, selected_run_date))
+
         st.subheader("决策叠加")
         charts.advisory_overlay_view(queries.advisory_overlay_summary(AGENT_ROOT, selected_run_date))
 

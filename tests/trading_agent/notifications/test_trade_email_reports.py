@@ -156,8 +156,8 @@ def test_build_intraday_trade_email_body_explains_buy_operation_in_chinese() -> 
     assert "候选排名通过、价格位于计划入场区间、仓位和风控额度通过" in body
     assert "【风险与价格】" in body
     assert "止损 $98.00" in body
-    assert "【Advisory Overlay】" in body
+    assert "【辅助信号叠加（advisory overlay）】" in body
     assert "排序调整：+5.00" in body
     assert "仓位乘数：0.50" in body
-    assert "factor_alpha：88.0" in body
-    assert "kronos：long（confidence 0.8）" in body
+    assert "量价因子：88.0" in body
+    assert "AI·Kronos预测：看多（置信度 0.80）" in body

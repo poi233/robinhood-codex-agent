@@ -502,6 +502,30 @@ def active_selection(agent_root: Path, run_date: str) -> dict[str, Any]:
     return _read_json_or_empty(paths.planner_dir / "active_selection.json")
 
 
+def fundamental_event(agent_root: Path, run_date: str) -> list[dict[str, Any]]:
+    """Read-only H7/H8: per-symbol fundamental quality flags + earnings/analyst event flags.
+    Both layers now feed the intraday advisory overlay, so surfacing them here explains the
+    rank tightening a buy candidate may have received."""
+    paths = build_runtime_paths(agent_root, run_date=run_date)
+    fundamental = _read_json_or_empty(paths.signals_dir / "fundamental_snapshot.json")
+    event = _read_json_or_empty(paths.planner_dir / "event_snapshot.json")
+    fund_symbols = fundamental.get("symbols") if isinstance(fundamental, dict) else {}
+    event_symbols = event.get("symbols") if isinstance(event, dict) else {}
+    symbols = sorted({*(fund_symbols or {}).keys(), *(event_symbols or {}).keys()})
+    rows: list[dict[str, Any]] = []
+    for symbol in symbols:
+        fund = (fund_symbols or {}).get(symbol) or {}
+        ev = (event_symbols or {}).get(symbol) or {}
+        rows.append({
+            "symbol": symbol,
+            "quality_flags": list(fund.get("quality_flags") or []) if isinstance(fund, dict) else [],
+            "suggested_use": fund.get("suggested_use") if isinstance(fund, dict) else None,
+            "days_to_earnings": ev.get("days_to_earnings") if isinstance(ev, dict) else None,
+            "event_flags": list(ev.get("event_flags") or []) if isinstance(ev, dict) else [],
+        })
+    return rows
+
+
 def screen_eval_report(agent_root: Path) -> dict[str, Any]:
     """Read-only O4: the selection-layer effectiveness report (empty until `analytics screen-eval`)."""
     from trading_agent.replay.screen_eval import default_screen_eval_report_path

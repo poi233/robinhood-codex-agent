@@ -36,6 +36,7 @@ echo "Safety checks:"
 PROJECT_CODEX_CONFIG="$AGENT_ROOT/.codex/config.toml"
 PREMARKET_SCRIPT="$SRC_ROOT/scripts/entrypoints/run_premarket.sh"
 PREMARKET_PIPELINE="$AGENT_ROOT/src/trading_agent/orchestration/premarket.py"
+POLICY_LOADERS="$AGENT_ROOT/src/trading_agent/policy/loaders.py"
 READ_APPROVED_TOOLS=(
   get_accounts
   get_portfolio
@@ -140,10 +141,10 @@ fi
 if [[ -f "$SRC_ROOT/config/dsa_strategy_weights.json" ]] \
   && [[ -f "$SRC_ROOT/prompts/signals/dsa_scan.txt" ]] \
   && file_has_pattern 'DSA_SIGNALS_PATH' "$SRC_ROOT/prompts/premarket/final_research.txt" \
-  && file_has_pattern 'DSA_SIGNALS_PATH' "$SRC_ROOT/prompts/intraday/check.txt"; then
-  echo "  - DSA signal layer is configured and wired into premarket/intraday: ok"
+  && file_has_pattern 'dsa_signals' "$POLICY_LOADERS"; then
+  echo "  - DSA signal layer is configured and wired into premarket/policy: ok"
 else
-  echo "  - WARNING: DSA signal layer is incomplete or not wired into prompts."
+  echo "  - WARNING: DSA signal layer is incomplete or not wired in."
 fi
 
 if [[ -f "$SRC_ROOT/scripts/kronos/kronos_generate_signals.py" ]] \
@@ -165,8 +166,8 @@ if [[ -f "$SRC_ROOT/prompts/technical/research.txt" ]] \
   && file_has_pattern 'collect_market_context' "$PREMARKET_PIPELINE" \
   && file_has_pattern 'technical.*research\.txt' "$PREMARKET_PIPELINE" \
   && file_has_pattern 'TECHNICAL_SIGNALS_PATH' "$SRC_ROOT/prompts/premarket/final_research.txt" \
-  && file_has_pattern 'TECHNICAL_SIGNALS_PATH' "$SRC_ROOT/prompts/intraday/check.txt"; then
-  echo "  - Technical signal layer is configured and wired into premarket/intraday: ok"
+  && file_has_pattern 'technical_signals' "$POLICY_LOADERS"; then
+  echo "  - Technical signal layer is configured and wired into premarket/policy: ok"
 else
   echo "  - WARNING: technical signal layer is incomplete or not wired into prompts."
 fi
@@ -181,10 +182,11 @@ else
   echo "  - WARNING: portable Kronos setup files missing."
 fi
 
-if file_has_pattern 'Runtime mode behavior' "$SRC_ROOT/prompts/intraday/check.txt"; then
-  echo "  - Intraday prompt has runtime mode gate: ok"
+if file_has_pattern 'EXECUTE_MODE' "$SRC_ROOT/prompts/intraday/execute.txt" \
+  && file_has_pattern 'KILL_SWITCH' "$SRC_ROOT/prompts/intraday/execute.txt"; then
+  echo "  - Intraday execute prompt has mode + kill-switch gates: ok"
 else
-  echo "  - WARNING: intraday prompt missing runtime mode gate."
+  echo "  - WARNING: intraday execute prompt missing mode/kill-switch gate."
 fi
 
 if file_has_pattern 'dollar-based market orders' "$SRC_ROOT/config/risk.md" \

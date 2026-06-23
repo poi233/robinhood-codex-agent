@@ -1052,6 +1052,46 @@ def active_selection_view(payload: dict[str, Any]) -> None:
         st.write("**pin 锚（永含）**：" + ", ".join(pins))
 
 
+_QUALITY_FLAG_ZH = {
+    "unprofitable": "不盈利",
+    "negative_roe": "ROE为负",
+    "revenue_declining": "营收下滑",
+    "high_leverage": "高杠杆",
+    "weak_liquidity": "流动性弱",
+}
+_EVENT_FLAG_ZH = {
+    "earnings_imminent": "临近财报",
+    "analyst_bullish": "分析师看多",
+    "analyst_bearish": "分析师看空",
+    "estimate_revised_up": "预期上修",
+    "estimate_revised_down": "预期下修",
+}
+
+
+def fundamental_event_view(rows: list[dict[str, Any]]) -> None:
+    """H7/H8: per-symbol fundamental quality + earnings/analyst event flags.
+    Both now tighten the intraday advisory rank, so this explains why a candidate may be demoted."""
+    if not rows:
+        st.info(
+            "暂无基本面/事件数据。premarket 的 H7 基本面层与 H8 事件层会写 "
+            "`signals/fundamental_snapshot.json` 与 `planner/event_snapshot.json`（数据源 yfinance，best-effort）。"
+        )
+        return
+    table = []
+    for row in rows:
+        qflags = [_QUALITY_FLAG_ZH.get(f, f) for f in (row.get("quality_flags") or [])]
+        eflags = [_EVENT_FLAG_ZH.get(f, f) for f in (row.get("event_flags") or [])]
+        dte = row.get("days_to_earnings")
+        table.append({
+            "代码": row.get("symbol"),
+            "基本面": "、".join(qflags) if qflags else "合格",
+            "距财报(天)": dte if dte is not None else "—",
+            "事件": "、".join(eflags) if eflags else "无",
+        })
+    st.caption("基本面与事件均为风险/谨慎过滤：弱基本面或临近财报会下调候选排名，绝不单独构成买入信号。")
+    ui.pretty_table(table, columns=["代码", "基本面", "距财报(天)", "事件"])
+
+
 # ── O4: selection-layer effectiveness ──────────────────────────────────────────────────
 def screen_eval_view(report: dict[str, Any]) -> None:
     """O4: did the screener's picks actually work — added/demoted forward returns + screen_score IC."""
