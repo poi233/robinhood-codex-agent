@@ -80,6 +80,15 @@ def test_output_is_consumable_by_trader_watch_levels() -> None:
         assert isinstance(levels[key], (int, float))
 
 
+def test_short_setup_status_arms_sell_risk_exit() -> None:
+    # policy/sell.evaluate_sell only arms risk_exit when short_setup.status is in
+    # {"active", "watch"}; a mismatch silently disables the risk-reduction exit.
+    out = build_technical_signals(_features({"NVDA": _bullish_daily()}), run_date="2026-06-23")
+    sym = out["symbols"]["NVDA"]
+    assert sym["short_setup"]["status"] in {"active", "watch"}
+    assert sym["short_setup"]["trigger_below"] > 0
+
+
 def test_deterministic_repeatable() -> None:
     feats = _features({"NVDA": _bullish_daily()})
     a = build_technical_signals(feats, run_date="2026-06-23")["symbols"]["NVDA"]

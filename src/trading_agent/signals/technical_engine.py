@@ -237,7 +237,10 @@ def _build_setups(
     }
 
     short_setup = {
-        "status": "valid",
+        # "watch" (not "valid"): policy/sell.evaluate_sell only arms the risk_exit
+        # path when short_setup.status is in {"active", "watch"}. The risk-reduction
+        # setup is always standing, so it is a "watch".
+        "status": "watch",
         "setup_type": "risk_reduction",
         "trigger_below": round(support_1, 4),
         "entry_zone": {"low": round(support_1, 4), "high": round(support_1, 4)},
