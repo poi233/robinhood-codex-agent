@@ -497,7 +497,7 @@ def screener_change(agent_root: Path, screener_date: str | None = None) -> dict[
 
 
 def active_selection(agent_root: Path, run_date: str) -> dict[str, Any]:
-    """Read-only O2: the day's dynamic active selection (empty unless ENABLE_DYNAMIC_ACTIVE was on)."""
+    """Read-only O2: the day's dynamic active selection (pins ∪ top-N by screen_score)."""
     paths = build_runtime_paths(agent_root, run_date=run_date)
     return _read_json_or_empty(paths.planner_dir / "active_selection.json")
 

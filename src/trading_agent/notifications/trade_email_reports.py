@@ -374,7 +374,7 @@ def build_postmarket_email_body(summary: Mapping[str, object]) -> str:
     lines = [
         "【盘后复盘通知】",
         _bullet("日期", summary.get("date", "")),
-        _bullet("交易模式", summary.get("trading_mode", "paper")),
+        _bullet("交易模式", {"paper": "模拟盘", "review": "审阅", "live": "实盘"}.get(str(summary.get("trading_mode") or "paper"), str(summary.get("trading_mode") or "paper"))),
         _bullet("期初总权益", _money(summary.get("starting_total_equity"))),
         _bullet("期末总权益", _money(summary.get("ending_total_equity"))),
         _bullet("总权益变化", _money(summary.get("total_equity_change"))),

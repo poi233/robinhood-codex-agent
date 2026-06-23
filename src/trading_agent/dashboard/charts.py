@@ -400,7 +400,7 @@ def factor_view(payload: dict) -> None:
 
 def advisory_overlay_view(rows: list[dict[str, Any]]) -> None:
     if not rows:
-        st.info("该运行日暂无叠加审计行。需 intraday 在 ENABLE_INTRADAY_ADVISORY_OVERLAY=1 下写 rankings 后填充。")
+        st.info("该运行日暂无叠加审计行。intraday 运行后会写入 rankings 并在此填充。")
         return
     st.caption("只读审计：基础分 + 排名增量 = 最终分；仓位/拦截字段只能收紧风险。")
     ui.pretty_table(rows)
@@ -998,7 +998,7 @@ def screener_change_view(payload: dict[str, Any]) -> None:
     if not payload or not payload.get("change"):
         st.info(
             "暂无每周选股记录。运行 `python3 -m trading_agent screen`（或周日 cron）后会生成 "
-            "`runtime/screener/<date>/universe_change.json`。默认 `ENABLE_WEEKLY_SCREENER=0` 时仍会产报告。"
+            "`runtime/screener/<date>/universe_change.json`（`screen --dry-run` 仅出报告、不改 universe）。"
         )
         return
     change = payload["change"]
@@ -1032,8 +1032,8 @@ def active_selection_view(payload: dict[str, Any]) -> None:
     """O2: today's dynamic active set — pins ∪ top-N universe by screen_score."""
     if not payload or not payload.get("active"):
         st.info(
-            "暂无动态 active 选择。设 `ENABLE_DYNAMIC_ACTIVE=1` 后，premarket 会写 "
-            "`planner/active_selection.json`（默认关时仍用静态 active_watchlist.txt）。"
+            "暂无动态 active 选择。premarket 运行后会写 "
+            "`planner/active_selection.json`（pin 锚 ∪ 按 screen_score 选出的 top-N）。"
         )
         return
     active = payload.get("active") or []
@@ -1097,7 +1097,7 @@ def screen_eval_view(report: dict[str, Any]) -> None:
     """O4: did the screener's picks actually work — added/demoted forward returns + screen_score IC."""
     if not report or report.get("status") != "ok":
         st.info(
-            "暂无选股有效性数据。开 `ENABLE_WEEKLY_SCREENER=1` 跑几周、有未来价格 bar 后，运行 "
+            "暂无选股有效性数据。每周选股跑几周、有未来价格 bar 后，运行 "
             "`analytics screen-eval`（或夜间批）会算：新增票超额收益、被降级票表现、screen_score Rank IC。"
         )
         return

@@ -197,7 +197,7 @@ def format_screen_eval_markdown(report: dict[str, Any]) -> str:
         return (
             "# 选股有效性报告（O4）\n\n"
             f"_暂无足够数据：{report.get('reason', report.get('status'))}_。"
-            "开 `ENABLE_WEEKLY_SCREENER=1` 跑几周、且有未来价格 bar 后即可计算。\n"
+            "每周选股跑几周、且有未来价格 bar 后即可计算。\n"
         )
     lines = [
         "# 选股有效性报告（O4）",
