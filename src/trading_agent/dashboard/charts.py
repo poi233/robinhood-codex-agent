@@ -1073,6 +1073,51 @@ _EVENT_FLAG_ZH = {
 }
 
 
+_TECH_ACTION_ZH = {
+    "strong_promote": "强力看多", "promote": "看多", "buy_bias": "偏多",
+    "observe": "观察", "hold": "持有", "neutral": "中性",
+    "reduce": "减仓", "sell_bias": "偏空", "avoid": "回避", "block": "阻断",
+}
+_TECH_FLAG_ZH = {
+    "breakout": "突破", "pullback": "回踩", "gap_up": "跳空高开",
+    "gap_down": "跳空低开", "inside_bar": "内包线",
+}
+
+
+def technical_engine_view(rows: list[dict[str, Any]]) -> None:
+    """Per-symbol technical-engine decomposition: how the multi-timeframe direction
+    builds the 0–100 priority score, so the technical score is explainable at a glance."""
+    if not rows:
+        st.info("该运行日暂无技术引擎明细（premarket 在 market_feed OHLCV 就绪后产出 technical_signals）。")
+        return
+    st.caption(
+        "技术分 = 多周期方向加权（周0.30/日0.40/时0.20/15分0.10）+ 相对强弱 + 形态 → 映射成 0–100 优先分。"
+        "各周期列为方向分（正=偏多、负=偏空、空=该周期无数据）。"
+    )
+    table = []
+    for row in rows:
+        flags = [_TECH_FLAG_ZH.get(f, f) for f in (row.get("flags") or [])]
+        table.append({
+            "代码": row.get("symbol"),
+            "动作": _TECH_ACTION_ZH.get(str(row.get("technical_action") or ""), row.get("technical_action") or "—"),
+            "优先分": row.get("priority_score"),
+            "置信度": row.get("confidence"),
+            "综合方向": row.get("direction"),
+            "周线": row.get("weekly"),
+            "日线": row.get("daily"),
+            "小时": row.get("hourly"),
+            "15分": row.get("intraday_15m"),
+            "相对强弱": row.get("rel_strength_dir"),
+            "周期一致度": row.get("timeframe_agreement"),
+            "形态": "、".join(flags) if flags else "—",
+        })
+    ui.pretty_table(
+        table,
+        columns=["代码", "动作", "优先分", "置信度", "综合方向", "周线", "日线", "小时", "15分",
+                 "相对强弱", "周期一致度", "形态"],
+    )
+
+
 def fundamental_event_view(rows: list[dict[str, Any]]) -> None:
     """H7/H8: per-symbol fundamental quality + earnings/analyst event flags.
     Both now tighten the intraday advisory rank, so this explains why a candidate may be demoted."""

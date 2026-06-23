@@ -404,6 +404,28 @@ def test_regime_state_query(tmp_path):
     assert regime_state(tmp_path, "2026-06-17")["regime"] == "bull"
 
 
+def test_technical_engine_detail_query(tmp_path):
+    import json
+    from trading_agent.core.context import build_runtime_paths
+    from trading_agent.dashboard.queries import technical_engine_detail
+    assert technical_engine_detail(tmp_path, "2026-06-17") == []
+    p = build_runtime_paths(tmp_path, run_date="2026-06-17").technical_signals_path
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text(json.dumps({"symbols": {"NVDA": {
+        "technical_action": "promote", "priority_score": 80.0, "confidence": 0.7,
+        "engine": {"direction": 0.6, "breakdown": {
+            "per_timeframe": {"weekly": 0.5, "daily": 0.7, "hourly": 0.4, "intraday_15m": 0.3},
+            "rel_strength_dir": 1.0, "timeframe_agreement": 1.0, "flags": ["breakout"],
+        }},
+    }}}), encoding="utf-8")
+    rows = technical_engine_detail(tmp_path, "2026-06-17")
+    assert len(rows) == 1
+    assert rows[0]["symbol"] == "NVDA"
+    assert rows[0]["weekly"] == 0.5 and rows[0]["daily"] == 0.7
+    assert rows[0]["technical_action"] == "promote"
+    assert rows[0]["flags"] == ["breakout"]
+
+
 def test_fundamental_event_query(tmp_path):
     import json
     from trading_agent.core.context import build_runtime_paths

@@ -137,6 +137,9 @@ elif active_page == "选股":
     charts.replay_summary_view(queries.replay_summary(AGENT_ROOT))
 
     with ui.detail_expander("因子、叠加与决策明细", show_detail=show_detail):
+        st.subheader("技术引擎分解")
+        charts.technical_engine_view(queries.technical_engine_detail(AGENT_ROOT, selected_run_date))
+
         st.subheader("价量因子")
         charts.factor_view(queries.factor_alpha(AGENT_ROOT, selected_run_date))
 

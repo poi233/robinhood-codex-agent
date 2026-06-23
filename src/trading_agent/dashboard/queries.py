@@ -503,6 +503,42 @@ def active_selection(agent_root: Path, run_date: str) -> dict[str, Any]:
     return _read_json_or_empty(paths.planner_dir / "active_selection.json")
 
 
+def technical_engine_detail(agent_root: Path, run_date: str) -> list[dict[str, Any]]:
+    """Read-only: per-symbol technical-engine breakdown so the technical score is explainable.
+
+    Surfaces each symbol's deterministic direction decomposition — per-timeframe direction
+    (weekly/daily/hourly/15m), relative strength, timeframe agreement, flags — alongside the
+    final action / priority_score / confidence the engine produced (and any bounded LLM swing)."""
+    paths = build_runtime_paths(agent_root, run_date=run_date)
+    payload = _read_json_or_empty(paths.technical_signals_path)
+    if not (payload.get("symbols") if isinstance(payload, dict) else None):
+        payload = _read_json_or_empty(paths.technical_signals_full_path)
+    symbols = payload.get("symbols") if isinstance(payload, dict) else {}
+    rows: list[dict[str, Any]] = []
+    for symbol, sym_payload in (symbols or {}).items():
+        if not isinstance(sym_payload, dict):
+            continue
+        engine = sym_payload.get("engine") or {}
+        breakdown = engine.get("breakdown") or {}
+        per_tf = breakdown.get("per_timeframe") or {}
+        rows.append({
+            "symbol": symbol,
+            "technical_action": sym_payload.get("technical_action"),
+            "priority_score": sym_payload.get("priority_score"),
+            "confidence": sym_payload.get("confidence"),
+            "direction": engine.get("direction"),
+            "weekly": per_tf.get("weekly"),
+            "daily": per_tf.get("daily"),
+            "hourly": per_tf.get("hourly"),
+            "intraday_15m": per_tf.get("intraday_15m"),
+            "rel_strength_dir": breakdown.get("rel_strength_dir"),
+            "timeframe_agreement": breakdown.get("timeframe_agreement"),
+            "flags": list(breakdown.get("flags") or []),
+        })
+    rows.sort(key=lambda r: (r["priority_score"] is not None, r["priority_score"] or 0), reverse=True)
+    return rows
+
+
 def fundamental_event(agent_root: Path, run_date: str) -> list[dict[str, Any]]:
     """Read-only H7/H8: per-symbol fundamental quality flags + earnings/analyst event flags.
     Both layers now feed the intraday advisory overlay, so surfacing them here explains the
