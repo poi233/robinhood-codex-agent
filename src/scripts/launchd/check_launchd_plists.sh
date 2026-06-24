@@ -43,6 +43,8 @@ for template in "${templates[@]}"; do
   # job = the token between "robinhood-codex-agent." and ".plist.example"
   job="${name#robinhood-codex-agent.}"
   job="${job%.plist.example}"
+  subcommand="$job"
+  [[ "$job" == "weekly-screen" ]] && subcommand="screen"
   body="$(cat "$template")"
   echo "[$job]"
 
@@ -51,12 +53,12 @@ for template in "${templates[@]}"; do
   check "$job: should call python -m trading_agent" \
     bash -c "grep -q '<string>-m</string>' '$template' && grep -q '<string>trading_agent</string>' '$template'"
   check "$job: should pass subcommand $job" \
-    grep -q "<string>$job</string>" "$template"
+    grep -q "<string>$subcommand</string>" "$template"
   check "$job: PATH should include repo .venv/bin first" \
     grep -q "<string>__REPO_ROOT__/.venv/bin:" "$template"
 
   # Verify the CLI parser knows this subcommand without running the job.
-  if PYTHONPATH="$REPO_ROOT/src" "$REPO_ROOT/.venv/bin/python" -m trading_agent "$job" --help >/dev/null 2>&1; then
+  if PYTHONPATH="$REPO_ROOT/src" "$REPO_ROOT/.venv/bin/python" -m trading_agent "$subcommand" --help >/dev/null 2>&1; then
     pass=$((pass + 1))
   else
     echo "  FAIL  $job: python -m trading_agent $job --help failed"

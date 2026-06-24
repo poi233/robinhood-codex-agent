@@ -251,6 +251,8 @@
   记录为 `completed`；仅有 Codex 子进程退出码 0 不再视为发送成功。
 - Gmail MCP 初始化/握手类瞬时错误会自动重试一次。重试判断只读取本次调用新增的 stderr，
   避免历史错误日志触发重复发送。
+- weekly screener 已有独立 launchd job：每周日 14:00 本地时间运行
+  `python -m trading_agent screen`，由统一安装脚本和 `doctor` 管理。
 
 ### 13. 策略可追溯（`strategy/`）
 

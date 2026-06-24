@@ -450,7 +450,7 @@ location, reads `src/config/strategy_registry.yaml` for the intraday cadence, an
 `launchctl`:
 
 ```bash
-src/scripts/launchd/install_launchd_jobs.sh            # render + (re)load all jobs
+src/scripts/launchd/install_launchd_jobs.sh            # render + (re)load all five jobs
 src/scripts/launchd/install_launchd_jobs.sh uninstall  # unload + remove them
 ```
 
@@ -459,6 +459,10 @@ set to the rendered repo path. This avoids the macOS launchd/TCC failure where `
 .../run_*.sh` exits `126` with `Operation not permitted`. `codex` is still resolved at runtime from
 `CODEX_BIN`, `PATH`, or common locations including `~/.local/bin`; if needed, set a stable
 `CODEX_BIN` in `src/config/runtime.env.local`.
+
+The installed jobs include `weekly-screen`, scheduled for Sunday at `14:00` local time. It invokes
+`python -m trading_agent screen` directly and writes launchd output to
+`runtime/logs/launchd.weekly-screen.{out,err}`.
 
 Validate launchd templates before loading:
 

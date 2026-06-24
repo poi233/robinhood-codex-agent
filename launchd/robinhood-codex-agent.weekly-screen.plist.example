@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <!-- Weekly O1 selection-layer screener. It may update the universe, but never trades. -->
+  <key>Label</key>
+  <string>com.example.robinhood-codex-agent.weekly-screen</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>__REPO_ROOT__/.venv/bin/python</string>
+    <string>-m</string>
+    <string>trading_agent</string>
+    <string>screen</string>
+  </array>
+  <key>WorkingDirectory</key>
+  <string>__REPO_ROOT__</string>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>AGENT_ROOT</key>
+    <string>__REPO_ROOT__</string>
+    <key>PATH</key>
+    <string>__REPO_ROOT__/.venv/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+  </dict>
+  <!-- Sunday at 14:00 local time, after Friday close and before Monday premarket. -->
+  <key>StartCalendarInterval</key>
+  <dict>
+    <key>Weekday</key>
+    <integer>0</integer>
+    <key>Hour</key>
+    <integer>14</integer>
+    <key>Minute</key>
+    <integer>0</integer>
+  </dict>
+  <key>StandardOutPath</key>
+  <string>__REPO_ROOT__/runtime/logs/launchd.weekly-screen.out</string>
+  <key>StandardErrorPath</key>
+  <string>__REPO_ROOT__/runtime/logs/launchd.weekly-screen.err</string>
+</dict>
+</plist>

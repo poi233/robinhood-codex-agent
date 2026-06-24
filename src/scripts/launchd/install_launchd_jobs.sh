@@ -15,8 +15,8 @@
 #
 # Env overrides:
 #   LAUNCH_AGENTS_DIR   target dir for plists       (default: ~/Library/LaunchAgents)
-#   LAUNCHD_JOBS        space-separated job names   (default: all four)
-#                       valid: premarket intraday postmarket nightly-analysis
+#   LAUNCHD_JOBS        space-separated job names   (default: all five)
+#                       valid: premarket intraday postmarket nightly-analysis weekly-screen
 
 set -euo pipefail
 
@@ -24,7 +24,7 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 TEMPLATE_DIR="$REPO_ROOT/launchd"
 LAUNCH_AGENTS_DIR="${LAUNCH_AGENTS_DIR:-$HOME/Library/LaunchAgents}"
 
-DEFAULT_JOBS="premarket intraday postmarket nightly-analysis"
+DEFAULT_JOBS="premarket intraday postmarket nightly-analysis weekly-screen"
 read -r -a JOBS <<< "${LAUNCHD_JOBS:-$DEFAULT_JOBS}"
 
 ACTION="${1:-install}"
