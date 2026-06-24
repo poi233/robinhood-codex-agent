@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 from datetime import datetime
 from pathlib import Path
@@ -14,6 +15,61 @@ from trading_agent.paper.broker import record_paper_day_end
 from trading_agent.prompts.codex import run_codex_prompt
 from trading_agent.reporting.postmarket import build_paper_postmarket_summary, build_paper_postmarket_zh_report
 from trading_agent.strategy.manifest import build_run_manifest
+
+
+def _shadow_experiment_summary(run_state_dir: Path) -> list[dict[str, object]]:
+    experiments_dir = run_state_dir / "experiments"
+    summaries: list[dict[str, object]] = []
+    if not experiments_dir.is_dir():
+        return summaries
+    for experiment_dir in sorted(path for path in experiments_dir.iterdir() if path.is_dir()):
+        paper_dir = experiment_dir / "paper"
+        orders: list[dict[str, object]] = []
+        orders_path = paper_dir / "orders.jsonl"
+        if orders_path.exists():
+            for line in orders_path.read_text(encoding="utf-8").splitlines():
+                try:
+                    item = json.loads(line)
+                except ValueError:
+                    continue
+                if isinstance(item, dict):
+                    orders.append(item)
+        positions: dict[str, object] = {}
+        positions_path = paper_dir / "positions.json"
+        if positions_path.exists():
+            try:
+                loaded = json.loads(positions_path.read_text(encoding="utf-8"))
+                if isinstance(loaded, dict):
+                    positions = loaded
+            except ValueError:
+                pass
+        filled_ids = {
+            str(item.get("order_id"))
+            for item in orders
+            if item.get("status") == "filled" and item.get("order_id")
+        }
+        pending_ids = {
+            str(item.get("order_id"))
+            for item in orders
+            if item.get("status") == "pending" and item.get("order_id") not in filled_ids
+        }
+        position_summaries = []
+        for symbol, raw in sorted(positions.items()):
+            if not isinstance(raw, dict):
+                continue
+            quantity = f"{float(raw.get('quantity') or 0):.8f}".rstrip("0").rstrip(".")
+            average_cost = float(raw.get("average_cost") or 0)
+            position_summaries.append(f"{symbol} {quantity} 股，成本 ${average_cost:,.2f}")
+        if filled_ids or pending_ids or position_summaries:
+            summaries.append(
+                {
+                    "name": experiment_dir.name,
+                    "filled_order_count": len(filled_ids),
+                    "pending_order_count": len(pending_ids),
+                    "position_summaries": position_summaries,
+                }
+            )
+    return summaries
 
 
 def _is_weekday_pt() -> bool:
@@ -39,6 +95,7 @@ def run_postmarket_pipeline(*, dry_run: bool) -> int:
             orders_log_path=paths.paper_orders_log_path,
             daily_usage_path=paths.daily_usage_path,
         )
+        paper_summary["shadow_experiments"] = _shadow_experiment_summary(paths.run_state_dir)
         write_json(
             paths.paper_postmarket_summary_path,
             paper_summary,

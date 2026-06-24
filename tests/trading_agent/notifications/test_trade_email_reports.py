@@ -111,6 +111,34 @@ def test_build_postmarket_email_body_includes_current_position_analysis_and_revi
     assert "总权益变化 $12.50" in body
 
 
+def test_build_postmarket_email_body_includes_shadow_experiments() -> None:
+    body = build_postmarket_email_body(
+        {
+            "date": "2026-06-24",
+            "trading_mode": "paper",
+            "shadow_experiments": [
+                {
+                    "name": "midfreq_v1__trend_follow",
+                    "filled_order_count": 2,
+                    "pending_order_count": 0,
+                    "position_summaries": ["AMD 76.89 股，成本 $522.31"],
+                },
+                {
+                    "name": "midfreq_v1__gap_fill",
+                    "filled_order_count": 0,
+                    "pending_order_count": 1,
+                    "position_summaries": [],
+                },
+            ],
+        }
+    )
+
+    assert "【影子实验盘】" in body
+    assert "midfreq_v1__trend_follow：成交 2，待成交 0，持仓 AMD 76.89 股，成本 $522.31。" in body
+    assert "midfreq_v1__gap_fill：成交 0，待成交 1，持仓 无。" in body
+    assert "不会触发真实订单" in body
+
+
 def test_build_intraday_trade_email_body_explains_buy_operation_in_chinese() -> None:
     decision = PolicyDecision(
         trading_mode="paper",

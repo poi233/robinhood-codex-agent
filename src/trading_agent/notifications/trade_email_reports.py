@@ -371,6 +371,21 @@ def build_postmarket_email_body(summary: Mapping[str, object]) -> str:
             )
     if not position_lines:
         position_lines = ["当前没有持仓。"]
+    shadow_lines: list[str] = []
+    shadow_experiments = summary.get("shadow_experiments")
+    if isinstance(shadow_experiments, list):
+        for experiment in shadow_experiments:
+            if not isinstance(experiment, Mapping):
+                continue
+            name = str(experiment.get("name") or "未命名策略")
+            filled = int(experiment.get("filled_order_count", 0) or 0)
+            pending = int(experiment.get("pending_order_count", 0) or 0)
+            positions_text = _join_or_none(experiment.get("position_summaries") or [])
+            shadow_lines.append(
+                f"{name}：成交 {filled}，待成交 {pending}，持仓 {positions_text}。"
+            )
+    if not shadow_lines:
+        shadow_lines = ["今天没有影子实验成交或待成交订单。"]
     lines = [
         "【盘后复盘通知】",
         _bullet("日期", summary.get("date", "")),
@@ -389,6 +404,9 @@ def build_postmarket_email_body(summary: Mapping[str, object]) -> str:
         _bullet("现金变化", _money(summary.get("cash_change"))),
         _bullet("持仓市值", _money(summary.get("positions_market_value"))),
         _bullet("拒绝或取消订单数", int(summary.get("rejected_or_canceled_order_count", 0) or 0)),
+        *_section("影子实验盘"),
+        *shadow_lines,
+        "说明：影子实验使用独立模拟账本，不影响主模拟盘，也不会触发真实订单。",
     ]
     return "\n".join(lines) + "\n"
 

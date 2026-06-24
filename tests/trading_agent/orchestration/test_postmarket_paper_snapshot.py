@@ -90,6 +90,16 @@ class PostmarketPaperSnapshotTests(unittest.TestCase):
                 json.dumps({"NVDA": {"symbol": "NVDA", "quantity": 0.1, "average_cost": 100.0, "market_price": 100.0}}),
                 encoding="utf-8",
             )
+            shadow_paper = root / "runtime" / "state" / "runs" / "2026-06-14" / "experiments" / "trend_follow" / "paper"
+            shadow_paper.mkdir(parents=True)
+            (shadow_paper / "orders.jsonl").write_text(
+                json.dumps({"order_id": "shadow-1", "status": "filled", "symbol": "AMD"}) + "\n",
+                encoding="utf-8",
+            )
+            (shadow_paper / "positions.json").write_text(
+                json.dumps({"AMD": {"quantity": 2.5, "average_cost": 100.0}}),
+                encoding="utf-8",
+            )
 
             original_cwd = os.getcwd()
             os.chdir(root)
@@ -122,6 +132,8 @@ class PostmarketPaperSnapshotTests(unittest.TestCase):
         self.assertEqual(notify.call_args.kwargs["event_tag"], "POSTMARKET_DONE")
         self.assertIn("【当前持仓分析】", notify.call_args.kwargs["body"])
         self.assertIn("NVDA：数量 0.1", notify.call_args.kwargs["body"])
+        self.assertIn("【影子实验盘】", notify.call_args.kwargs["body"])
+        self.assertIn("trend_follow：成交 1，待成交 0，持仓 AMD 2.5 股，成本 $100.00。", notify.call_args.kwargs["body"])
         self.assertEqual(
             notify.call_args.kwargs["report_path"].resolve(),
             (root / "runtime" / "logs" / "runs" / "2026-06-14" / "reports" / "postmarket_summary.md").resolve(),
