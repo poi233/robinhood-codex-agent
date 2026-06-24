@@ -365,6 +365,127 @@ def setup_range_reversion(inputs: PolicyInputs, candidate: RankedCandidate) -> B
     )
 
 
+# --------------------------------------------------------------------------------------
+# Q3 setups — new entry archetypes, all derivable from quote (price + previous_close) and the
+# always-present key_levels, so they can be screened on daily bars via replay/setup_screen.
+# --------------------------------------------------------------------------------------
+
+def setup_gap_fill(inputs: PolicyInputs, candidate: RankedCandidate) -> BuyPriceDecision:
+    """Fade an opening gap DOWN: price has gapped below the prior close by a meaningful (but not
+    violent) amount → buy expecting reversion back toward that prior close (the gap fill). Long-only,
+    so only gap-downs; refuses to catch a knife (price must hold above nearest support, the stop)."""
+    symbol = candidate.symbol
+    watch = _watch(inputs, symbol)
+    quote = inputs.quotes.get(symbol)
+    profile = inputs.policy_profile or {}
+    if not quote or quote.price <= 0:
+        return _blocked(0.0, "missing_quote")
+    price = quote.price
+    prev_close = as_float(quote.previous_close)
+    if prev_close is None or prev_close <= 0:
+        return _blocked(price, "missing_previous_close")
+
+    gap_pct = (price - prev_close) / prev_close  # negative for a gap down
+    min_gap = float(profile.get("gap_fill_min_gap_pct", 0.02))
+    max_gap = float(profile.get("gap_fill_max_gap_pct", 0.12))
+    if gap_pct > -min_gap:
+        return _blocked(price, "gap_too_small")
+    if gap_pct < -max_gap:  # too violent — likely real bad news, not a mean-reversion fade
+        return _blocked(price, "gap_too_large")
+    if candidate.candidate_score < float(profile.get("gap_fill_score_threshold", 50)):
+        return _blocked(price, "score_below_threshold")
+    support = _support_1(watch)
+    if support is not None and price <= support:
+        return _blocked(price, "below_support")
+
+    limit_price = price
+    pct_stop = limit_price * (1.0 - float(profile.get("stop_fallback_pct", 0.03)))
+    stop_price = _tightest_stop(limit_price, support, pct_stop)
+    # Target: fill the gap back to the prior close; resistances above are fallback rungs.
+    target_1, target_2 = _fallback_targets(limit_price, profile, [prev_close] + _resistances_above(watch, limit_price))
+    return _finalize(
+        profile, setup_type="gap_fill", limit_price=limit_price,
+        stop_price=stop_price, target_1=target_1, target_2=target_2, reason_codes=["gap_fill_ok"],
+    )
+
+
+def setup_failed_breakdown(inputs: PolicyInputs, candidate: RankedCandidate) -> BuyPriceDecision:
+    """Bear-trap reversal: the prior close was BELOW a support level, and price has now reclaimed it
+    (back above, within a band). Buy the reclaim, stop below the trap low, target the next resistance.
+    Distinct from dip_pullback, which buys a support that was never lost."""
+    symbol = candidate.symbol
+    watch = _watch(inputs, symbol)
+    quote = inputs.quotes.get(symbol)
+    profile = inputs.policy_profile or {}
+    if not quote or quote.price <= 0:
+        return _blocked(0.0, "missing_quote")
+    price = quote.price
+    prev_close = as_float(quote.previous_close)
+    if prev_close is None or prev_close <= 0:
+        return _blocked(price, "missing_previous_close")
+    support = _support_1(watch)
+    if support is None or support <= 0:
+        return _blocked(price, "missing_support")
+
+    if prev_close >= support:
+        return _blocked(price, "no_breakdown_to_reclaim")
+    if price <= support:
+        return _blocked(price, "support_not_reclaimed")
+    reclaim_band = float(profile.get("reclaim_band_pct", 0.03))
+    if price > support * (1.0 + reclaim_band):
+        return _blocked(price, "reclaim_extended")
+    if candidate.candidate_score < float(profile.get("reclaim_score_threshold", 50)):
+        return _blocked(price, "score_below_threshold")
+
+    limit_price = price
+    # Stop below the trap low (approximated by the prior close, the deepest known print) and support.
+    stop_basis = min(prev_close, support) * (1.0 - float(profile.get("reclaim_stop_buffer_pct", 0.01)))
+    stop_price = _tightest_stop(limit_price, stop_basis)
+    target_1, target_2 = _fallback_targets(limit_price, profile, _resistances_above(watch, limit_price))
+    return _finalize(
+        profile, setup_type="failed_breakdown", limit_price=limit_price,
+        stop_price=stop_price, target_1=target_1, target_2=target_2, reason_codes=["failed_breakdown_ok"],
+    )
+
+
+def setup_breakout_retest(inputs: PolicyInputs, candidate: RankedCandidate) -> BuyPriceDecision:
+    """Buy the retest of a broken level: the prior close cleared a resistance (broke out), and price
+    has now pulled back to retest that level as new support (sitting just above it). Stop below the
+    retested level, target the next resistance / range high. Distinct from breakout_momentum (buys AT
+    the break) and dip_pullback (buys the original support, not a freshly broken resistance)."""
+    symbol = candidate.symbol
+    watch = _watch(inputs, symbol)
+    quote = inputs.quotes.get(symbol)
+    profile = inputs.policy_profile or {}
+    if not quote or quote.price <= 0:
+        return _blocked(0.0, "missing_quote")
+    price = quote.price
+    prev_close = as_float(quote.previous_close)
+    if prev_close is None or prev_close <= 0:
+        return _blocked(price, "missing_previous_close")
+
+    band = float(profile.get("retest_band_pct", 0.02))
+    broken: float | None = None
+    for level in sorted(set(_level_list(watch, "resistances"))):
+        if prev_close > level and level <= price <= level * (1.0 + band):
+            broken = level  # highest qualifying broken-and-retested level
+    if broken is None:
+        return _blocked(price, "no_retest")
+    if candidate.candidate_score < float(profile.get("retest_score_threshold", 55)):
+        return _blocked(price, "score_below_threshold")
+
+    limit_price = price
+    stop_price = _tightest_stop(
+        limit_price, broken * (1.0 - float(profile.get("retest_stop_buffer_pct", 0.01))), _support_1(watch)
+    )
+    targets = [lvl for lvl in _resistances_above(watch, limit_price) if lvl > broken]
+    target_1, target_2 = _fallback_targets(limit_price, profile, targets)
+    return _finalize(
+        profile, setup_type="breakout_retest", limit_price=limit_price,
+        stop_price=stop_price, target_1=target_1, target_2=target_2, reason_codes=["breakout_retest_ok"],
+    )
+
+
 SETUP_REGISTRY: dict[str, Callable[[PolicyInputs, RankedCandidate], BuyPriceDecision]] = {
     "pullback": setup_pullback,
     "breakout": setup_breakout,
@@ -372,4 +493,7 @@ SETUP_REGISTRY: dict[str, Callable[[PolicyInputs, RankedCandidate], BuyPriceDeci
     "trend_continuation": setup_trend_continuation,
     "dip_pullback": setup_dip_pullback,
     "range_reversion": setup_range_reversion,
+    "gap_fill": setup_gap_fill,
+    "failed_breakdown": setup_failed_breakdown,
+    "breakout_retest": setup_breakout_retest,
 }

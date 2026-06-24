@@ -238,5 +238,70 @@ class EngineEndToEndTests(unittest.TestCase):
         self.assertEqual(challenger_decision.intent.setup_type, "range_reversion")
 
 
+def _with_prev_close(inputs: PolicyInputs, price: float, prev_close: float) -> PolicyInputs:
+    inputs.quotes["ABC"] = Quote(symbol="ABC", price=price, previous_close=prev_close, timestamp=datetime.now(tz=PT).isoformat())
+    return inputs
+
+
+class GapFillTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.profile = load_policy_profile(REPO_ROOT, profile_name="gap_fill")
+
+    def test_fires_on_gap_down_and_targets_prior_close(self) -> None:
+        inputs = _with_prev_close(_inputs(price=96.0, profile=self.profile, watch=_non_bullish_watch()), 96.0, 100.0)
+        decision = decide_buy_price(inputs, _candidate())
+        self.assertIsNone(decision.blocked_reason)
+        self.assertEqual(decision.setup_type, "gap_fill")
+        self.assertEqual(decision.target_1, 100.0)  # gap-fill target = prior close
+        self.assertGreaterEqual(decision.reward_risk or 0, self.profile["min_reward_risk"])
+
+    def test_blocks_when_gap_too_small(self) -> None:
+        inputs = _with_prev_close(_inputs(price=99.5, profile=self.profile, watch=_non_bullish_watch()), 99.5, 100.0)
+        self.assertEqual(decide_buy_price(inputs, _candidate()).blocked_reason, "gap_too_small")
+
+    def test_blocks_when_gap_too_large(self) -> None:
+        inputs = _with_prev_close(_inputs(price=80.0, profile=self.profile, watch=_non_bullish_watch()), 80.0, 100.0)
+        self.assertEqual(decide_buy_price(inputs, _candidate()).blocked_reason, "gap_too_large")
+
+
+class FailedBreakdownTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.profile = load_policy_profile(REPO_ROOT, profile_name="failed_breakdown")
+
+    def test_fires_on_reclaim_after_close_below_support(self) -> None:
+        # support_1 = max(supports) = 95; prior close 93 (below), price 96 reclaimed within band.
+        inputs = _with_prev_close(_inputs(price=96.0, profile=self.profile, watch=_non_bullish_watch()), 96.0, 93.0)
+        decision = decide_buy_price(inputs, _candidate())
+        self.assertIsNone(decision.blocked_reason)
+        self.assertEqual(decision.setup_type, "failed_breakdown")
+        self.assertLess(decision.stop_price, 95.0)  # stop sits below the trap, under support
+
+    def test_blocks_when_no_breakdown(self) -> None:
+        inputs = _with_prev_close(_inputs(price=96.0, profile=self.profile, watch=_non_bullish_watch()), 96.0, 96.0)
+        self.assertEqual(decide_buy_price(inputs, _candidate()).blocked_reason, "no_breakdown_to_reclaim")
+
+    def test_blocks_when_reclaim_extended(self) -> None:
+        inputs = _with_prev_close(_inputs(price=99.0, profile=self.profile, watch=_non_bullish_watch()), 99.0, 93.0)
+        self.assertEqual(decide_buy_price(inputs, _candidate()).blocked_reason, "reclaim_extended")
+
+
+class BreakoutRetestTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.profile = load_policy_profile(REPO_ROOT, profile_name="breakout_retest")
+
+    def test_fires_on_retest_of_broken_resistance(self) -> None:
+        # resistance 105: prior close 107 cleared it, price 106 pulled back to retest within band.
+        inputs = _with_prev_close(_inputs(price=106.0, profile=self.profile, watch=_non_bullish_watch()), 106.0, 107.0)
+        decision = decide_buy_price(inputs, _candidate())
+        self.assertIsNone(decision.blocked_reason)
+        self.assertEqual(decision.setup_type, "breakout_retest")
+        self.assertGreater(decision.stop_price, 103.0)  # stop just below the retested 105 level
+        self.assertEqual(decision.target_1, 115.0)  # next resistance above the broken level
+
+    def test_blocks_when_prior_close_did_not_break_out(self) -> None:
+        inputs = _with_prev_close(_inputs(price=106.0, profile=self.profile, watch=_non_bullish_watch()), 106.0, 104.0)
+        self.assertEqual(decide_buy_price(inputs, _candidate()).blocked_reason, "no_retest")
+
+
 if __name__ == "__main__":
     unittest.main()

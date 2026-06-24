@@ -160,7 +160,7 @@
 | | P3 | **Technical 叙述 LLM 有边界进决策**（apply_llm_assessment） | 用户新增（2026-06-23） | 🟢 **代码完成（2026-06-23，narrative 现无条件运行）**：叙述 prompt（mini 模型）除写 chan/Brooks/基本面外，额外产结构化 `llm_assessment`（bias/conviction/chan_signal/brooks_quality/fundamental_bias/veto）；`apply_llm_assessment` 把它**有界**地折进决策——priority 至多 ±`TECHNICAL_LLM_MAX_SWING`（默认 12 分≈一档）、`veto` 仅可降级到 avoid（只能更谨慎不能更激进）、**绝不改价格 levels/止损/no_trade**（价格闸门风控恒成立）、数据 failed 的票不动；LLM 失败/缺字段则引擎基线保留 |
 | **Q 策略发现与多样性引擎**（最大化复用历史数据筛策略，用户新增 2026-06-24，见下方 Q 段） | Q1 | **历史 setup 重放筛选器**（任意 setup × 全历史 → 假设成交/前向收益/样本数表） | 用户新增（2026-06-24） | ✅ **已完成（2026-06-24）** |
 | | Q2 | 策略多样性度量 + `growth recommend` 最小成交门槛 + 相关性去重选择 | 用户新增（2026-06-24） | ✅ **已完成（2026-06-24）** |
-| | Q3 | 3 个纯日线可筛新入场 setup（gap_fill / failed_breakdown / relative_strength） | 用户新增（2026-06-24） | ⏳ **待开始** |
+| | Q3 | 3 个纯日线可筛新入场 setup（gap_fill / failed_breakdown / breakout_retest） | 用户新增（2026-06-24） | ✅ **已完成（2026-06-24）** |
 | | Q4 | 数据驱动发现回路（near-miss 聚类 / blocked-reason 挖掘 / 特征分桶前向收益） | 用户新增（2026-06-24） | ⏳ **待开始** |
 | | Q5 | 多重比较护栏（train/test 切分 + FDR/deflated Sharpe + 组合层净值评估） | 用户新增（2026-06-24） | ⏳ **待开始** |
 | | Q6 | 日内 bar 采集（flag 门控）+ ORB/vwap_reclaim 日内 setup | 用户新增（2026-06-24） | ⏳ **待开始** |
@@ -1737,7 +1737,19 @@ promotion MD 的「Diversity (Q2)」相关性矩阵 + 多样化选择。`growth_
 **涉及文件**：新增 `growth/diversity.py` + 测试；改 `growth/evaluator.py`（旧行为在阈值=0/单策略时逐字不变）。
 **验收**：相关性矩阵对齐到公共交易日；min-trade gate 默认值可配；单策略/无数据时 recommend 行为与现状一致（回归钉住）。
 
-### Q3 — 3 个纯日线可筛新入场 setup
+### Q3 — 3 个纯日线可筛新入场 setup — ✅ 已完成（2026-06-24）
+**已完成（2026-06-24）**：`policy/setups.py` 新增 3 个纯函数 setup（只用 quote.price + quote.previous_close +
+key_levels，全部可经 Q1 harness 日线回测）：`gap_fill`（跳空回补：price 较 previous_close 跳空下行 2–12% →
+买，目标回到 previous_close）、`failed_breakdown`（诱空反转：previous_close 跌破支撑、price 已收复 → 买，止损在
+陷阱低点下方；区别于 dip 的支撑未失守）、`breakout_retest`（突破回踩：previous_close 已突破某阻力、price 回踩该
+位当支撑 → 买；区别于 breakout_momentum 的"突破当时买"）。各加 `policy_profiles.json` profile + 种入
+`strategy_experiments.yaml` 为 active_shadow（`midfreq_v1__gap_fill/failed_breakdown/breakout_retest`）+
+`growth_policy.json` setups 白名单扩到 9 个。每个 setup 有 fires/blocks 单测（共 8 个新断言）。
+**relative_strength 调整说明**：原计划的 `relative_strength` 需要把基准(SPY)收益**plumb 进 PolicyInputs**（setups
+目前只拿到单标的 quote+key_levels，拿不到截面/基准），属更大改动；本轮用同样纯净、同样日线可筛、且入场原型
+**同样不同**的 `breakout_retest` 顶上，relative_strength 留待后续（需先做基准收益注入，可并入 Q6 数据层）。
+**待真实历史筛**：本仓库 checkout 无历史 run，3 个 setup 已可运行（shadow 隔离、不碰 champion），它们的去留由
+`analytics setup-screen`（Q1）+ `growth recommend`（Q2）在你有数据后判定。
 **目标**：补当前 setup 不覆盖的入场原型，且**纯日线就能历史回测**：`gap_fill`（开盘跳空回补/均值回归）、
 `failed_breakdown`（跌破支撑又收回的诱空反转，区别于 dip 的支撑上方买）、`relative_strength`（大盘跌日买跑赢 SPY
 的票，用 factor_store 已拉的 benchmark 日线）。
