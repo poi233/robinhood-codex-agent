@@ -187,13 +187,20 @@ def build_diversity_report(
     correlation = pairwise_return_correlation(returns)
     overlap = jaccard_overlap(entry_sets_from_decisions(decisions_by_strategy))
     selected = greedy_diverse_selection(edge_by_id, correlation, max_corr=max_corr, min_edge=min_edge)
+    # Q5: judge the COMBINATION (equal-weight) of the diverse picks, not each in isolation — a
+    # low-correlation mediocre strategy can still lift the portfolio's Sharpe / drawdown.
+    from trading_agent.replay.significance import portfolio_metrics
+
+    portfolio = portfolio_metrics(returns, selected) if selected else None
     return {
         "return_correlation": correlation,
         "entry_overlap": overlap,
         "diverse_selection": selected,
+        "portfolio": portfolio,
         "params": {"max_corr": max_corr, "min_edge": min_edge},
         "note": (
             "low pairwise correlation / entry overlap = genuinely different strategies; "
-            "diverse_selection greedily maximises edge per forward slot under the correlation ceiling"
+            "diverse_selection greedily maximises edge per forward slot under the correlation ceiling; "
+            "portfolio = equal-weight combo of the picks (judge the group, not each strategy)"
         ),
     }

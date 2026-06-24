@@ -70,6 +70,7 @@ def build_parser() -> argparse.ArgumentParser:
     analytics_setup_screen_parser.add_argument("--profile", metavar="NAME", default=None, help="Screen this policy_profile's configured setups instead of a raw stack.")
     analytics_setup_screen_parser.add_argument("--lookahead", type=int, default=5, help="Trading-day horizon for target/stop + forward return (default 5).")
     analytics_setup_screen_parser.add_argument("--max-per-day", type=int, default=None, help="Cap hypothetical fills per day (default: all eligible candidates).")
+    analytics_setup_screen_parser.add_argument("--split-date", metavar="YYYY-MM-DD", default=None, help="Q5: split into TRAIN (before) vs held-out TEST (on/after) windows to catch overfitting.")
     analytics_discover_parser = analytics_subparsers.add_parser("discover", help="Write runtime/analytics/discovery.{json,md} (Q4: mine history for setups to BUILD — which gate blocks winners, top missed winners, near-threshold; needs network for yfinance).")
     analytics_discover_parser.add_argument("--since", metavar="YYYY-MM-DD", default=None)
     analytics_discover_parser.add_argument("--until", metavar="YYYY-MM-DD", default=None)
@@ -560,6 +561,7 @@ def _run_analytics_setup_screen(
     profile: str | None,
     lookahead: int,
     max_per_day: int | None,
+    split_date: str | None,
 ) -> int:
     from trading_agent.replay.setup_screen import write_setup_screen_report
 
@@ -572,6 +574,7 @@ def _run_analytics_setup_screen(
         profile_name=profile,
         setups=setup_list,
         max_per_day=max_per_day,
+        split_date=split_date,
     )
     print(f"Wrote {json_path}")
     print(f"Wrote {md_path}")
@@ -743,6 +746,7 @@ def main(argv: list[str] | None = None) -> int:
             profile=args.profile,
             lookahead=args.lookahead,
             max_per_day=args.max_per_day,
+            split_date=args.split_date,
         )
     if args.command == "analytics" and args.analytics_command == "discover":
         return _run_analytics_discover(agent_root, since=args.since, until=args.until, lookahead=args.lookahead, top_k=args.top_k)

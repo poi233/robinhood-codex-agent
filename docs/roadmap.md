@@ -162,7 +162,7 @@
 | | Q2 | 策略多样性度量 + `growth recommend` 最小成交门槛 + 相关性去重选择 | 用户新增（2026-06-24） | ✅ **已完成（2026-06-24）** |
 | | Q3 | 3 个纯日线可筛新入场 setup（gap_fill / failed_breakdown / breakout_retest） | 用户新增（2026-06-24） | ✅ **已完成（2026-06-24）** |
 | | Q4 | 数据驱动发现回路（blocked-reason 边际 / 错过赢家 / near-threshold） | 用户新增（2026-06-24） | ✅ **已完成（2026-06-24）** |
-| | Q5 | 多重比较护栏（train/test 切分 + FDR/deflated Sharpe + 组合层净值评估） | 用户新增（2026-06-24） | ⏳ **待开始** |
+| | Q5 | 多重比较护栏（train/test 切分 + BH-FDR + 组合层净值评估） | 用户新增（2026-06-24） | ✅ **已完成（2026-06-24）** |
 | | Q6 | 日内 bar 采集（flag 门控）+ ORB/vwap_reclaim 日内 setup | 用户新增（2026-06-24） | ⏳ **待开始** |
 
 > **新旧编号对照**：R1→E1（增 benchmark returns）、R2→E2、R3→A3、R4→D2、R5→D3、R6→D4、R7→F2；
@@ -1779,7 +1779,16 @@ gap%/RVOL/距支撑/regime 分桶，量每桶前向收益 → 有 edge 但无 se
 **涉及文件**：新增 `replay/discovery.py` + 测试；`cli.py`。
 **验收**：只读；每分析出 top-K 假设 + 支撑样本数；无数据时降级提示。
 
-### Q5 — 多重比较护栏
+### Q5 — 多重比较护栏 — ✅ 已完成（2026-06-24）
+**已完成（2026-06-24）**：`replay/significance.py`（纯函数,无 scipy/numpy）：`binomial_sf`(胜率优于掷硬币的
+单边精确二项 p 值,小样本"67% 胜率/6 笔"自动不可信)、`benjamini_hochberg`(对 N 个筛选 setup 控 FDR,出 q 值 +
+significant)、`sharpe`/`max_drawdown_from_returns`/`combine_equal_weight_returns`/`portfolio_metrics`(组合层评估)。
+**接线**：① setup-screen 每行加 `p_value` + BH 校正后的 `q_value`/`significant`(markdown 加 p/q/✓ 列);② 新增
+`screen_train_test` + CLI `--split-date` → TRAIN(切分日前)/TEST(样本外)两张表并排,抓过拟合;③ diversity 的
+diverse_selection 现额外算等权**组合** Sharpe/回撤/累计收益(判断策略群而非单个)。15 个新单测(含 BH FDR 控制、
+二项 p、组合统计)。全部只读、不碰 champion。
+**deflated Sharpe 调整说明**：原列 "FDR 或 deflated Sharpe" 二选一,选了 **BH-FDR**——它对"筛了 N 个 setup,
+按胜率排第一的是不是运气"这个问题更直接、且无需估计 Sharpe 分布的偏度/峰度;deflated Sharpe 留作可选后续。
 **目标**：既然在同一份历史上批量筛，要防「N 选 1 的冠军其实是运气」：① 筛选器 **train/test 按日期切分**
 （老日子选、留出近窗确认）；② **多重比较修正**（Benjamini-Hochberg FDR 或 deflated Sharpe，按筛选数 N 抬门槛）；
 ③ **组合层评估**（合并净值曲线判断策略群，而非逐个 Sharpe——低相关的平庸策略对组合可能更有价值）。

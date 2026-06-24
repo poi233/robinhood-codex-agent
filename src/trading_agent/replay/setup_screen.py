@@ -38,6 +38,7 @@ from trading_agent.policy.price_policy import decide_buy_price
 from trading_agent.policy.setups import SETUP_REGISTRY
 from trading_agent.replay.analysis import discover_run_dates
 from trading_agent.replay.forward_returns import PriceLoader, _entry_index, default_price_loader
+from trading_agent.replay.significance import benjamini_hochberg, binomial_sf
 
 _APPROX_NOTE = (
     "close-based daily-bar approximation (intraday touches understated; assumes the hypothetical "
@@ -185,8 +186,21 @@ def _rows_from_agg(agg: dict[str, dict[str, Any]]) -> list[dict[str, Any]]:
                 "win_rate": round(data["target_first"] / decided, 4) if decided else None,
                 "mean_fwd_return": round(sum(fwd) / len(fwd), 6) if fwd else None,
                 "n_fwd": len(fwd),
+                # Q5: one-sided p that win rate beats a coin flip, so small samples are not trusted.
+                "p_value": binomial_sf(data["target_first"], decided) if decided else None,
             }
         )
+    return _apply_fdr(rows)
+
+
+def _apply_fdr(rows: list[dict[str, Any]], *, alpha: float = 0.05) -> list[dict[str, Any]]:
+    """Q5: control the False Discovery Rate across the screened setups — annotate each row with the
+    BH-adjusted q-value and a ``significant`` flag, so "the best of N setups" isn't just luck."""
+    adjusted = benjamini_hochberg({r["setup_type"]: r["p_value"] for r in rows if r.get("p_value") is not None}, alpha)
+    for row in rows:
+        verdict = adjusted.get(row["setup_type"], {})
+        row["q_value"] = verdict.get("q")
+        row["significant"] = bool(verdict.get("significant"))
     return rows
 
 
@@ -273,7 +287,72 @@ def screen_all_setups(
     }
 
 
+def screen_train_test(
+    agent_root: Path,
+    *,
+    split_date: str,
+    lookahead: int = 5,
+    since: str | None = None,
+    until: str | None = None,
+    risk_tier: int = 0,
+    max_per_day: int | None = None,
+    price_loader: PriceLoader = default_price_loader,
+) -> dict[str, Any]:
+    """Q5: screen each setup on the TRAIN window (run dates < split_date) and, separately, on the
+    held-out TEST window (>= split_date). A setup that only wins in-sample is overfit — compare the
+    two tables. ``since``/``until`` further bound the overall window."""
+    train_until = split_date if until is None else min(split_date, until)
+    train = screen_all_setups(
+        agent_root, lookahead=lookahead, since=since, until=train_until,
+        risk_tier=risk_tier, max_per_day=max_per_day, price_loader=price_loader,
+    )
+    test = screen_all_setups(
+        agent_root, lookahead=lookahead, since=split_date, until=until,
+        risk_tier=risk_tier, max_per_day=max_per_day, price_loader=price_loader,
+    )
+    return {"status": "ok", "mode": "train_test", "split_date": split_date, "lookahead": lookahead,
+            "train": train, "test": test,
+            "note": "a setup that wins in TRAIN but not TEST is overfit; trust TEST (held-out)."}
+
+
+def _screen_table(report: dict[str, Any]) -> str:
+    if report.get("status") == "no_data":
+        return f"_暂无历史数据：{report.get('reason')}_。\n"
+    rows = report.get("rows") or []
+    if not rows:
+        return f"_扫描了 {report.get('run_dates', 0)} 个交易日，没有任何 setup 产生有效假设入场_。\n"
+    horizon = report.get("lookahead", 5)
+    out = [
+        f"| setup | 假设成交 | 触目标 | 触止损 | 未决 | 胜率 | 平均{horizon}d收益 | 样本 | p | q | 显著 |",
+        "|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|:--:|",
+    ]
+    for row in rows:
+        win = row["win_rate"] if row["win_rate"] is not None else "—"
+        fwd = row["mean_fwd_return"] if row["mean_fwd_return"] is not None else "—"
+        p = row.get("p_value") if row.get("p_value") is not None else "—"
+        q = row.get("q_value") if row.get("q_value") is not None else "—"
+        sig = "✓" if row.get("significant") else ""
+        out.append(
+            f"| {row['setup_type']} | {row['fills']} | {row['target_first']} | {row['stop_first']} | "
+            f"{row['undecided']} | {win} | {fwd} | {row['n_fwd']} | {p} | {q} | {sig} |"
+        )
+    return "\n".join(out) + "\n"
+
+
 def format_setup_screen_markdown(report: dict[str, Any]) -> str:
+    if report.get("mode") == "train_test":
+        parts = [
+            "# 历史 setup 重放筛选 · train/test（Q5）",
+            "",
+            f"切分日 {report['split_date']}　·　lookahead {report['lookahead']}d",
+            "",
+            "## TRAIN（样本内，切分日之前）",
+            _screen_table(report.get("train") or {}),
+            "## TEST（样本外，切分日及之后）",
+            _screen_table(report.get("test") or {}),
+            f"> {report.get('note', '')}",
+        ]
+        return "\n".join(parts) + "\n"
     if report.get("status") == "no_data":
         return (
             "# 历史 setup 重放筛选（Q1）\n\n"
@@ -292,20 +371,9 @@ def format_setup_screen_markdown(report: dict[str, Any]) -> str:
         f"模式：{mode}　·　交易日 {report['run_dates']}　·　假设成交 {report['fills']}　·　"
         f"lookahead {horizon}d　·　窗口 {report.get('since') or '全部'} → {report.get('until') or '全部'}",
         "",
-        f"| setup | 假设成交 | 触目标 | 触止损 | 未决 | 胜率 | 平均{horizon}d收益 | 样本 |",
-        "|---|---:|---:|---:|---:|---:|---:|---:|",
-    ]
-    for row in report["rows"]:
-        win = row["win_rate"] if row["win_rate"] is not None else "—"
-        fwd = row["mean_fwd_return"] if row["mean_fwd_return"] is not None else "—"
-        lines.append(
-            f"| {row['setup_type']} | {row['fills']} | {row['target_first']} | {row['stop_first']} | "
-            f"{row['undecided']} | {win} | {fwd} | {row['n_fwd']} |"
-        )
-    lines += [
-        "",
+        _screen_table(report),
         f"> {report.get('note', '')}",
-        "> 样本少时数字噪声大，只看方向；正式判断走 Q5 的显著性 / 多重比较护栏。",
+        "> p=胜率优于掷硬币的单边检验；q/✓=多重比较(BH-FDR α0.05)校正后仍显著。样本少时只看方向。",
     ]
     return "\n".join(lines) + "\n"
 
@@ -328,11 +396,18 @@ def write_setup_screen_report(
     setups: list[str] | None = None,
     risk_tier: int = 0,
     max_per_day: int | None = None,
+    split_date: str | None = None,
     price_loader: PriceLoader = default_price_loader,
 ) -> tuple[Path, Path]:
-    """Write ``runtime/analytics/setup_screen.{json,md}``. Default (no ``setups``/``profile_name``)
-    screens every registered setup head-to-head; otherwise screens that specific stack/profile."""
-    if setups or profile_name:
+    """Write ``runtime/analytics/setup_screen.{json,md}``. ``split_date`` → Q5 train/test split;
+    else default (no ``setups``/``profile_name``) screens every registered setup head-to-head;
+    otherwise screens that specific stack/profile."""
+    if split_date:
+        report = screen_train_test(
+            agent_root, split_date=split_date, lookahead=lookahead, since=since, until=until,
+            risk_tier=risk_tier, max_per_day=max_per_day, price_loader=price_loader,
+        )
+    elif setups or profile_name:
         report = screen_setups(
             agent_root,
             lookahead=lookahead,
