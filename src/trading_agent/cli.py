@@ -70,6 +70,11 @@ def build_parser() -> argparse.ArgumentParser:
     analytics_setup_screen_parser.add_argument("--profile", metavar="NAME", default=None, help="Screen this policy_profile's configured setups instead of a raw stack.")
     analytics_setup_screen_parser.add_argument("--lookahead", type=int, default=5, help="Trading-day horizon for target/stop + forward return (default 5).")
     analytics_setup_screen_parser.add_argument("--max-per-day", type=int, default=None, help="Cap hypothetical fills per day (default: all eligible candidates).")
+    analytics_discover_parser = analytics_subparsers.add_parser("discover", help="Write runtime/analytics/discovery.{json,md} (Q4: mine history for setups to BUILD — which gate blocks winners, top missed winners, near-threshold; needs network for yfinance).")
+    analytics_discover_parser.add_argument("--since", metavar="YYYY-MM-DD", default=None)
+    analytics_discover_parser.add_argument("--until", metavar="YYYY-MM-DD", default=None)
+    analytics_discover_parser.add_argument("--lookahead", type=int, default=5, help="Forward-return horizon in trading days (default 5).")
+    analytics_discover_parser.add_argument("--top-k", type=int, default=20, help="How many top missed-winner rows to list (default 20).")
     analytics_validate_parser = analytics_subparsers.add_parser("validate", help="Write runtime/analytics/validate_report.{json,md} (N3: read-only scan for malformed JSONL lines + rows missing key fields; local-only, modifies nothing).")
     analytics_validate_parser.add_argument("--since", metavar="YYYY-MM-DD", default=None)
     analytics_validate_parser.add_argument("--until", metavar="YYYY-MM-DD", default=None)
@@ -573,6 +578,15 @@ def _run_analytics_setup_screen(
     return 0
 
 
+def _run_analytics_discover(agent_root: Path, *, since: str | None, until: str | None, lookahead: int, top_k: int) -> int:
+    from trading_agent.replay.discovery import write_discovery_report
+
+    json_path, md_path = write_discovery_report(agent_root, lookahead=lookahead, since=since, until=until, top_k=top_k)
+    print(f"Wrote {json_path}")
+    print(f"Wrote {md_path}")
+    return 0
+
+
 def _run_nightly_analysis(agent_root: Path) -> int:
     from trading_agent.core.config import load_env_files
     from trading_agent.core.context import build_runtime_paths
@@ -635,6 +649,7 @@ def _run_nightly_analysis(agent_root: Path) -> int:
         ("analytics thesis", ["analytics", "thesis"]),
         ("analytics screen-eval", ["analytics", "screen-eval"]),
         ("analytics setup-screen", ["analytics", "setup-screen"]),
+        ("analytics discover", ["analytics", "discover"]),
         ("analytics weight-suggestion", ["analytics", "weight-suggestion"]),
         ("growth observe", ["growth", "observe"]),
         ("growth propose", ["growth", "propose"]),
@@ -729,6 +744,8 @@ def main(argv: list[str] | None = None) -> int:
             lookahead=args.lookahead,
             max_per_day=args.max_per_day,
         )
+    if args.command == "analytics" and args.analytics_command == "discover":
+        return _run_analytics_discover(agent_root, since=args.since, until=args.until, lookahead=args.lookahead, top_k=args.top_k)
     if args.command == "analytics" and args.analytics_command == "validate":
         return _run_analytics_validate(agent_root, since=args.since, until=args.until)
     if args.command == "analytics" and args.analytics_command == "retention":

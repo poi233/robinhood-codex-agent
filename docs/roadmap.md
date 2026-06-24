@@ -161,7 +161,7 @@
 | **Q 策略发现与多样性引擎**（最大化复用历史数据筛策略，用户新增 2026-06-24，见下方 Q 段） | Q1 | **历史 setup 重放筛选器**（任意 setup × 全历史 → 假设成交/前向收益/样本数表） | 用户新增（2026-06-24） | ✅ **已完成（2026-06-24）** |
 | | Q2 | 策略多样性度量 + `growth recommend` 最小成交门槛 + 相关性去重选择 | 用户新增（2026-06-24） | ✅ **已完成（2026-06-24）** |
 | | Q3 | 3 个纯日线可筛新入场 setup（gap_fill / failed_breakdown / breakout_retest） | 用户新增（2026-06-24） | ✅ **已完成（2026-06-24）** |
-| | Q4 | 数据驱动发现回路（near-miss 聚类 / blocked-reason 挖掘 / 特征分桶前向收益） | 用户新增（2026-06-24） | ⏳ **待开始** |
+| | Q4 | 数据驱动发现回路（blocked-reason 边际 / 错过赢家 / near-threshold） | 用户新增（2026-06-24） | ✅ **已完成（2026-06-24）** |
 | | Q5 | 多重比较护栏（train/test 切分 + FDR/deflated Sharpe + 组合层净值评估） | 用户新增（2026-06-24） | ⏳ **待开始** |
 | | Q6 | 日内 bar 采集（flag 门控）+ ORB/vwap_reclaim 日内 setup | 用户新增（2026-06-24） | ⏳ **待开始** |
 
@@ -1760,7 +1760,16 @@ key_levels，全部可经 Q1 harness 日线回测）：`gap_fill`（跳空回补
 **验收**：每 setup 有纯函数单测；只进 challenger profile、champion 默认 setups 逐字不变；未过历史筛的 setup 不种
 shadow（只留代码 + 备注）。
 
-### Q4 — 数据驱动发现回路
+### Q4 — 数据驱动发现回路 — ✅ 已完成（2026-06-24）
+**已完成（2026-06-24）**：`replay/discovery.py` + CLI `analytics discover`（接进夜间批）。三个离线分析「让数据
+提出 setup」：① **blocked-reason 边际**——把决策日志 `per_candidate_blocks` 里每个被挡的 (日, 标的) join 前向收益,
+按 reason 聚合(挡掉数/平均收益/上涨率/赢家数),**按平均前向收益降序**——排前面的 gate 最常挡住随后上涨的票,就是
+「该建一个 setup」的最强信号;② **错过的 top 赢家**——被挡但随后大涨的具体 (日,标的)+被挡原因清单;③ **near-threshold**
+——复用 `near_miss.near_threshold_analysis`(cleared/near_miss/below 前向收益对比,判 trade_threshold 是否太严)。
+只读、写 `runtime/analytics/discovery.{json,md}`;无数据/无前向收益优雅降级。6 个新单测。
+**特征分桶调整说明**：原列的 gap%/RVOL/距支撑分桶需要每个 (日,标的) 重新加载 quote+key_levels 抽特征(更重的
+loop),本轮先交付价值更高、更直接的 **blocked-reason 边际**(它本质就是「按某个条件分桶看前向收益」的最有行动性的
+版本——按"被哪个闸门挡"分桶)。gap%/RVOL/距支撑的连续特征分桶留待后续(可复用 Q1 的 per-run 加载)。
 **目标**：不止「测已想好的 setup」，而是**让数据提出 setup**：① near-miss 聚类（`replay/near_miss.py`：champion 差
 一点就买、被某 gate 挡、但前向收益好的标的/日）→ 反复出现 = 缺失 setup 信号；② blocked-reason 挖掘
 （shadow_decisions 的 `blocked_reasons` 聚合 → 哪个 gate 最常挡掉本会赢的单）；③ 特征分桶前向收益（把历史候选按
