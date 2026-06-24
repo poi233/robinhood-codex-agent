@@ -151,6 +151,9 @@ class PolicyInputs:
     advisory_overlay: Any | None = None
     # K3: symbol -> theme from universe_meta.json; used by buy policy to capture thesis tags.
     theme_map: dict[str, str] = field(default_factory=dict)
+    # Q6: symbol -> [(timestamp, price), ...] captured intraday this session (empty unless
+    # ENABLE_INTRADAY_BAR_CAPTURE has been running); read by the intraday setups (ORB / VWAP).
+    intraday_bars: dict[str, list[tuple[str, float]]] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)

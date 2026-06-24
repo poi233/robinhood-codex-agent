@@ -75,6 +75,17 @@ def _load_research_reports(root: Path, run_date: str) -> dict[str, dict[str, Any
     return reports
 
 
+def _load_intraday_bars(root: Path, run_date: str) -> dict[str, list[tuple[str, float]]]:
+    """Q6: captured intraday price path per symbol (empty unless ENABLE_INTRADAY_BAR_CAPTURE has
+    been running). Additive + best-effort — never breaks input loading."""
+    from trading_agent.data.intraday_bars import load_intraday_bars
+
+    try:
+        return load_intraday_bars(root, run_date=run_date)
+    except Exception:
+        return {}
+
+
 def _as_float(value: Any, default: float = 0.0) -> float:
     if value is None or value == "":
         return default
@@ -359,6 +370,7 @@ def load_policy_inputs(
         research_reports=_load_research_reports(agent_root, run_date),
         kill_switch_present=(agent_root / "KILL_SWITCH").exists(),
         theme_map=load_theme_map(config_dir),
+        intraday_bars=_load_intraday_bars(agent_root, run_date),
     )
     if robinhood_gateway is None:
         _hydrate_snapshots_if_present(inputs, paths)

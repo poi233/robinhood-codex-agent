@@ -114,6 +114,20 @@ def _is_intraday_window_pt() -> bool:
     return 6 * 60 + 45 <= current <= 12 * 60 + 55
 
 
+def _maybe_capture_intraday_bars(agent_root: Path, run_date: str, inputs) -> None:
+    """Q6: append this tick's per-symbol prices to intraday_bars.jsonl when ENABLE_INTRADAY_BAR_CAPTURE
+    is on. Opt-in because it adds per-tick I/O to the hot path; best-effort so it never blocks trading.
+    Flag off (default) → no-op, zero change to the existing path."""
+    if os.environ.get("ENABLE_INTRADAY_BAR_CAPTURE", "0") != "1":
+        return
+    try:
+        from trading_agent.data.intraday_bars import capture_intraday_bars
+
+        capture_intraday_bars(agent_root, run_date=run_date, quotes=inputs.quotes)
+    except Exception:
+        pass
+
+
 def run_intraday_pipeline(*, dry_run: bool) -> int:
     agent_root = resolve_agent_root()
     load_env_files(agent_root)
@@ -222,6 +236,7 @@ def run_intraday_pipeline(*, dry_run: bool) -> int:
             decision.blocked_reasons.append(paper_result.reason)
     _append_intraday_rankings(agent_root, inputs, run_date=run_date)
     _append_policy_decision(agent_root, decision, run_date=run_date)
+    _maybe_capture_intraday_bars(agent_root, run_date, inputs)
     _run_shadow_experiments_safely(agent_root, run_date, inputs, runtime.trading_mode, effective_risk_tier)
     return 0
 
@@ -284,6 +299,7 @@ def _run_deterministic_nonpaper_intraday(
 
     _append_intraday_rankings(agent_root, inputs, run_date=run_date)
     _append_policy_decision(agent_root, decision, run_date=run_date)
+    _maybe_capture_intraday_bars(agent_root, run_date, inputs)
     _run_shadow_experiments_safely(agent_root, run_date, inputs, runtime.trading_mode, effective_risk_tier)
     return 0
 

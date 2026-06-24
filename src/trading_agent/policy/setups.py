@@ -486,6 +486,83 @@ def setup_breakout_retest(inputs: PolicyInputs, candidate: RankedCandidate) -> B
     )
 
 
+# --------------------------------------------------------------------------------------
+# Q6 setups — intraday-timing entries that read the captured intraday price path
+# (inputs.intraday_bars; populated only when ENABLE_INTRADAY_BAR_CAPTURE has been running, so they
+# stay dormant — "insufficient_intraday_bars" — until then).
+# --------------------------------------------------------------------------------------
+
+def _intraday_series(inputs: PolicyInputs, symbol: str) -> list[float]:
+    bars = inputs.intraday_bars.get(symbol) or inputs.intraday_bars.get(symbol.upper()) or []
+    return [price for _ts, price in bars if price and price > 0]
+
+
+def setup_opening_range_breakout(inputs: PolicyInputs, candidate: RankedCandidate) -> BuyPriceDecision:
+    """Opening-range breakout: take the high of the first ``orb_bars`` intraday snapshots (the opening
+    range) and buy when the latest price clears it (within a chase band). Stop at the opening-range
+    low, target the next resistance. Needs captured intraday bars."""
+    symbol = candidate.symbol
+    profile = inputs.policy_profile or {}
+    prices = _intraday_series(inputs, symbol)
+    orb_bars = int(profile.get("orb_bars", 6))
+    if len(prices) < orb_bars + 1:
+        return _blocked(prices[-1] if prices else 0.0, "insufficient_intraday_bars")
+    opening = prices[:orb_bars]
+    or_high, or_low = max(opening), min(opening)
+    price = prices[-1]
+
+    tolerance = float(profile.get("orb_chase_tolerance_pct", 0.01))
+    if price < or_high:
+        return _blocked(price, "below_opening_range_high")
+    if price > or_high * (1.0 + tolerance):
+        return _blocked(price, "orb_chase_tolerance_blocked")
+    if candidate.candidate_score < float(profile.get("orb_score_threshold", 55)):
+        return _blocked(price, "score_below_threshold")
+
+    watch = _watch(inputs, symbol)
+    limit_price = price
+    stop_price = _tightest_stop(limit_price, or_low, _support_1(watch))
+    target_1, target_2 = _fallback_targets(limit_price, profile, _resistances_above(watch, limit_price))
+    return _finalize(
+        profile, setup_type="opening_range_breakout", limit_price=limit_price,
+        stop_price=stop_price, target_1=target_1, target_2=target_2, reason_codes=["opening_range_breakout_ok"],
+    )
+
+
+def setup_vwap_reclaim(inputs: PolicyInputs, candidate: RankedCandidate) -> BuyPriceDecision:
+    """VWAP reclaim (price-only approximation — true VWAP needs volume, not captured yet): treat the
+    session mean price as 'VWAP'; buy when price was below it on the prior snapshot and has just
+    reclaimed it (within a band). Stop below the session low, target the next resistance."""
+    symbol = candidate.symbol
+    profile = inputs.policy_profile or {}
+    prices = _intraday_series(inputs, symbol)
+    min_bars = int(profile.get("vwap_min_bars", 4))
+    if len(prices) < min_bars:
+        return _blocked(prices[-1] if prices else 0.0, "insufficient_intraday_bars")
+    mean_price = sum(prices) / len(prices)
+    price, prev = prices[-1], prices[-2]
+
+    if not (prev < mean_price <= price):  # was below the mean, now reclaimed it
+        return _blocked(price, "no_vwap_reclaim")
+    band = float(profile.get("vwap_reclaim_band_pct", 0.01))
+    if price > mean_price * (1.0 + band):
+        return _blocked(price, "vwap_reclaim_extended")
+    if candidate.candidate_score < float(profile.get("vwap_score_threshold", 55)):
+        return _blocked(price, "score_below_threshold")
+
+    watch = _watch(inputs, symbol)
+    limit_price = price
+    session_low = min(prices)
+    stop_price = _tightest_stop(
+        limit_price, session_low * (1.0 - float(profile.get("vwap_stop_buffer_pct", 0.005))), _support_1(watch)
+    )
+    target_1, target_2 = _fallback_targets(limit_price, profile, _resistances_above(watch, limit_price))
+    return _finalize(
+        profile, setup_type="vwap_reclaim", limit_price=limit_price,
+        stop_price=stop_price, target_1=target_1, target_2=target_2, reason_codes=["vwap_reclaim_ok"],
+    )
+
+
 SETUP_REGISTRY: dict[str, Callable[[PolicyInputs, RankedCandidate], BuyPriceDecision]] = {
     "pullback": setup_pullback,
     "breakout": setup_breakout,
@@ -496,4 +573,6 @@ SETUP_REGISTRY: dict[str, Callable[[PolicyInputs, RankedCandidate], BuyPriceDeci
     "gap_fill": setup_gap_fill,
     "failed_breakdown": setup_failed_breakdown,
     "breakout_retest": setup_breakout_retest,
+    "opening_range_breakout": setup_opening_range_breakout,
+    "vwap_reclaim": setup_vwap_reclaim,
 }

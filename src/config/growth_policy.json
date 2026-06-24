@@ -17,7 +17,7 @@
       "min_reward_risk": {"min": 1.2, "max": 2.5, "max_delta": 0.25}
     },
     "setups": {
-      "enabled_setups": {"allowed": ["pullback", "breakout", "trend_continuation", "breakout_momentum", "dip_pullback", "range_reversion", "gap_fill", "failed_breakdown", "breakout_retest"]}
+      "enabled_setups": {"allowed": ["pullback", "breakout", "trend_continuation", "breakout_momentum", "dip_pullback", "range_reversion", "gap_fill", "failed_breakdown", "breakout_retest", "opening_range_breakout", "vwap_reclaim"]}
     },
     "overlay": {
       "factor_weight": {"min": 0.00, "max": 0.25, "max_delta": 0.05},

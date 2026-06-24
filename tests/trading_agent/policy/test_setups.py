@@ -303,5 +303,62 @@ class BreakoutRetestTests(unittest.TestCase):
         self.assertEqual(decide_buy_price(inputs, _candidate()).blocked_reason, "no_retest")
 
 
+def _with_intraday(inputs: PolicyInputs, symbol: str, prices: list[float]) -> PolicyInputs:
+    inputs.intraday_bars[symbol] = [(f"2026-06-24T{14 + i // 60:02d}:{i % 60:02d}:00Z", p) for i, p in enumerate(prices)]
+    return inputs
+
+
+class OpeningRangeBreakoutTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.profile = load_policy_profile(REPO_ROOT, profile_name="opening_range_breakout")
+
+    def test_fires_on_break_above_opening_range(self) -> None:
+        # opening range (first 6) high = 101; latest 101.5 clears it within the 1% chase band.
+        inputs = _with_intraday(
+            _inputs(price=101.5, profile=self.profile, watch=_non_bullish_watch()),
+            "ABC", [100.0, 100.5, 101.0, 100.8, 100.9, 101.0, 101.5],
+        )
+        decision = decide_buy_price(inputs, _candidate())
+        self.assertIsNone(decision.blocked_reason)
+        self.assertEqual(decision.setup_type, "opening_range_breakout")
+
+    def test_blocks_below_opening_range_high(self) -> None:
+        inputs = _with_intraday(
+            _inputs(price=100.5, profile=self.profile, watch=_non_bullish_watch()),
+            "ABC", [100.0, 100.5, 101.0, 100.8, 100.9, 101.0, 100.5],
+        )
+        self.assertEqual(decide_buy_price(inputs, _candidate()).blocked_reason, "below_opening_range_high")
+
+    def test_blocks_without_enough_bars(self) -> None:
+        inputs = _with_intraday(_inputs(price=101.0, profile=self.profile, watch=_non_bullish_watch()), "ABC", [100.0, 101.0])
+        self.assertEqual(decide_buy_price(inputs, _candidate()).blocked_reason, "insufficient_intraday_bars")
+
+
+class VwapReclaimTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.profile = load_policy_profile(REPO_ROOT, profile_name="vwap_reclaim")
+
+    def test_fires_on_reclaim_of_session_mean(self) -> None:
+        # prices mean ≈ 99.825; prior 99 (below), latest 100.3 reclaims it within band.
+        inputs = _with_intraday(
+            _inputs(price=100.3, profile=self.profile, watch=_non_bullish_watch()),
+            "ABC", [102.0, 98.0, 99.0, 100.3],
+        )
+        decision = decide_buy_price(inputs, _candidate())
+        self.assertIsNone(decision.blocked_reason)
+        self.assertEqual(decision.setup_type, "vwap_reclaim")
+
+    def test_blocks_when_not_reclaiming(self) -> None:
+        inputs = _with_intraday(
+            _inputs(price=101.0, profile=self.profile, watch=_non_bullish_watch()),
+            "ABC", [98.0, 99.0, 100.0, 101.0],  # prior already above the mean → no reclaim
+        )
+        self.assertEqual(decide_buy_price(inputs, _candidate()).blocked_reason, "no_vwap_reclaim")
+
+    def test_blocks_without_enough_bars(self) -> None:
+        inputs = _with_intraday(_inputs(price=100.0, profile=self.profile, watch=_non_bullish_watch()), "ABC", [99.0, 100.0])
+        self.assertEqual(decide_buy_price(inputs, _candidate()).blocked_reason, "insufficient_intraday_bars")
+
+
 if __name__ == "__main__":
     unittest.main()
