@@ -63,6 +63,13 @@ def build_parser() -> argparse.ArgumentParser:
     analytics_screen_eval_parser = analytics_subparsers.add_parser("screen-eval", help="Write runtime/analytics/screen_eval_report.{json,md} (O4: selection-layer effectiveness — added/demoted forward returns vs SPY + screen_score Rank IC; needs network for yfinance).")
     analytics_screen_eval_parser.add_argument("--since", metavar="YYYY-MM-DD", default=None)
     analytics_screen_eval_parser.add_argument("--until", metavar="YYYY-MM-DD", default=None)
+    analytics_setup_screen_parser = analytics_subparsers.add_parser("setup-screen", help="Write runtime/analytics/setup_screen.{json,md} (Q1: replay each entry setup over all historical candidates+key_levels → hypothetical fills / win-rate / forward-return table; needs network for yfinance).")
+    analytics_setup_screen_parser.add_argument("--since", metavar="YYYY-MM-DD", default=None)
+    analytics_setup_screen_parser.add_argument("--until", metavar="YYYY-MM-DD", default=None)
+    analytics_setup_screen_parser.add_argument("--setups", metavar="A,B,C", default=None, help="Comma-separated setup stack to screen as ONE strategy (first-clears-wins). Default: screen every registered setup in isolation, head-to-head.")
+    analytics_setup_screen_parser.add_argument("--profile", metavar="NAME", default=None, help="Screen this policy_profile's configured setups instead of a raw stack.")
+    analytics_setup_screen_parser.add_argument("--lookahead", type=int, default=5, help="Trading-day horizon for target/stop + forward return (default 5).")
+    analytics_setup_screen_parser.add_argument("--max-per-day", type=int, default=None, help="Cap hypothetical fills per day (default: all eligible candidates).")
     analytics_validate_parser = analytics_subparsers.add_parser("validate", help="Write runtime/analytics/validate_report.{json,md} (N3: read-only scan for malformed JSONL lines + rows missing key fields; local-only, modifies nothing).")
     analytics_validate_parser.add_argument("--since", metavar="YYYY-MM-DD", default=None)
     analytics_validate_parser.add_argument("--until", metavar="YYYY-MM-DD", default=None)
@@ -539,6 +546,33 @@ def _run_analytics_screen_eval(agent_root: Path, *, since: str | None, until: st
     return 0
 
 
+def _run_analytics_setup_screen(
+    agent_root: Path,
+    *,
+    since: str | None,
+    until: str | None,
+    setups: str | None,
+    profile: str | None,
+    lookahead: int,
+    max_per_day: int | None,
+) -> int:
+    from trading_agent.replay.setup_screen import write_setup_screen_report
+
+    setup_list = [name.strip() for name in setups.split(",") if name.strip()] if setups else None
+    json_path, md_path = write_setup_screen_report(
+        agent_root,
+        lookahead=lookahead,
+        since=since,
+        until=until,
+        profile_name=profile,
+        setups=setup_list,
+        max_per_day=max_per_day,
+    )
+    print(f"Wrote {json_path}")
+    print(f"Wrote {md_path}")
+    return 0
+
+
 def _run_nightly_analysis(agent_root: Path) -> int:
     from trading_agent.core.config import load_env_files
     from trading_agent.core.context import build_runtime_paths
@@ -600,6 +634,7 @@ def _run_nightly_analysis(agent_root: Path) -> int:
         ("analytics ai-ablation", ["analytics", "ai-ablation"]),
         ("analytics thesis", ["analytics", "thesis"]),
         ("analytics screen-eval", ["analytics", "screen-eval"]),
+        ("analytics setup-screen", ["analytics", "setup-screen"]),
         ("analytics weight-suggestion", ["analytics", "weight-suggestion"]),
         ("growth observe", ["growth", "observe"]),
         ("growth propose", ["growth", "propose"]),
@@ -684,6 +719,16 @@ def main(argv: list[str] | None = None) -> int:
         return _run_analytics_thesis(agent_root, since=args.since, until=args.until)
     if args.command == "analytics" and args.analytics_command == "screen-eval":
         return _run_analytics_screen_eval(agent_root, since=args.since, until=args.until)
+    if args.command == "analytics" and args.analytics_command == "setup-screen":
+        return _run_analytics_setup_screen(
+            agent_root,
+            since=args.since,
+            until=args.until,
+            setups=args.setups,
+            profile=args.profile,
+            lookahead=args.lookahead,
+            max_per_day=args.max_per_day,
+        )
     if args.command == "analytics" and args.analytics_command == "validate":
         return _run_analytics_validate(agent_root, since=args.since, until=args.until)
     if args.command == "analytics" and args.analytics_command == "retention":
