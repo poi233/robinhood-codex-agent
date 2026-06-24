@@ -34,8 +34,13 @@
   "promotion_rules": {
     "min_shadow_days": 10,
     "min_trading_days": 8,
+    "min_filled_trades": 20,
     "fill_rate_not_worse_than_champion": true,
     "max_drawdown_not_worse_than_champion": true,
     "require_human_final_approval": true
+  },
+  "diversity": {
+    "max_correlation": 0.7,
+    "min_edge": 0.0
   }
 }

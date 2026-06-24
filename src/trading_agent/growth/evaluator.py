@@ -8,6 +8,7 @@ from typing import Any
 
 from trading_agent.core.context import build_experiment_paths, build_runtime_paths
 from trading_agent.core.io import write_json
+from trading_agent.growth.diversity import build_diversity_report
 from trading_agent.growth.experiment_queue import list_experiments
 from trading_agent.growth.policy import load_growth_policy
 from trading_agent.replay.analysis import build_replay_report, discover_run_dates
@@ -142,6 +143,14 @@ def _recommendation(metrics: dict[str, Any], champion: dict[str, Any], promotion
     if metrics["shadow_days"] < min_shadow_days:
         reasons.append(f"min_shadow_days_not_met: {metrics['shadow_days']} < {min_shadow_days}")
 
+    # Q2: don't draw conclusions from a tiny sample — require a minimum number of FILLED trades in
+    # the challenger's isolated ledger before it can be recommended. Default 0 = gate off.
+    min_filled = int(promotion_rules.get("min_filled_trades", 0) or 0)
+    if min_filled > 0:
+        filled = metrics.get("filled")
+        if not filled or int(filled) < min_filled:
+            reasons.append(f"min_filled_trades_not_met: {int(filled or 0)} < {min_filled}")
+
     if promotion_rules.get("fill_rate_not_worse_than_champion"):
         if metrics.get("fill_rate_pct") is None:
             reasons.append("fill_rate_unavailable: challenger has not traded in shadow yet")
@@ -170,6 +179,8 @@ def evaluate_experiments(agent_root: Path, *, since: str | None = None, until: s
     promotion_rules = policy.get("promotion_rules") or {}
 
     challengers: list[dict[str, Any]] = []
+    decisions_by_strategy: dict[str, list[dict[str, Any]]] = {}
+    edge_by_id: dict[str, float | None] = {}
     for experiment in list_experiments(agent_root):
         if experiment.get("status") not in EVALUATED_STATES:
             continue
@@ -178,6 +189,8 @@ def evaluate_experiments(agent_root: Path, *, since: str | None = None, until: s
         metrics = shadow_metrics(decisions)
         # G9: overlay the challenger's real fill rate / drawdown / PnL from its isolated ledger.
         metrics.update(challenger_ledger_metrics(agent_root, strategy_id, run_dates))
+        decisions_by_strategy[strategy_id] = decisions
+        edge_by_id[strategy_id] = metrics.get("realized_pnl")
         challengers.append({
             "experiment_id": experiment.get("experiment_id"),
             "challenger_strategy_id": strategy_id,
@@ -187,11 +200,24 @@ def evaluate_experiments(agent_root: Path, *, since: str | None = None, until: s
             "recommendation": _recommendation(metrics, champion, promotion_rules),
         })
 
+    # Q2: how different are the standing strategies, and which low-correlation subset to forward-run.
+    diversity_rules = policy.get("diversity") or {}
+    diversity = build_diversity_report(
+        agent_root,
+        run_dates=run_dates,
+        challenger_ids=list(decisions_by_strategy.keys()),
+        decisions_by_strategy=decisions_by_strategy,
+        edge_by_id=edge_by_id,
+        max_corr=float(diversity_rules.get("max_correlation", 0.7)),
+        min_edge=float(diversity_rules.get("min_edge", 0.0)),
+    )
+
     return {
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "run_date_range": {"since": since, "until": until},
         "champion": champion,
         "challengers": challengers,
+        "diversity": diversity,
     }
 
 
@@ -233,6 +259,32 @@ def _recommendation_markdown(report: dict[str, Any]) -> str:
         if rec["blocking_reasons"]:
             lines.append("- Blocking reasons:")
             lines.extend(f"  - {reason}" for reason in rec["blocking_reasons"])
+        lines.append("")
+
+    diversity = report.get("diversity") or {}
+    correlation = diversity.get("return_correlation") or {}
+    if correlation:
+        params = diversity.get("params") or {}
+        selected = diversity.get("diverse_selection") or []
+        lines.append("## Diversity (Q2)")
+        lines.append("")
+        if selected:
+            lines.append(
+                f"- Low-correlation diverse pick (edge ≥ {params.get('min_edge')}, "
+                f"corr ≤ {params.get('max_corr')}): {', '.join(selected)}"
+            )
+        else:
+            lines.append("- No positive-edge challenger with enough equity history to select yet.")
+        ids = sorted(correlation)
+        if len(ids) >= 2:
+            lines.append("")
+            lines.append("Daily paper-equity return correlation (lower = more diverse):")
+            lines.append("")
+            lines.append("| | " + " | ".join(ids) + " |")
+            lines.append("|---" * (len(ids) + 1) + "|")
+            for a in ids:
+                cells = ["—" if correlation[a].get(b) is None else f"{correlation[a].get(b)}" for b in ids]
+                lines.append(f"| {a} | " + " | ".join(cells) + " |")
         lines.append("")
     return "\n".join(lines) + "\n"
 

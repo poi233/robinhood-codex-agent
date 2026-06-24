@@ -159,7 +159,7 @@
 | | P8 | **邮件发送结果闭环 + Gmail MCP 瞬时故障重试** | 用户新增（2026-06-23） | ✅ **已完成（2026-06-23）**：通知 prompt 必须把 Gmail 返回的 `message_id` 写入结构化 `*.send_result.json`；Python 上层校验成功回执后才记 `completed`，修复“工具失败但 Codex 退出码 0 导致误报已发送”。对本次新增 stderr 中明确的 Gmail MCP 初始化/握手/传输反序列化错误自动重试一次，历史日志不会误触发重试。 |
 | | P3 | **Technical 叙述 LLM 有边界进决策**（apply_llm_assessment） | 用户新增（2026-06-23） | 🟢 **代码完成（2026-06-23，narrative 现无条件运行）**：叙述 prompt（mini 模型）除写 chan/Brooks/基本面外，额外产结构化 `llm_assessment`（bias/conviction/chan_signal/brooks_quality/fundamental_bias/veto）；`apply_llm_assessment` 把它**有界**地折进决策——priority 至多 ±`TECHNICAL_LLM_MAX_SWING`（默认 12 分≈一档）、`veto` 仅可降级到 avoid（只能更谨慎不能更激进）、**绝不改价格 levels/止损/no_trade**（价格闸门风控恒成立）、数据 failed 的票不动；LLM 失败/缺字段则引擎基线保留 |
 | **Q 策略发现与多样性引擎**（最大化复用历史数据筛策略，用户新增 2026-06-24，见下方 Q 段） | Q1 | **历史 setup 重放筛选器**（任意 setup × 全历史 → 假设成交/前向收益/样本数表） | 用户新增（2026-06-24） | ✅ **已完成（2026-06-24）** |
-| | Q2 | 策略多样性度量 + `growth recommend` 最小成交门槛 + 相关性去重选择 | 用户新增（2026-06-24） | ⏳ **待开始** |
+| | Q2 | 策略多样性度量 + `growth recommend` 最小成交门槛 + 相关性去重选择 | 用户新增（2026-06-24） | ✅ **已完成（2026-06-24）** |
 | | Q3 | 3 个纯日线可筛新入场 setup（gap_fill / failed_breakdown / relative_strength） | 用户新增（2026-06-24） | ⏳ **待开始** |
 | | Q4 | 数据驱动发现回路（near-miss 聚类 / blocked-reason 挖掘 / 特征分桶前向收益） | 用户新增（2026-06-24） | ⏳ **待开始** |
 | | Q5 | 多重比较护栏（train/test 切分 + FDR/deflated Sharpe + 组合层净值评估） | 用户新增（2026-06-24） | ⏳ **待开始** |
@@ -1720,7 +1720,15 @@ edge 可比，但保留真实 point-in-time 闸门。只读、写 `runtime/analy
 **验收**：只读、不写任何 champion/paper 产物；无历史数据时优雅降级（空表 + 提示）；每 setup 出 fills/target_first/
 stop_first/undecided/win_rate/mean_fwd_return + N；daily-close 近似的局限在输出里标注（同 setup_outcomes）。
 
-### Q2 — 策略多样性度量 + recommend 门槛/去重
+### Q2 — 策略多样性度量 + recommend 门槛/去重 — ✅ 已完成（2026-06-24）
+**已完成（2026-06-24）**：`growth/diversity.py` + 接进 `growth/evaluator.py`。① 从各挑战者隔离账本
+`equity_curve.jsonl`（+ champion）算日收益 → **两两 Pearson 相关性**（<3 个公共日记 None 避免噪声）；
+② 从 shadow_decisions 的 would_trade 记 (run_date, symbol) → **入场 Jaccard 重叠**；③ **贪心低相关选择**
+（先取 edge 最高，再反复加 edge≥min_edge 且对已选集合相关性≤max_corr 者）；④ `_recommendation` 加
+**`min_filled_trades` 门槛**（默认 0=关；shipped config 设 20），成交不足不下结论。报告新增 `diversity` 块 +
+promotion MD 的「Diversity (Q2)」相关性矩阵 + 多样化选择。`growth_policy.json` 加 `min_filled_trades`/`diversity`
+两个可配项。只读、不碰 champion；单策略/无数据时旧 recommend 行为逐字不变（回归钉住）。8 个新单测。
+
 **目标**：(1) 任何两个策略的**日 PnL 相关性 / 入场 (symbol,day) 重叠**；(2) `growth recommend` 加**最小成交数
 门槛**（成交 < N 的策略不下结论，避免少样本噪声）+ **贪心低相关选择**（先取最优，再反复加「有正 edge 且与已选
 集合相关性最低」者）；(3) regime/时段**覆盖矩阵**（找空格子 = 下一个该设计的策略提示）。
