@@ -165,7 +165,7 @@
 | | Q4 | 数据驱动发现回路（blocked-reason 边际 / 错过赢家 / near-threshold） | 用户新增（2026-06-24） | ✅ **已完成（2026-06-24）** |
 | | Q5 | 多重比较护栏（train/test 切分 + BH-FDR + 组合层净值评估） | 用户新增（2026-06-24） | ✅ **已完成（2026-06-24）** |
 | | Q6 | 日内 bar 采集（flag 门控）+ ORB/vwap_reclaim 日内 setup | 用户新增（2026-06-24） | ✅ **已完成（2026-06-24）** |
-| **S 策略对等并行 + 排行榜 dashboard**（用户新增 2026-06-24，见下方 S 段） | S1 | 策略排行榜聚合层（champion + 所有挑战者统一指标，按收益排序，显示层领先者） | 用户新增（2026-06-24） | 🟡 **进行中** |
+| **S 策略对等并行 + 排行榜 dashboard**（用户新增 2026-06-24，见下方 S 段） | S1 | 策略排行榜聚合层（champion + 所有挑战者统一指标，按收益排序，显示层领先者） | 用户新增（2026-06-24） | ✅ **已完成（2026-06-24）** |
 | | S2 | dashboard 新增「策略对比」一等页（排序表 + 任意策略切换看权益/订单/K线） | 用户新增（2026-06-24） | ⏳ **待开始** |
 
 > **新旧编号对照**：R1→E1（增 benchmark returns）、R2→E2、R3→A3、R4→D2、R5→D3、R6→D4、R7→F2；
@@ -1842,7 +1842,12 @@ bar 时可筛；doctor 显示开关。
 >   （那正是 Q5 要防的近因追逐 / 过拟合）。
 > - 范围：S1 聚合层 + S2 对称 dashboard 页**全做**。
 
-### S1 — 策略排行榜聚合层
+### S1 — 策略排行榜聚合层 — ✅ 已完成（2026-06-24）
+**已完成（2026-06-24）**：`growth/leaderboard.py:build_leaderboard` + `dashboard/queries.py:strategy_leaderboard`。
+枚举 champion(`load_active_strategy` 的真实 id,role=champion)+ 每个 active_shadow 挑战者,各读自己账本 equity
+(champion `paper/`、挑战者 `experiments/<id>/paper/`)算 总收益/Sharpe(复用 Q5 `significance.sharpe`)/回撤/天数,
+复用 `evaluate_experiments` 的每策略 fill/PnL/回撤;按总收益降序;`leader`=收益最高且 `filled>=min_filled_trades`
+(显示用,不足则 `leader_qualified=False`)。只读、无数据优雅降级(本仓库实测返回 8 个策略全空)。4 个新单测。
 **目标**：一个只读层把 champion（registry active_strategy）+ 所有 active_shadow 挑战者**用同一结构**列出，每个算
 总收益 / Sharpe / 回撤 / 成交数 / 胜率 / 天数（各自隔离账本），按总收益排序，标 `leader`=收益最高且过 min_filled 门槛
 （显示用）。

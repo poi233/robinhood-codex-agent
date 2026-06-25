@@ -418,6 +418,14 @@ def champion_vs_challengers(agent_root: Path) -> dict[str, Any]:
     return _read_json_or_empty(default_experiment_report_path(agent_root))
 
 
+def strategy_leaderboard(agent_root: Path) -> dict[str, Any]:
+    """S1: every strategy (champion + challengers) as peers, sorted by total paper return, with a
+    display-only leader. Read-only; powers the symmetric '策略对比' page."""
+    from trading_agent.growth.leaderboard import build_leaderboard
+
+    return build_leaderboard(agent_root)
+
+
 def proposals_overview(agent_root: Path) -> list[dict[str, Any]]:
     """Read-only summary of every written proposal + its validation status (if any)."""
     base = agent_root / "runtime" / "strategy_proposals"
