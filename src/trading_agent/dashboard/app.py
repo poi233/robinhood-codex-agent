@@ -58,6 +58,13 @@ PAGE_BRIEFS = {
         "先看收益/alpha 卡片，再展开策略细节。",
         "持续跑输大盘时回到校准查信号有效性。",
     ),
+    "strategies": ui.PageBrief(
+        "策略对比",
+        "排行榜 · 任意策略切换",
+        "所有策略（champion + 挑战者）平等并列，按盈利排序，可切换看各自效果。",
+        "先看排行榜与领先者；再选任一策略看它的权益/订单/K线。",
+        "领先=显示置顶；实盘 champion 仍人工提拔，不自动切换。",
+    ),
     "kline": ui.PageBrief(
         "K线复盘",
         "日 K · 均线 · 买卖点",
@@ -96,7 +103,7 @@ with st.sidebar:
 
 active_page = st.segmented_control(
     "页面",
-    ["总览", "选股", "业绩", "日线", "校准", "成长"],
+    ["总览", "选股", "业绩", "策略", "日线", "校准", "成长"],
     default="总览",
     key="dashboard_page",
     label_visibility="collapsed",
@@ -170,6 +177,44 @@ elif active_page == "业绩":
 
     with ui.detail_expander("订单明细"):
         charts.orders_table_view(queries.orders_table(AGENT_ROOT, selected_run_date))
+
+# ── 策略对比 ─────────────────────────────────────────────
+elif active_page == "策略":
+    ui.page_header(PAGE_BRIEFS["strategies"], show_help=show_help)
+    _lb = queries.strategy_leaderboard(AGENT_ROOT)
+    charts.strategy_leaderboard_view(_lb)
+
+    st.subheader("所有策略权益曲线")
+    charts.strategy_equity_replay_view(queries.strategy_equity_curves(AGENT_ROOT))
+
+    _strategies = _lb.get("strategies") or []
+    if _strategies:
+        _ids = [r["strategy_id"] for r in _strategies]
+        _default = _lb.get("leader") or _ids[0]
+        _default_idx = _ids.index(_default) if _default in _ids else 0
+        st.subheader("单策略详情")
+        _picked_id = st.selectbox("选择策略", _ids, index=_default_idx)
+        _picked = next((r for r in _strategies if r["strategy_id"] == _picked_id), _strategies[0])
+        _role = _picked.get("role")
+        ui.metric_row([
+            ui.MetricCard("角色", "champion（实盘主策略）" if _role == "champion" else "挑战者（隔离纸面）"),
+            ui.MetricCard("总收益", ui.fmt_pct((_picked["total_return"] or 0) * 100) if _picked.get("total_return") is not None else "—"),
+            ui.MetricCard("Sharpe", str(_picked["sharpe"]) if _picked.get("sharpe") is not None else "—"),
+            ui.MetricCard("成交数", str(_picked.get("filled", 0))),
+        ])
+        st.caption("领先=显示置顶；实盘 champion 仍人工提拔，本页不改变任何交易。")
+
+        st.markdown("**该策略的成交**")
+        charts.orders_table_view(queries.strategy_filled_orders(AGENT_ROOT, strategy_id=_picked_id, role=_role))
+
+        _kline_symbols = queries.available_kline_symbols(AGENT_ROOT)
+        if _kline_symbols:
+            st.markdown("**该策略的买卖点（K线）**")
+            _sym = st.selectbox("K线标的", _kline_symbols, index=0, key="strat_kline_sym")
+            _trades = queries.trades_for_symbol(AGENT_ROOT, _sym)
+            _key = "champion" if _role == "champion" else _picked_id
+            _ohlcv = queries.ohlcv_daily(AGENT_ROOT, _sym)
+            charts.kline_view(_sym, _ohlcv, _trades, selected_strategies=[_key] if _key in _trades else None)
 
 # ── K线复盘 ─────────────────────────────────────────────
 elif active_page == "日线":

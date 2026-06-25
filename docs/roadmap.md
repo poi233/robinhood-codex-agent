@@ -166,7 +166,7 @@
 | | Q5 | 多重比较护栏（train/test 切分 + BH-FDR + 组合层净值评估） | 用户新增（2026-06-24） | ✅ **已完成（2026-06-24）** |
 | | Q6 | 日内 bar 采集（flag 门控）+ ORB/vwap_reclaim 日内 setup | 用户新增（2026-06-24） | ✅ **已完成（2026-06-24）** |
 | **S 策略对等并行 + 排行榜 dashboard**（用户新增 2026-06-24，见下方 S 段） | S1 | 策略排行榜聚合层（champion + 所有挑战者统一指标，按收益排序，显示层领先者） | 用户新增（2026-06-24） | ✅ **已完成（2026-06-24）** |
-| | S2 | dashboard 新增「策略对比」一等页（排序表 + 任意策略切换看权益/订单/K线） | 用户新增（2026-06-24） | ⏳ **待开始** |
+| | S2 | dashboard 新增「策略对比」一等页（排序表 + 任意策略切换看权益/订单/K线） | 用户新增（2026-06-24） | ✅ **已完成（2026-06-24）** |
 
 > **新旧编号对照**：R1→E1（增 benchmark returns）、R2→E2、R3→A3、R4→D2、R5→D3、R6→D4、R7→F2；
 > token 优化设计→D1；docx 的 run_manifest→B1、registry→B2、analytics.db→B3、changelog→B4、
@@ -1828,7 +1828,7 @@ bar 时可筛；doctor 显示开关。
 
 ---
 
-## S — 策略对等并行 + 排行榜 dashboard — 🟡 进行中（2026-06-24）
+## S — 策略对等并行 + 排行榜 dashboard — ✅ 全部完成（2026-06-24，S1–S2）
 
 > **背景**：挑战者其实**已经在各自隔离账本里并行真跑**（G9：每 tick mark-to-market 记权益 + 真的模拟成交），
 > 但 dashboard 是 champion 为中心、策略对比埋在「策略版本与影子实验」折叠区里，所以用户「有好多策略却只看得到
@@ -1858,7 +1858,13 @@ Q2 `diversity._daily_equity_returns`）；dashboard query `strategy_leaderboard`
 **验收**：champion 与挑战者同结构同表；按总收益降序；leader 受 `min_filled_trades` 门槛约束（不足则 leader_qualified=
 False）；只读、不碰任何账本；无数据优雅降级。
 
-### S2 — dashboard「策略对比」一等页
+### S2 — dashboard「策略对比」一等页 — ✅ 已完成（2026-06-24）
+**已完成（2026-06-24）**：`app.py` 在顶部页切换器加「策略」一等页(总览/选股/业绩/**策略**/日线/校准/成长);
+`charts.strategy_leaderboard_view` 出按总收益排序的排行榜(🏆 领先者徽章 + ⭐ champion 标 + 总收益/Sharpe/回撤/成交数/
+成交率/天数);页内「所有策略权益曲线」(复用 `strategy_equity_replay_view`,全策略同图)+「单策略详情」选择器(默认选
+leader)→ 切到任意策略看其指标卡 / 成交表(`queries.strategy_filled_orders` 读对应账本)/ K线买卖点(复用 `kline_view`
+聚焦单策略)。champion 只是一行(role 标签),明确标注「领先=显示置顶,实盘 champion 仍人工」。更新 `EXPECTED_PAGES`
++ 新增策略页渲染单测;36 dashboard 测试全过,全量 727 passed。
 **目标**：把策略对比从折叠区提成顶部 `segmented_control` 的**一等页**（与 今日/校准/成长 平级）；排序表（领先者徽章）
 + 策略选择器（默认选 leader）→ **对称**展示所选策略的指标卡 / 权益曲线 vs SPY / 订单 / K线买卖点。champion 只是
 其中一行（role 标签 + 动态 leader 标签，无特殊待遇）。

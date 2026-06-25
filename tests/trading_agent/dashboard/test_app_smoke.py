@@ -122,7 +122,7 @@ def _seed(root: Path) -> None:
     build_analytics_db(root)
 
 
-EXPECTED_PAGES = ["总览", "选股", "业绩", "日线", "校准", "成长"]
+EXPECTED_PAGES = ["总览", "选股", "业绩", "策略", "日线", "校准", "成长"]
 
 
 def test_dashboard_renders_every_page_without_error(tmp_path, monkeypatch):
@@ -157,6 +157,22 @@ def test_dashboard_selection_layer_panels_render(tmp_path, monkeypatch):
     app.segmented_control[0].set_value("校准").run()
     assert not app.exception, app.exception
     assert "选股有效性（O4）" in [s.value for s in app.subheader]
+
+
+def test_dashboard_strategy_page_renders_leaderboard_and_switch(tmp_path, monkeypatch):
+    """S2: the 策略 page shows the peer leaderboard + all-strategy equity + a per-strategy switch."""
+    _seed(tmp_path)
+    monkeypatch.setenv("AGENT_ROOT", str(tmp_path))
+    monkeypatch.chdir(tmp_path)
+    app = AppTest.from_file(str(APP_PATH), default_timeout=60)
+    app.run()
+    app.segmented_control[0].set_value("策略").run()
+    assert not app.exception, app.exception
+    subheaders = [s.value for s in app.subheader]
+    assert "所有策略权益曲线" in subheaders
+    assert "单策略详情" in subheaders
+    # the per-strategy selector exists (champion + the seeded challenger are both selectable peers)
+    assert any(getattr(sb, "label", "") == "选择策略" for sb in app.selectbox)
 
 
 def test_dashboard_ignores_current_working_directory(tmp_path, monkeypatch):

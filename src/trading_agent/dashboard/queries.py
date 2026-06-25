@@ -426,6 +426,35 @@ def strategy_leaderboard(agent_root: Path) -> dict[str, Any]:
     return build_leaderboard(agent_root)
 
 
+def strategy_filled_orders(agent_root: Path, *, strategy_id: str, role: str) -> list[dict[str, Any]]:
+    """S2: filled paper orders for ONE strategy across all run dates. Champion reads the main paper
+    ledger; a challenger reads its isolated experiments/<id>/paper ledger. Read-only, newest first."""
+    from trading_agent.core.context import build_runtime_paths
+    from trading_agent.replay.analysis import _resolve_final_orders
+
+    out: list[dict[str, Any]] = []
+    for run_date in list_run_dates(agent_root):
+        if role == "champion":
+            path = build_runtime_paths(agent_root, run_date=run_date).paper_orders_log_path
+        else:
+            path = build_runtime_paths(agent_root, run_date=run_date).run_state_dir / "experiments" / strategy_id / "paper" / "orders.jsonl"
+        for order in _resolve_final_orders(_read_jsonl_or_empty(path)):
+            if str(order.get("status") or "").lower() not in {"filled", "partial_filled"}:
+                continue
+            out.append({
+                "run_date": run_date,
+                "symbol": order.get("symbol"),
+                "side": order.get("side"),
+                "status": order.get("status"),
+                "quantity": order.get("quantity"),
+                "fill_price": order.get("fill_price") if order.get("fill_price") is not None else order.get("limit_price"),
+                "notional": order.get("notional"),
+                "setup_type": order.get("setup_type"),
+            })
+    out.sort(key=lambda r: str(r.get("run_date")), reverse=True)
+    return out
+
+
 def proposals_overview(agent_root: Path) -> list[dict[str, Any]]:
     """Read-only summary of every written proposal + its validation status (if any)."""
     base = agent_root / "runtime" / "strategy_proposals"

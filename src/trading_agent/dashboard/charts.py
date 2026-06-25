@@ -502,6 +502,40 @@ def equity_curve_view(payload: dict[str, Any]) -> None:
         st.caption("（基准曲线需要本地 market_feed 中的 SPY 日线；当前缺数据，只画策略权益）")
 
 
+def strategy_leaderboard_view(leaderboard: dict[str, Any]) -> None:
+    """S1/S2: all strategies as peers, sorted by total paper return, leader badged. The leader is a
+    DISPLAY pointer only — the execution champion stays a manual decision."""
+    strategies = leaderboard.get("strategies") or []
+    if not strategies:
+        st.info("暂无策略数据。挑战者在 intraday 跑过 shadow 且有纸面权益后填充。")
+        return
+    leader = leaderboard.get("leader")
+    if leader and leaderboard.get("leader_qualified"):
+        st.caption(
+            f"🏆 当前领先（按总收益）：**{leader}** — 仅显示置顶；实盘 champion 仍人工 YAML 提拔，不自动切换。"
+        )
+    else:
+        st.caption(
+            f"暂无策略满足最小成交门槛（{leaderboard.get('min_filled_trades', 0)} 笔），下表按总收益排序仅供参考；"
+            "实盘 champion 仍人工提拔。"
+        )
+    rows = []
+    for r in strategies:
+        badge = "🏆" if r.get("is_leader") else ("⭐" if r.get("role") == "champion" else "")
+        rows.append({
+            "": badge,
+            "策略": r.get("strategy_id"),
+            "角色": "champion" if r.get("role") == "champion" else "挑战者",
+            "总收益": ui.fmt_pct((r["total_return"] or 0) * 100) if r.get("total_return") is not None else "—",
+            "Sharpe": r["sharpe"] if r.get("sharpe") is not None else "—",
+            "最大回撤": ui.fmt_pct((r["max_drawdown"] or 0) * 100) if r.get("max_drawdown") is not None else "—",
+            "成交数": r.get("filled", 0),
+            "成交率": ui.fmt_pct(r["fill_rate_pct"]) if r.get("fill_rate_pct") is not None else "—",
+            "天数": r.get("days", 0),
+        })
+    ui.pretty_table(rows)
+
+
 def strategy_comparison_view(rows: list[dict[str, Any]]) -> None:
     st.subheader("各策略版本对比（按 strategy_id）")
     if not rows:
