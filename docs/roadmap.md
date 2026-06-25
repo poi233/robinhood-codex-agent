@@ -165,6 +165,8 @@
 | | Q4 | 数据驱动发现回路（blocked-reason 边际 / 错过赢家 / near-threshold） | 用户新增（2026-06-24） | ✅ **已完成（2026-06-24）** |
 | | Q5 | 多重比较护栏（train/test 切分 + BH-FDR + 组合层净值评估） | 用户新增（2026-06-24） | ✅ **已完成（2026-06-24）** |
 | | Q6 | 日内 bar 采集（flag 门控）+ ORB/vwap_reclaim 日内 setup | 用户新增（2026-06-24） | ✅ **已完成（2026-06-24）** |
+| **S 策略对等并行 + 排行榜 dashboard**（用户新增 2026-06-24，见下方 S 段） | S1 | 策略排行榜聚合层（champion + 所有挑战者统一指标，按收益排序，显示层领先者） | 用户新增（2026-06-24） | 🟡 **进行中** |
+| | S2 | dashboard 新增「策略对比」一等页（排序表 + 任意策略切换看权益/订单/K线） | 用户新增（2026-06-24） | ⏳ **待开始** |
 
 > **新旧编号对照**：R1→E1（增 benchmark returns）、R2→E2、R3→A3、R4→D2、R5→D3、R6→D4、R7→F2；
 > token 优化设计→D1；docx 的 run_manifest→B1、registry→B2、analytics.db→B3、changelog→B4、
@@ -1823,3 +1825,44 @@ bar 时可筛；doctor 显示开关。
 ### Q 段推荐执行顺序
 1. **Q1**（地基，其余都依赖）→ 2. **Q2**（度量到位才能比）→ 3. **Q3**（用 Q1 筛 + Q2 比）→ 4. **Q4**（发现新假设）
 → 5. **Q5**（护栏，防自欺）→ 6. **Q6**（补日内数据，解锁更多维度）。每项做完更新本节状态 + 单独 push。
+
+---
+
+## S — 策略对等并行 + 排行榜 dashboard — 🟡 进行中（2026-06-24）
+
+> **背景**：挑战者其实**已经在各自隔离账本里并行真跑**（G9：每 tick mark-to-market 记权益 + 真的模拟成交），
+> 但 dashboard 是 champion 为中心、策略对比埋在「策略版本与影子实验」折叠区里，所以用户「有好多策略却只看得到
+> 主策略」。目标：把所有策略当**对等同伴**呈现——一张按盈利排序的排行榜，任意策略可切换看各自效果，**最赚的置顶
+> 当 champion 显示**，其余同等可见。执行层**无需改动**（已经在并行跑）。
+>
+> **关键安全决策（已与用户确认 2026-06-24）**：
+> - 领先者**只做显示置顶**——dashboard 里按收益排序、leader 置顶+默认展开，用 Q5 的最小成交门槛过滤掉少样本
+>   噪声；纯展示，不动任何交易。
+> - 真正喂实盘/live 的 champion **仍冻结、只人工 YAML 提拔（G8）**，**绝不自动把执行 champion 换成「最近最赚的」**
+>   （那正是 Q5 要防的近因追逐 / 过拟合）。
+> - 范围：S1 聚合层 + S2 对称 dashboard 页**全做**。
+
+### S1 — 策略排行榜聚合层
+**目标**：一个只读层把 champion（registry active_strategy）+ 所有 active_shadow 挑战者**用同一结构**列出，每个算
+总收益 / Sharpe / 回撤 / 成交数 / 胜率 / 天数（各自隔离账本），按总收益排序，标 `leader`=收益最高且过 min_filled 门槛
+（显示用）。
+**具体**：新增 `growth/leaderboard.py:build_leaderboard`——复用 `evaluate_experiments`（每策略 fill/PnL/回撤）+ 各账本
+equity 曲线（champion `paper/`、挑战者 `experiments/<id>/paper/`）算总收益 / Sharpe（复用 Q5 `significance.sharpe` +
+Q2 `diversity._daily_equity_returns`）；dashboard query `strategy_leaderboard` 包一层。
+**涉及文件**：新增 `growth/leaderboard.py` + `tests/.../test_leaderboard.py`；`dashboard/queries.py`（query）。
+**验收**：champion 与挑战者同结构同表；按总收益降序；leader 受 `min_filled_trades` 门槛约束（不足则 leader_qualified=
+False）；只读、不碰任何账本；无数据优雅降级。
+
+### S2 — dashboard「策略对比」一等页
+**目标**：把策略对比从折叠区提成顶部 `segmented_control` 的**一等页**（与 今日/校准/成长 平级）；排序表（领先者徽章）
++ 策略选择器（默认选 leader）→ **对称**展示所选策略的指标卡 / 权益曲线 vs SPY / 订单 / K线买卖点。champion 只是
+其中一行（role 标签 + 动态 leader 标签，无特殊待遇）。
+**具体**：`dashboard/app.py` 加页；`charts.py` 加 `strategy_leaderboard_view` + 单策略详情；复用现成
+`strategy_equity_replay_view`（已画所有曲线）+ `kline_view`（已支持多策略，聚焦单策略）；`queries.py` 加 per-strategy
+订单查询。
+**涉及文件**：`dashboard/app.py`、`dashboard/charts.py`、`dashboard/queries.py` + 测试。
+**验收**：新页与 今日/校准/成长 平级；表按收益排序、leader 置顶 + 徽章；选任意策略能看其独立效果；champion 无特殊
+待遇；headless `AppTest` 渲染过空态 + 有数据态；页面明确标注「领先=显示置顶，实盘 champion 仍人工」。
+
+### S 段执行顺序
+1. **S1** 聚合层（S2 依赖它）→ 2. **S2** dashboard 页。每步做完更新本节状态 + 单独 push。
