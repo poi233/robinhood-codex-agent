@@ -105,10 +105,11 @@ def test_build_postmarket_email_body_includes_current_position_analysis_and_revi
 
     assert body.startswith("【盘后复盘通知】")
     assert "##" not in body
-    assert "【当前持仓分析】" in body
-    assert "NVDA：数量 1，成本 $100.00，现价 $110.00，市值 $110.00，未实现盈亏 $10.00（10.00%）" in body
-    assert "【今日回顾】" in body
-    assert "总权益变化 $12.50" in body
+    assert "【账户总览】" in body
+    assert "【每个账户持仓与收益】" in body
+    assert "NVDA：数量 1，成本 $100.00，现价 $110.00，市值 $110.00，未实现 +$10.00（+10.00%）" in body
+    assert "【执行与风控】" in body
+    assert "总权益变化：+$12.50" in body
 
 
 def test_build_postmarket_email_body_includes_shadow_experiments() -> None:
@@ -133,9 +134,12 @@ def test_build_postmarket_email_body_includes_shadow_experiments() -> None:
         }
     )
 
-    assert "【影子实验盘】" in body
-    assert "midfreq_v1__trend_follow：成交 2，待成交 0，持仓 AMD 76.89 股，成本 $522.31。" in body
-    assert "midfreq_v1__gap_fill：成交 0，待成交 1，持仓 无。" in body
+    assert "【每个账户持仓与收益】" in body
+    assert "midfreq_v1__trend_follow" in body
+    assert "订单：总数 0，成交 2，待成交 0" in body
+    assert "- AMD 76.89 股，成本 $522.31" in body
+    assert "midfreq_v1__gap_fill" in body
+    assert "订单：总数 0，成交 0，待成交 1" in body
     assert "不会触发真实订单" in body
 
 

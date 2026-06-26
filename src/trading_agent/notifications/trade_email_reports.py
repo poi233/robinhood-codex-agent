@@ -35,9 +35,33 @@ def _read_jsonl(path: Path) -> list[dict[str, Any]]:
 
 def _money(value: Any) -> str:
     try:
-        return f"${float(value or 0):,.2f}"
+        numeric = float(value or 0)
     except (TypeError, ValueError):
         return "$0.00"
+    if numeric < 0:
+        return f"-${abs(numeric):,.2f}"
+    return f"${numeric:,.2f}"
+
+
+def _signed_money(value: Any) -> str:
+    try:
+        numeric = float(value or 0)
+    except (TypeError, ValueError):
+        numeric = 0.0
+    if numeric > 0:
+        return f"+${numeric:,.2f}"
+    if numeric < 0:
+        return f"-${abs(numeric):,.2f}"
+    return "$0.00"
+
+
+def _pct(value: Any) -> str:
+    try:
+        numeric = float(value or 0)
+    except (TypeError, ValueError):
+        numeric = 0.0
+    sign = "+" if numeric > 0 else ""
+    return f"{sign}{numeric:.2f}%"
 
 
 def _number(value: Any) -> str:
@@ -355,7 +379,82 @@ def build_premarket_email_body(agent_root: Path, *, run_date: str | None = None)
 
 
 def build_postmarket_email_body(summary: Mapping[str, object]) -> str:
-    positions = summary.get("open_position_details")
+    account_summaries = summary.get("account_summaries")
+    if not isinstance(account_summaries, list) or not account_summaries:
+        account_summaries = [
+            {
+                "name": "主模拟盘",
+                "starting_total_equity": summary.get("starting_total_equity"),
+                "ending_total_equity": summary.get("ending_total_equity"),
+                "total_equity_change": summary.get("total_equity_change"),
+                "total_return_pct": summary.get("total_return_pct"),
+                "realized_pnl": summary.get("realized_pnl"),
+                "unrealized_pnl": summary.get("unrealized_pnl"),
+                "ending_cash": summary.get("ending_cash"),
+                "positions_market_value": summary.get("positions_market_value"),
+                "order_count": summary.get("order_count"),
+                "filled_order_count": summary.get("filled_order_count"),
+                "pending_order_count": summary.get("pending_order_count"),
+                "filled_notional": summary.get("filled_notional"),
+                "open_position_details": summary.get("open_position_details"),
+            }
+        ]
+        shadow_experiments = summary.get("shadow_experiments")
+        if isinstance(shadow_experiments, list):
+            account_summaries.extend(
+                {**experiment, "account_type": "shadow_experiment"}
+                for experiment in shadow_experiments
+                if isinstance(experiment, Mapping)
+            )
+    account_lines: list[str] = []
+    shadow_count = 0
+    for raw_account in account_summaries:
+        if not isinstance(raw_account, Mapping):
+            continue
+        name = str(raw_account.get("name") or "未命名账户")
+        if raw_account.get("account_type") == "shadow_experiment":
+            shadow_count += 1
+        account_lines.extend(_postmarket_account_lines(raw_account, name=name))
+    lines = [
+        "【盘后复盘通知】",
+        _bullet("日期", summary.get("date", "")),
+        _bullet("交易模式", {"paper": "模拟盘", "review": "审阅", "live": "实盘"}.get(str(summary.get("trading_mode") or "paper"), str(summary.get("trading_mode") or "paper"))),
+        *_section("账户总览"),
+        f"主账户收益 {_signed_money(summary.get('total_equity_change'))}（{_pct(summary.get('total_return_pct'))}），"
+        f"期末权益 {_money(summary.get('ending_total_equity'))}，持仓市值 {_money(summary.get('positions_market_value'))}。",
+        f"主账户订单 {int(summary.get('order_count', 0) or 0)} 笔，成交 {int(summary.get('filled_order_count', 0) or 0)} 笔，"
+        f"成交名义金额 {_money(summary.get('filled_notional'))}。",
+        f"影子实验账户：{shadow_count} 个。",
+        *_section("每个账户持仓与收益"),
+        *(account_lines or ["未找到可展示的账户明细。"]),
+        *_section("执行与风控"),
+        _bullet("期初总权益", _money(summary.get("starting_total_equity"))),
+        _bullet("期末总权益", _money(summary.get("ending_total_equity"))),
+        _bullet("总权益变化", f"{_signed_money(summary.get('total_equity_change'))}（{_pct(summary.get('total_return_pct'))}）"),
+        _bullet("已实现盈亏", _money(summary.get("realized_pnl"))),
+        _bullet("未实现盈亏", _money(summary.get("unrealized_pnl"))),
+        f"订单数 {int(summary.get('order_count', 0) or 0)}，成交 {int(summary.get('filled_order_count', 0) or 0)}，成交名义金额 {_money(summary.get('filled_notional'))}。",
+        f"收盘持仓数量 {int(summary.get('open_position_count', 0) or 0)}，明天盘前继续按风险层级和候选评分更新计划。",
+        _bullet("现金变化", _money(summary.get("cash_change"))),
+        _bullet("持仓市值", _money(summary.get("positions_market_value"))),
+        _bullet("拒绝或取消订单数", int(summary.get("rejected_or_canceled_order_count", 0) or 0)),
+        "说明：影子实验使用独立模拟账本，不影响主模拟盘，也不会触发真实订单。",
+    ]
+    return "\n".join(lines) + "\n"
+
+
+def _postmarket_account_lines(account: Mapping[str, object], *, name: str) -> list[str]:
+    lines = [
+        f"{name}",
+        f"  权益：{_money(account.get('starting_total_equity'))} → {_money(account.get('ending_total_equity'))}；"
+        f"收益 {_signed_money(account.get('total_equity_change'))}（{_pct(account.get('total_return_pct'))}）",
+        f"  现金：{_money(account.get('ending_cash'))}；持仓市值：{_money(account.get('positions_market_value'))}；"
+        f"已实现 {_money(account.get('realized_pnl'))}；未实现 {_money(account.get('unrealized_pnl'))}",
+        f"  订单：总数 {int(account.get('order_count', 0) or 0)}，成交 {int(account.get('filled_order_count', 0) or 0)}，"
+        f"待成交 {int(account.get('pending_order_count', 0) or 0)}，成交名义金额 {_money(account.get('filled_notional'))}",
+        "  持仓：",
+    ]
+    positions = account.get("open_position_details")
     position_lines: list[str] = []
     if isinstance(positions, list):
         for item in positions:
@@ -364,51 +463,18 @@ def build_postmarket_email_body(summary: Mapping[str, object]) -> str:
             symbol = str(item.get("symbol") or "").upper()
             if not symbol:
                 continue
+            price_note = "；价格缺失，按成本暂估" if item.get("market_price_source") == "estimated_from_cost" else ""
             position_lines.append(
-                f"{symbol}：数量 {_number(item.get('quantity'))}，成本 {_money(item.get('average_cost'))}，"
+                f"    - {symbol}：数量 {_number(item.get('quantity'))}，成本 {_money(item.get('average_cost'))}，"
                 f"现价 {_money(item.get('market_price'))}，市值 {_money(item.get('market_value'))}，"
-                f"未实现盈亏 {_money(item.get('unrealized_pnl'))}（{float(item.get('unrealized_return_pct') or 0):.2f}%）"
+                f"未实现 {_signed_money(item.get('unrealized_pnl'))}（{_pct(item.get('unrealized_return_pct'))}）{price_note}"
             )
     if not position_lines:
-        position_lines = ["当前没有持仓。"]
-    shadow_lines: list[str] = []
-    shadow_experiments = summary.get("shadow_experiments")
-    if isinstance(shadow_experiments, list):
-        for experiment in shadow_experiments:
-            if not isinstance(experiment, Mapping):
-                continue
-            name = str(experiment.get("name") or "未命名策略")
-            filled = int(experiment.get("filled_order_count", 0) or 0)
-            pending = int(experiment.get("pending_order_count", 0) or 0)
-            positions_text = _join_or_none(experiment.get("position_summaries") or [])
-            shadow_lines.append(
-                f"{name}：成交 {filled}，待成交 {pending}，持仓 {positions_text}。"
-            )
-    if not shadow_lines:
-        shadow_lines = ["今天没有影子实验成交或待成交订单。"]
-    lines = [
-        "【盘后复盘通知】",
-        _bullet("日期", summary.get("date", "")),
-        _bullet("交易模式", {"paper": "模拟盘", "review": "审阅", "live": "实盘"}.get(str(summary.get("trading_mode") or "paper"), str(summary.get("trading_mode") or "paper"))),
-        _bullet("期初总权益", _money(summary.get("starting_total_equity"))),
-        _bullet("期末总权益", _money(summary.get("ending_total_equity"))),
-        _bullet("总权益变化", _money(summary.get("total_equity_change"))),
-        _bullet("已实现盈亏", _money(summary.get("realized_pnl"))),
-        *_section("当前持仓分析"),
-        *position_lines,
-        *_section("今日回顾"),
-        f"总权益变化 {_money(summary.get('total_equity_change'))}，已实现盈亏 {_money(summary.get('realized_pnl'))}。",
-        f"订单数 {int(summary.get('order_count', 0) or 0)}，成交 {int(summary.get('filled_order_count', 0) or 0)}，成交名义金额 {_money(summary.get('filled_notional'))}。",
-        f"收盘持仓数量 {int(summary.get('open_position_count', 0) or 0)}，明天盘前继续按风险层级和候选评分更新计划。",
-        *_section("账户与执行"),
-        _bullet("现金变化", _money(summary.get("cash_change"))),
-        _bullet("持仓市值", _money(summary.get("positions_market_value"))),
-        _bullet("拒绝或取消订单数", int(summary.get("rejected_or_canceled_order_count", 0) or 0)),
-        *_section("影子实验盘"),
-        *shadow_lines,
-        "说明：影子实验使用独立模拟账本，不影响主模拟盘，也不会触发真实订单。",
-    ]
-    return "\n".join(lines) + "\n"
+        summaries = account.get("position_summaries")
+        if isinstance(summaries, list):
+            position_lines = [f"    - {summary}" for summary in summaries if str(summary).strip()]
+    lines.extend(position_lines or ["    - 当前没有持仓。"])
+    return lines
 
 
 _REASON_ZH = {

@@ -130,10 +130,11 @@ class PostmarketPaperSnapshotTests(unittest.TestCase):
         self.assertIn("## 账户概览", zh_report)
         notify.assert_called_once()
         self.assertEqual(notify.call_args.kwargs["event_tag"], "POSTMARKET_DONE")
-        self.assertIn("【当前持仓分析】", notify.call_args.kwargs["body"])
+        self.assertIn("【每个账户持仓与收益】", notify.call_args.kwargs["body"])
         self.assertIn("NVDA：数量 0.1", notify.call_args.kwargs["body"])
-        self.assertIn("【影子实验盘】", notify.call_args.kwargs["body"])
-        self.assertIn("trend_follow：成交 1，待成交 0，持仓 AMD 2.5 股，成本 $100.00。", notify.call_args.kwargs["body"])
+        self.assertIn("trend_follow", notify.call_args.kwargs["body"])
+        self.assertIn("订单：总数 1，成交 1，待成交 0", notify.call_args.kwargs["body"])
+        self.assertIn("AMD：数量 2.5", notify.call_args.kwargs["body"])
         self.assertEqual(
             notify.call_args.kwargs["report_path"].resolve(),
             (root / "runtime" / "logs" / "runs" / "2026-06-14" / "reports" / "postmarket_summary.md").resolve(),
