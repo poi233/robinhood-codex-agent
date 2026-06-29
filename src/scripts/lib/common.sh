@@ -126,10 +126,11 @@ fi
 
 TRADING_MODE="${TRADING_MODE:-paper}"
 # Two-tier Codex model routing: reasoning-heavy prompts use CODEX_MODEL, simple
-# data-fetch / formatting prompts use CODEX_MODEL_MINI. CODEX_MODEL_FORCE pins
-# every prompt to a single model (escape hatch).
+# data-fetch / formatting prompts use CODEX_MODEL_MINI. The mini slot defaults
+# to the full model for scheduled-run reliability. CODEX_MODEL_FORCE pins every
+# prompt to a single model (escape hatch).
 CODEX_MODEL="${CODEX_MODEL:-gpt-5.4}"
-CODEX_MODEL_MINI="${CODEX_MODEL_MINI:-gpt-5.4-mini}"
+CODEX_MODEL_MINI="${CODEX_MODEL_MINI:-gpt-5.4}"
 CODEX_BIN="${CODEX_BIN:-codex}"
 RISK_TIER="${RISK_TIER:-0}"
 MAX_SINGLE_ORDER_NOTIONAL="${MAX_SINGLE_ORDER_NOTIONAL:-10}"

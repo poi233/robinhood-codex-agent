@@ -130,7 +130,7 @@ class CoreRuntimeTests(unittest.TestCase):
         config = RuntimeConfig(
             trading_mode="live",
             codex_model="gpt-5.4",
-            codex_model_mini="gpt-5.4-mini",
+            codex_model_mini="gpt-5.4",
             risk_tier=4,
             paper_risk_tier=4,
             market_feed_timeframes="1d",
@@ -142,7 +142,7 @@ class CoreRuntimeTests(unittest.TestCase):
         config = RuntimeConfig(
             trading_mode="review",
             codex_model="gpt-5.4",
-            codex_model_mini="gpt-5.4-mini",
+            codex_model_mini="gpt-5.4",
             risk_tier=4,
             paper_risk_tier=0,
             market_feed_timeframes="1d",
@@ -154,7 +154,7 @@ class CoreRuntimeTests(unittest.TestCase):
         config = RuntimeConfig(
             trading_mode="paper",
             codex_model="gpt-5.4",
-            codex_model_mini="gpt-5.4-mini",
+            codex_model_mini="gpt-5.4",
             risk_tier=0,
             paper_risk_tier=4,
             market_feed_timeframes="1d",
@@ -165,7 +165,7 @@ class CoreRuntimeTests(unittest.TestCase):
         config = RuntimeConfig(
             trading_mode="live",
             codex_model="gpt-5.4",
-            codex_model_mini="gpt-5.4-mini",
+            codex_model_mini="gpt-5.4",
             risk_tier=2,
             paper_risk_tier=4,
             market_feed_timeframes="1d",

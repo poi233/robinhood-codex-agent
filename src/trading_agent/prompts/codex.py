@@ -10,10 +10,11 @@ from trading_agent.core.context import build_runtime_paths
 from trading_agent.core.run_history import append_prompt_progress_log, append_run_output_log, append_stage_log
 from trading_agent.prompts.runtime_block import build_runtime_block
 
-# Default models for the two tiers. Simple, data-fetch / formatting prompts run
-# on the cheaper "mini" model; reasoning-heavy prompts run on the full model.
+# Default models for the two tiers. Simple, data-fetch / formatting prompts keep
+# the CODEX_MODEL_MINI routing slot, but default to the full model so scheduled
+# runs do not fail on mini-model capacity.
 DEFAULT_CODEX_MODEL = "gpt-5.4"
-DEFAULT_CODEX_MODEL_MINI = "gpt-5.4-mini"
+DEFAULT_CODEX_MODEL_MINI = "gpt-5.4"
 
 # Run kinds that are simple, mechanical operations (read an MCP tool / format a
 # payload / fetch a snapshot) and do not need a reasoning-heavy model. Everything
@@ -39,7 +40,7 @@ SIMPLE_RUN_KINDS = frozenset(
 
 
 def _is_simple_run_kind(run_kind: str) -> bool:
-    """Return True when run_kind should use the cheaper mini model."""
+    """Return True when run_kind should use the simple-operation model slot."""
     if run_kind.startswith("email_notification"):
         return True
     return run_kind in SIMPLE_RUN_KINDS
@@ -48,7 +49,7 @@ def _is_simple_run_kind(run_kind: str) -> bool:
 def resolve_codex_model(run_kind: str) -> str:
     """Pick the Codex model for a given run kind.
 
-    Simple operations use ``CODEX_MODEL_MINI`` (default ``gpt-5.4-mini``);
+    Simple operations use ``CODEX_MODEL_MINI`` (default ``gpt-5.4``);
     reasoning-heavy operations use ``CODEX_MODEL`` (default ``gpt-5.4``).
     Setting ``CODEX_MODEL_FORCE`` overrides routing and pins every prompt to a
     single model (escape hatch for debugging / cost experiments).

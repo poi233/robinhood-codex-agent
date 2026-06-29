@@ -342,7 +342,7 @@ def run_premarket_pipeline(*, dry_run: bool) -> int:
         )
         write_json(paths.technical_signals_path, signals)
 
-        # Narrative + bounded-LLM pass: the prompt (cheap/mini model) writes
+        # Narrative + bounded-LLM pass: the prompt (simple-operation model slot) writes
         # chan/Brooks/fundamentals narrative AND a structured llm_assessment per
         # symbol. apply_llm_assessment then folds that opinion into
         # action/priority/confidence WITHIN HARD BOUNDS and never edits price
