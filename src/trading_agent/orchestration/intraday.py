@@ -14,7 +14,12 @@ from trading_agent.core.time import pt_date_string
 from trading_agent.data.live_quotes import fetch_yfinance_live_quotes
 from trading_agent.notifications.email import send_trade_email_notification
 from trading_agent.notifications.trade_email_reports import build_intraday_trade_email_body
-from trading_agent.paper.broker import apply_paper_intent, reconcile_pending_paper_orders, record_paper_day_start
+from trading_agent.paper.broker import (
+    apply_paper_intent,
+    mark_paper_positions_to_market,
+    reconcile_pending_paper_orders,
+    record_paper_day_start,
+)
 from trading_agent.policy.engine import generate_order_intent
 from trading_agent.policy.loaders import load_policy_inputs
 from trading_agent.policy.models import PolicyDecision
@@ -170,12 +175,28 @@ def run_intraday_pipeline(*, dry_run: bool) -> int:
         require_live_quotes=True,
     )
     if runtime.trading_mode == "paper":
+        record_paper_day_start(
+            agent_root,
+            run_date=run_date,
+            starting_cash=paper_starting_cash,
+            quotes=inputs.quotes,
+        )
+        inputs = load_policy_inputs(
+            agent_root,
+            run_date=run_date,
+            trading_mode=runtime.trading_mode,
+            risk_tier=effective_risk_tier,
+            robinhood_gateway=None,
+            quote_provider=fetch_yfinance_live_quotes,
+            require_live_quotes=True,
+        )
         pending_fill_events = reconcile_pending_paper_orders(
             agent_root,
             run_date=run_date,
             quotes=inputs.quotes,
             starting_cash=paper_starting_cash,
         )
+        mark_paper_positions_to_market(agent_root, run_date=run_date, quotes=inputs.quotes, event="intraday_mark")
         if pending_fill_events:
             inputs = load_policy_inputs(
                 agent_root,
@@ -186,13 +207,6 @@ def run_intraday_pipeline(*, dry_run: bool) -> int:
                 quote_provider=fetch_yfinance_live_quotes,
                 require_live_quotes=True,
             )
-    if runtime.trading_mode == "paper":
-        record_paper_day_start(
-            agent_root,
-            run_date=run_date,
-            starting_cash=paper_starting_cash,
-            positions=inputs.positions,
-        )
     decision = generate_order_intent(inputs)
     if runtime.trading_mode == "paper" and decision.decision == "would_trade":
         paper_result = apply_paper_intent(

@@ -25,14 +25,27 @@ def _simulate_challenger_paper(agent_root: Path, run_date: str, strategy_id: str
                                champion_inputs: PolicyInputs, challenger_inputs: PolicyInputs) -> None:
     """Seed/reconcile the challenger's isolated paper ledger and overlay its own account/positions/
     pending into challenger_inputs, so the challenger decides and trades from ITS OWN state."""
-    from trading_agent.paper.broker import reconcile_pending_paper_orders, record_paper_day_start
+    from trading_agent.paper.broker import mark_paper_positions_to_market, reconcile_pending_paper_orders, record_paper_day_start
     from trading_agent.policy.loaders import hydrate_paper_ledger
 
     exp_runtime = build_experiment_runtime_paths(agent_root, run_date=run_date, strategy_id=strategy_id)
     starting_cash = _challenger_starting_cash()
-    record_paper_day_start(agent_root, run_date=run_date, starting_cash=starting_cash, paths_override=exp_runtime)
+    record_paper_day_start(
+        agent_root,
+        run_date=run_date,
+        starting_cash=starting_cash,
+        quotes=champion_inputs.quotes,
+        paths_override=exp_runtime,
+    )
     reconcile_pending_paper_orders(agent_root, run_date=run_date, quotes=champion_inputs.quotes,
                                    starting_cash=starting_cash, paths_override=exp_runtime)
+    mark_paper_positions_to_market(
+        agent_root,
+        run_date=run_date,
+        quotes=champion_inputs.quotes,
+        event="shadow_mark",
+        paths_override=exp_runtime,
+    )
     hydrate_paper_ledger(challenger_inputs, exp_runtime)
 
 

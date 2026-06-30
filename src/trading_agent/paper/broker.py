@@ -79,6 +79,75 @@ def _normalize_positions(positions: Any) -> dict[str, Any]:
     return {str(symbol).upper(): _position_payload(position, str(symbol).upper()) for symbol, position in positions.items()}
 
 
+def _previous_ledger_paths(paths: Any, run_date: str) -> tuple[Path, Path] | None:
+    """Return the latest previous account/positions paths for the same ledger.
+
+    Champion paper uses ``paper/...`` under each run date. Shadow strategies use
+    ``experiments/<strategy>/paper/...``. Preserving the path suffix lets both
+    ledgers carry forward independently.
+    """
+    try:
+        account_suffix = paths.paper_account_path.relative_to(paths.run_state_dir)
+        positions_suffix = paths.paper_positions_path.relative_to(paths.run_state_dir)
+    except ValueError:
+        return None
+    runs_root = paths.run_state_dir.parent
+    if not runs_root.exists():
+        return None
+    for prior_run_dir in sorted(
+        (path for path in runs_root.iterdir() if path.is_dir() and path.name < run_date),
+        key=lambda path: path.name,
+        reverse=True,
+    ):
+        account_path = prior_run_dir / account_suffix
+        positions_path = prior_run_dir / positions_suffix
+        if account_path.exists() or positions_path.exists():
+            return account_path, positions_path
+    return None
+
+
+def _carry_forward_account_positions(paths: Any, run_date: str, starting_cash: float) -> tuple[dict[str, Any], dict[str, Any]]:
+    account = _read_json_or(paths.paper_account_path, None)
+    positions = _read_json_or(paths.paper_positions_path, None)
+    if isinstance(account, dict) and isinstance(positions, dict):
+        return account, _normalize_positions(positions)
+
+    prior = _previous_ledger_paths(paths, run_date)
+    if prior is not None:
+        prior_account_path, prior_positions_path = prior
+        if not isinstance(account, dict):
+            prior_account = _read_json_or(prior_account_path, None)
+            if isinstance(prior_account, dict):
+                account = dict(prior_account)
+        if not isinstance(positions, dict):
+            prior_positions = _read_json_or(prior_positions_path, None)
+            if isinstance(prior_positions, dict):
+                positions = _normalize_positions(prior_positions)
+
+    if not isinstance(account, dict):
+        account = _initialize_account(paths.paper_account_path, starting_cash)
+    if not isinstance(positions, dict):
+        positions = {}
+    return account, _normalize_positions(positions)
+
+
+def _mark_positions_to_market(positions: dict[str, Any], quotes: dict[str, Quote] | None) -> bool:
+    if not quotes:
+        return False
+    changed = False
+    for symbol, position in positions.items():
+        if not isinstance(position, dict):
+            continue
+        quote = quotes.get(symbol)
+        if quote is None or quote.price <= 0:
+            continue
+        new_price = round(float(quote.price), 4)
+        if position.get("market_price") != new_price:
+            position["market_price"] = new_price
+            changed = True
+    return changed
+
+
 def _positions_market_value(positions: dict[str, Any]) -> float:
     total = 0.0
     for position in positions.values():
@@ -125,15 +194,17 @@ def record_paper_day_start(
     run_date: str,
     starting_cash: float,
     positions: dict[str, Any] | None = None,
+    quotes: dict[str, Quote] | None = None,
     paths_override: Any | None = None,
 ) -> bool:
     paths = paths_override or build_runtime_paths(agent_root, run_date=run_date)
     if paths.paper_day_start_path.exists():
         return False
-    account = _initialize_account(paths.paper_account_path, starting_cash)
-    normalized_positions = _normalize_positions(positions) if positions is not None else _read_json_or(paths.paper_positions_path, {})
-    if not isinstance(normalized_positions, dict):
-        normalized_positions = {}
+    account, normalized_positions = _carry_forward_account_positions(paths, run_date, starting_cash)
+    if positions is not None:
+        normalized_positions = _normalize_positions(positions)
+    _mark_positions_to_market(normalized_positions, quotes)
+    account["updated_at"] = datetime.now(tz=PT).isoformat()
     payload = _snapshot_payload(run_date=run_date, event="day_start", account=account, positions=normalized_positions)
     write_json(paths.paper_account_path, account)
     write_json(paths.paper_positions_path, normalized_positions)
@@ -168,6 +239,36 @@ def record_paper_day_end(agent_root: Path, *, run_date: str, paths_override: Any
     payload = _snapshot_payload(run_date=run_date, event="day_end", account=account, positions=positions)
     write_json(paths.paper_day_end_path, payload)
     _append_equity_point(paths.paper_equity_curve_path, payload)
+    return True
+
+
+def mark_paper_positions_to_market(
+    agent_root: Path,
+    *,
+    run_date: str,
+    quotes: dict[str, Quote],
+    event: str = "mark_to_market",
+    paths_override: Any | None = None,
+) -> bool:
+    paths = paths_override or build_runtime_paths(agent_root, run_date=run_date)
+    account = _initialize_account(paths.paper_account_path, 0.0)
+    positions = _read_json_or(paths.paper_positions_path, {})
+    if not isinstance(positions, dict):
+        positions = {}
+    positions = _normalize_positions(positions)
+    if not positions:
+        return False
+    changed = _mark_positions_to_market(positions, quotes)
+    if not changed:
+        return False
+    now = datetime.now(tz=PT).isoformat()
+    account["updated_at"] = now
+    write_json(paths.paper_account_path, account)
+    write_json(paths.paper_positions_path, positions)
+    _append_equity_point(
+        paths.paper_equity_curve_path,
+        _snapshot_payload(run_date=run_date, event=event, account=account, positions=positions, timestamp=now),
+    )
     return True
 
 

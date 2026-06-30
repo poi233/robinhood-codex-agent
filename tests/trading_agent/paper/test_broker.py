@@ -5,7 +5,14 @@ import unittest
 import unittest.mock
 from pathlib import Path
 
-from trading_agent.paper.broker import apply_paper_intent, pending_paper_orders, reconcile_pending_paper_orders, record_paper_day_end, record_paper_day_start
+from trading_agent.paper.broker import (
+    apply_paper_intent,
+    mark_paper_positions_to_market,
+    pending_paper_orders,
+    reconcile_pending_paper_orders,
+    record_paper_day_end,
+    record_paper_day_start,
+)
 from trading_agent.paper.broker import _compute_fill_price, _partial_fill_ratio, _resolve_fill_quantity
 from trading_agent.policy.models import OrderIntent, PolicyDecision, Quote
 
@@ -345,6 +352,64 @@ class PaperBrokerTests(unittest.TestCase):
         self.assertEqual(day_end["total_equity"], 25.0)
         self.assertEqual([point["event"] for point in curve], ["day_start", "day_end"])
 
+    def test_day_start_carries_forward_previous_run_positions_and_marks_quotes(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            prior_paper = root / "runtime" / "state" / "runs" / "2026-06-14" / "paper"
+            prior_paper.mkdir(parents=True)
+            (prior_paper / "account.json").write_text(
+                json.dumps({"cash": 900.0, "starting_cash": 1000.0, "realized_pnl": 0.0}),
+                encoding="utf-8",
+            )
+            (prior_paper / "positions.json").write_text(
+                json.dumps({"NVDA": {"symbol": "NVDA", "quantity": 1.0, "average_cost": 100.0, "market_price": 101.0}}),
+                encoding="utf-8",
+            )
+
+            result = record_paper_day_start(
+                root,
+                run_date="2026-06-15",
+                starting_cash=1000.0,
+                quotes={"NVDA": Quote(symbol="NVDA", price=105.0, timestamp="2026-06-15T06:45:00-07:00", is_fresh=True)},
+            )
+
+            paper_dir = root / "runtime" / "state" / "runs" / "2026-06-15" / "paper"
+            account = json.loads((paper_dir / "account.json").read_text(encoding="utf-8"))
+            positions = json.loads((paper_dir / "positions.json").read_text(encoding="utf-8"))
+            day_start = json.loads((paper_dir / "day_start.json").read_text(encoding="utf-8"))
+
+        self.assertTrue(result)
+        self.assertEqual(account["cash"], 900.0)
+        self.assertEqual(positions["NVDA"]["quantity"], 1.0)
+        self.assertEqual(positions["NVDA"]["market_price"], 105.0)
+        self.assertEqual(day_start["positions_market_value"], 105.0)
+        self.assertEqual(day_start["total_equity"], 1005.0)
+
+    def test_mark_paper_positions_to_market_updates_equity_curve(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            record_paper_day_start(
+                root,
+                run_date="2026-06-14",
+                starting_cash=1000.0,
+                positions={"NVDA": {"symbol": "NVDA", "quantity": 2.0, "average_cost": 100.0, "market_price": 100.0}},
+            )
+
+            result = mark_paper_positions_to_market(
+                root,
+                run_date="2026-06-14",
+                quotes={"NVDA": Quote(symbol="NVDA", price=110.0, timestamp="2026-06-14T10:00:00-07:00", is_fresh=True)},
+            )
+
+            paper_dir = root / "runtime" / "state" / "runs" / "2026-06-14" / "paper"
+            positions = json.loads((paper_dir / "positions.json").read_text(encoding="utf-8"))
+            curve = [json.loads(line) for line in (paper_dir / "equity_curve.jsonl").read_text(encoding="utf-8").splitlines()]
+
+        self.assertTrue(result)
+        self.assertEqual(positions["NVDA"]["market_price"], 110.0)
+        self.assertEqual(curve[-1]["event"], "mark_to_market")
+        self.assertEqual(curve[-1]["positions_market_value"], 220.0)
+        self.assertEqual(curve[-1]["total_equity"], 1220.0)
 
     def test_partial_fill_ratio_at_limit_is_min_ratio(self) -> None:
         with unittest.mock.patch.dict(os.environ, {"PAPER_PARTIAL_FILL_MIN_RATIO": "0.3", "PAPER_PARTIAL_FILL_THRESHOLD_BPS": "20"}, clear=False):
