@@ -17,12 +17,16 @@
 #   LAUNCH_AGENTS_DIR   target dir for plists       (default: ~/Library/LaunchAgents)
 #   LAUNCHD_JOBS        space-separated job names   (default: all five)
 #                       valid: premarket intraday postmarket nightly-analysis weekly-screen
+#   LAUNCHD_PYTHON_BIN  Python executable for jobs  (default: $REPO_ROOT/.venv/bin/python)
+#   LAUNCHD_LOG_DIR     launchd stdout/stderr dir   (default: ~/Library/Logs/robinhood-codex-agent)
 
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 TEMPLATE_DIR="$REPO_ROOT/launchd"
 LAUNCH_AGENTS_DIR="${LAUNCH_AGENTS_DIR:-$HOME/Library/LaunchAgents}"
+LAUNCHD_PYTHON_BIN="${LAUNCHD_PYTHON_BIN:-$REPO_ROOT/.venv/bin/python}"
+LAUNCHD_LOG_DIR="${LAUNCHD_LOG_DIR:-$HOME/Library/Logs/robinhood-codex-agent}"
 
 DEFAULT_JOBS="premarket intraday postmarket nightly-analysis weekly-screen"
 read -r -a JOBS <<< "${LAUNCHD_JOBS:-$DEFAULT_JOBS}"
@@ -126,8 +130,10 @@ render_one() {
   dest="$LAUNCH_AGENTS_DIR/$label.plist"
 
   # Escape & and | so they survive sed replacement of an arbitrary path.
-  local escaped_root
+  local escaped_root escaped_python escaped_log_dir
   escaped_root="$(printf '%s' "$REPO_ROOT" | sed -e 's/[&|]/\\&/g')"
+  escaped_python="$(printf '%s' "$LAUNCHD_PYTHON_BIN" | sed -e 's/[&|]/\\&/g')"
+  escaped_log_dir="$(printf '%s' "$LAUNCHD_LOG_DIR" | sed -e 's/[&|]/\\&/g')"
   if [[ "$job" == "intraday" || "$job" == "nightly-analysis" ]]; then
     local schedule_file
     schedule_file="$(mktemp)"
@@ -136,7 +142,9 @@ render_one() {
     else
       nightly_analysis_schedule_xml > "$schedule_file"
     fi
-    sed "s|__REPO_ROOT__|$escaped_root|g" "$template" \
+    sed -e "s|__REPO_ROOT__|$escaped_root|g" \
+        -e "s|__PYTHON_BIN__|$escaped_python|g" \
+        -e "s|__LAUNCHD_LOG_DIR__|$escaped_log_dir|g" "$template" \
       | awk -v schedule_file="$schedule_file" '
           /__INTRADAY_SCHEDULE__/ || /__NIGHTLY_SCHEDULE__/ {
             while ((getline line < schedule_file) > 0) print line
@@ -148,7 +156,9 @@ render_one() {
       > "$dest"
     rm -f "$schedule_file"
   else
-    sed "s|__REPO_ROOT__|$escaped_root|g" "$template" > "$dest"
+    sed -e "s|__REPO_ROOT__|$escaped_root|g" \
+        -e "s|__PYTHON_BIN__|$escaped_python|g" \
+        -e "s|__LAUNCHD_LOG_DIR__|$escaped_log_dir|g" "$template" > "$dest"
   fi
   printf '%s\t%s\n' "$label" "$dest"
 }
@@ -158,7 +168,7 @@ require_macos() {
 }
 
 do_render() {
-  mkdir -p "$LAUNCH_AGENTS_DIR" "$REPO_ROOT/runtime/logs"
+  mkdir -p "$LAUNCH_AGENTS_DIR" "$LAUNCHD_LOG_DIR" "$REPO_ROOT/runtime/logs"
   for job in "${JOBS[@]}"; do
     render_one "$job"
   done
@@ -176,7 +186,7 @@ do_install() {
   done < <(do_render)
   echo
   echo "Done. Verify with:  launchctl list | grep robinhood-codex-agent"
-  echo "Logs:  $REPO_ROOT/runtime/logs/launchd.<job>.{out,err}"
+  echo "Logs:  $LAUNCHD_LOG_DIR/launchd.<job>.{out,err}"
   echo "Intraday schedule source: src/config/strategy_registry.yaml active_strategy=$(active_strategy)"
   echo "Nightly analysis schedule: postmarket + 30 minutes"
 }

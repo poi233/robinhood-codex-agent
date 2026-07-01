@@ -8,7 +8,7 @@
   <string>com.example.robinhood-codex-agent.weekly-screen</string>
   <key>ProgramArguments</key>
   <array>
-    <string>__REPO_ROOT__/.venv/bin/python</string>
+    <string>__PYTHON_BIN__</string>
     <string>-m</string>
     <string>trading_agent</string>
     <string>screen</string>
@@ -33,8 +33,8 @@
     <integer>0</integer>
   </dict>
   <key>StandardOutPath</key>
-  <string>__REPO_ROOT__/runtime/logs/launchd.weekly-screen.out</string>
+  <string>__LAUNCHD_LOG_DIR__/launchd.weekly-screen.out</string>
   <key>StandardErrorPath</key>
-  <string>__REPO_ROOT__/runtime/logs/launchd.weekly-screen.err</string>
+  <string>__LAUNCHD_LOG_DIR__/launchd.weekly-screen.err</string>
 </dict>
 </plist>

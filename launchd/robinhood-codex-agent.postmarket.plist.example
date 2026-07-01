@@ -10,7 +10,7 @@
   <string>com.example.robinhood-codex-agent.postmarket</string>
   <key>ProgramArguments</key>
   <array>
-    <string>__REPO_ROOT__/.venv/bin/python</string>
+    <string>__PYTHON_BIN__</string>
     <string>-m</string>
     <string>trading_agent</string>
     <string>postmarket</string>
@@ -37,8 +37,8 @@
     <integer>10</integer>
   </dict>
   <key>StandardOutPath</key>
-  <string>__REPO_ROOT__/runtime/logs/launchd.postmarket.out</string>
+  <string>__LAUNCHD_LOG_DIR__/launchd.postmarket.out</string>
   <key>StandardErrorPath</key>
-  <string>__REPO_ROOT__/runtime/logs/launchd.postmarket.err</string>
+  <string>__LAUNCHD_LOG_DIR__/launchd.postmarket.err</string>
 </dict>
 </plist>

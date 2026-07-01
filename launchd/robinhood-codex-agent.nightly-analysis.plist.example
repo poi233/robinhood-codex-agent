@@ -10,7 +10,7 @@
   <string>com.example.robinhood-codex-agent.nightly-analysis</string>
   <key>ProgramArguments</key>
   <array>
-    <string>__REPO_ROOT__/.venv/bin/python</string>
+    <string>__PYTHON_BIN__</string>
     <string>-m</string>
     <string>trading_agent</string>
     <string>nightly-analysis</string>
@@ -33,8 +33,8 @@
     <!-- __NIGHTLY_SCHEDULE__ -->
   </array>
   <key>StandardOutPath</key>
-  <string>__REPO_ROOT__/runtime/logs/launchd.nightly-analysis.out</string>
+  <string>__LAUNCHD_LOG_DIR__/launchd.nightly-analysis.out</string>
   <key>StandardErrorPath</key>
-  <string>__REPO_ROOT__/runtime/logs/launchd.nightly-analysis.err</string>
+  <string>__LAUNCHD_LOG_DIR__/launchd.nightly-analysis.err</string>
 </dict>
 </plist>

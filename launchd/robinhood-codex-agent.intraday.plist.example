@@ -10,7 +10,7 @@
   <string>com.example.robinhood-codex-agent.intraday</string>
   <key>ProgramArguments</key>
   <array>
-    <string>__REPO_ROOT__/.venv/bin/python</string>
+    <string>__PYTHON_BIN__</string>
     <string>-m</string>
     <string>trading_agent</string>
     <string>intraday</string>
@@ -34,8 +34,8 @@
     <!-- __INTRADAY_SCHEDULE__ -->
   </array>
   <key>StandardOutPath</key>
-  <string>__REPO_ROOT__/runtime/logs/launchd.intraday.out</string>
+  <string>__LAUNCHD_LOG_DIR__/launchd.intraday.out</string>
   <key>StandardErrorPath</key>
-  <string>__REPO_ROOT__/runtime/logs/launchd.intraday.err</string>
+  <string>__LAUNCHD_LOG_DIR__/launchd.intraday.err</string>
 </dict>
 </plist>

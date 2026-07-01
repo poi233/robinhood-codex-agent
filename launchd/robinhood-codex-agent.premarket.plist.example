@@ -10,7 +10,7 @@
   <string>com.example.robinhood-codex-agent.premarket</string>
   <key>ProgramArguments</key>
   <array>
-    <string>__REPO_ROOT__/.venv/bin/python</string>
+    <string>__PYTHON_BIN__</string>
     <string>-m</string>
     <string>trading_agent</string>
     <string>premarket</string>
@@ -37,8 +37,8 @@
     <integer>30</integer>
   </dict>
   <key>StandardOutPath</key>
-  <string>__REPO_ROOT__/runtime/logs/launchd.premarket.out</string>
+  <string>__LAUNCHD_LOG_DIR__/launchd.premarket.out</string>
   <key>StandardErrorPath</key>
-  <string>__REPO_ROOT__/runtime/logs/launchd.premarket.err</string>
+  <string>__LAUNCHD_LOG_DIR__/launchd.premarket.err</string>
 </dict>
 </plist>

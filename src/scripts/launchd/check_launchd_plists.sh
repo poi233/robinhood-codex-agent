@@ -5,10 +5,10 @@
 # check fails.
 #
 # What it enforces, and why:
-#   - ProgramArguments runs .venv/bin/python -m trading_agent <job>
-#       → launchd on macOS can reject repo-local shell wrappers under Documents with "Operation not
-#         permitted"; direct Python avoids that TCC/provenance failure while AGENT_ROOT and cwd keep
-#         runtime path resolution stable.
+#   - ProgramArguments runs a rendered Python executable -m trading_agent <job>
+#       → launchd on macOS can reject repo-local shell wrappers and stdout/stderr files under
+#         Documents with "Operation not permitted"; direct Python plus a safe log dir avoids that
+#         TCC/provenance failure while AGENT_ROOT and cwd keep runtime path resolution stable.
 #   - the matching Python CLI subcommand exists.
 #   - no version-pinned codex release dir / user home   → those paths vanish on codex auto-update.
 
@@ -48,17 +48,22 @@ for template in "${templates[@]}"; do
   body="$(cat "$template")"
   echo "[$job]"
 
-  check "$job: ProgramArguments should invoke repo .venv python" \
-    grep -q "<string>__REPO_ROOT__/.venv/bin/python</string>" "$template"
+  check "$job: ProgramArguments should invoke rendered python executable" \
+    grep -q "<string>__PYTHON_BIN__</string>" "$template"
   check "$job: should call python -m trading_agent" \
     bash -c "grep -q '<string>-m</string>' '$template' && grep -q '<string>trading_agent</string>' '$template'"
   check "$job: should pass subcommand $job" \
     grep -q "<string>$subcommand</string>" "$template"
   check "$job: PATH should include repo .venv/bin first" \
     grep -q "<string>__REPO_ROOT__/.venv/bin:" "$template"
+  check "$job: launchd stdout should use safe log dir placeholder" \
+    grep -q "<string>__LAUNCHD_LOG_DIR__/launchd\\.$job\\.out</string>" "$template"
+  check "$job: launchd stderr should use safe log dir placeholder" \
+    grep -q "<string>__LAUNCHD_LOG_DIR__/launchd\\.$job\\.err</string>" "$template"
 
   # Verify the CLI parser knows this subcommand without running the job.
-  if PYTHONPATH="$REPO_ROOT/src" "$REPO_ROOT/.venv/bin/python" -m trading_agent "$subcommand" --help >/dev/null 2>&1; then
+  python_bin="${LAUNCHD_PYTHON_BIN:-$REPO_ROOT/.venv/bin/python}"
+  if PYTHONPATH="$REPO_ROOT/src" "$python_bin" -m trading_agent "$subcommand" --help >/dev/null 2>&1; then
     pass=$((pass + 1))
   else
     echo "  FAIL  $job: python -m trading_agent $job --help failed"
